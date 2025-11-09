@@ -1,2 +1,2 @@
-mod config;
 mod api;
+mod config;

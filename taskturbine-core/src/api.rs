@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use sqlx::{migrate::MigrateError, PgPool};
-use uuid::Uuid;
 use serde_json;
-
+use sqlx::{PgPool, migrate::MigrateError};
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum TaskTurbineError {
@@ -22,7 +21,6 @@ pub enum TaskState {
     Failed,
     Cancelled,
 }
-
 
 /// Options for spawning a task.
 /// Default values are drawn from the TaskRuntime and TaskOptions defaults.
@@ -70,7 +68,8 @@ pub struct Storage {
 impl Storage {
     /// Create a new runtime from the given configuration.
     pub fn new(config: Config) -> Self {
-        let pool = PgPool::connect_lazy(&config.database_url).expect("Failed to create database connection pool");
+        let pool = PgPool::connect_lazy(&config.database_url)
+            .expect("Failed to create database connection pool");
         Self { config, pool }
     }
 
@@ -83,13 +82,7 @@ impl Storage {
     /// Delete all data from the storage tables.
     /// This is a destructive operation that should only really be used in tests.
     pub async fn clear_storage(&self) -> Result<(), TaskTurbineError> {
-        let tables = vec![
-            "events",
-            "waits",
-            "checkpoints",
-            "runs",
-            "tasks",
-        ];
+        let tables = vec!["events", "waits", "checkpoints", "runs", "tasks"];
         for table in tables.iter() {
             let query = format!("TRUNCATE taskturbine.{} CASCADE", table);
             sqlx::query(&query)
@@ -101,12 +94,22 @@ impl Storage {
     }
 
     /// Spawn a task and initialize a run.
-    pub async fn spawn_job(&self, namespace: &str, task_name: &str, payload: &[u8], options: Option<TaskOptions>) -> Result<Uuid, TaskTurbineError> {
+    pub async fn spawn_job(
+        &self,
+        namespace: &str,
+        task_name: &str,
+        payload: &[u8],
+        options: Option<TaskOptions>,
+    ) -> Result<Uuid, TaskTurbineError> {
         let options = options.or_else(|| Some(TaskOptions::default())).unwrap();
-        let header_json = serde_json::to_vec(&options.headers)
-            .map_err(|e| TaskTurbineError::EncodeError(e))?;
+        let header_json =
+            serde_json::to_vec(&options.headers).map_err(|e| TaskTurbineError::EncodeError(e))?;
 
-        let mut atomic = self.pool.begin().await.map_err(|e| TaskTurbineError::SqlError(e))?;
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| TaskTurbineError::SqlError(e))?;
         let task_id = Uuid::now_v7();
         let res = sqlx::query(
             "INSERT INTO taskturbine.tasks (
@@ -114,7 +117,8 @@ impl Storage {
                 retry_seconds, retry_factor, retry_max_seconds,
                 max_attempts, cancellation_max_age, enqueue_at, state
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11)",
-        ).bind(&task_id)
+        )
+        .bind(&task_id)
         .bind(namespace)
         .bind(task_name)
         .bind(payload)
@@ -136,7 +140,8 @@ impl Storage {
             "INSERT INTO taskturbine.runs (
                 run_id, task_id, attempt, state, available_at
             ) VALUES ($1, $2, 0, $3, NOW())",
-        ).bind(run_id)
+        )
+        .bind(run_id)
         .bind(&task_id)
         .bind(TaskState::Pending)
         .execute(&mut *atomic);
@@ -144,12 +149,14 @@ impl Storage {
         if let Err(e) = res.await {
             return Err(TaskTurbineError::SqlError(e));
         }
-        atomic.commit().await.map_err(|e| TaskTurbineError::SqlError(e))?;
+        atomic
+            .commit()
+            .await
+            .map_err(|e| TaskTurbineError::SqlError(e))?;
 
         Ok(task_id)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
