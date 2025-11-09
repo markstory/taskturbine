@@ -228,13 +228,13 @@ mod tests {
         let config = Config {
             database_url: db_url,
         };
-        let runtime = Storage::new(config);
+        let storage = Storage::new(config);
 
         // Ensure migrations have been applied and that storage is cleared.
-        runtime.update_schema().await.unwrap();
-        runtime.clear_storage().await.unwrap();
+        storage.update_schema().await.unwrap();
+        storage.clear_storage().await.unwrap();
 
-        runtime
+        storage
     }
 
     #[tokio::test]
