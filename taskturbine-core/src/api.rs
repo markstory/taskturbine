@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use serde_json;
 use sqlx::{PgPool, migrate::MigrateError};
 use uuid::Uuid;
 
@@ -82,13 +81,13 @@ impl Storage {
     /// Delete all data from the storage tables.
     /// This is a destructive operation that should only really be used in tests.
     pub async fn clear_storage(&self) -> Result<(), TaskTurbineError> {
-        let tables = vec!["events", "waits", "checkpoints", "runs", "tasks"];
+        let tables = ["events", "waits", "checkpoints", "runs", "tasks"];
         for table in tables.iter() {
-            let query = format!("TRUNCATE taskturbine.{} CASCADE", table);
+            let query = format!("TRUNCATE taskturbine.{table} CASCADE");
             sqlx::query(&query)
                 .execute(&self.pool)
                 .await
-                .map_err(|e| TaskTurbineError::SqlError(e))?;
+                .map_err(TaskTurbineError::SqlError)?;
         }
         Ok(())
     }
@@ -103,13 +102,13 @@ impl Storage {
     ) -> Result<Uuid, TaskTurbineError> {
         let options = options.or_else(|| Some(TaskOptions::default())).unwrap();
         let header_json =
-            serde_json::to_vec(&options.headers).map_err(|e| TaskTurbineError::EncodeError(e))?;
+            serde_json::to_vec(&options.headers).map_err(TaskTurbineError::EncodeError)?;
 
         let mut atomic = self
             .pool
             .begin()
             .await
-            .map_err(|e| TaskTurbineError::SqlError(e))?;
+            .map_err(TaskTurbineError::SqlError)?;
         let task_id = Uuid::now_v7();
         let res = sqlx::query(
             "INSERT INTO taskturbine.tasks (
@@ -118,7 +117,7 @@ impl Storage {
                 max_attempts, cancellation_max_age, enqueue_at, state
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11)",
         )
-        .bind(&task_id)
+        .bind(task_id)
         .bind(namespace)
         .bind(task_name)
         .bind(payload)
@@ -142,7 +141,7 @@ impl Storage {
             ) VALUES ($1, $2, 0, $3, NOW())",
         )
         .bind(run_id)
-        .bind(&task_id)
+        .bind(task_id)
         .bind(TaskState::Pending)
         .execute(&mut *atomic);
 
@@ -152,7 +151,7 @@ impl Storage {
         atomic
             .commit()
             .await
-            .map_err(|e| TaskTurbineError::SqlError(e))?;
+            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(task_id)
     }
@@ -184,9 +183,9 @@ mod tests {
         let payload = b"{\"key\": \"value\"}";
 
         let result = runtime.spawn_job(namespace, task_name, payload, None).await;
-        assert!(result.is_ok(), "Failed to spawn job: {:?}", result);
+        assert!(result.is_ok(), "Failed to spawn job: {result:?}");
 
         let task_id = result.unwrap();
-        assert!(task_id.to_string().len() > 0);
+        assert!(!task_id.to_string().is_empty());
     }
 }
