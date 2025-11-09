@@ -21,7 +21,6 @@ CREATE TABLE taskturbine.tasks (
     first_started_at timestamptz,
     state text not null check (state in ('pending', 'running', 'sleeping', 'completed', 'failed', 'cancelled')),
     last_attempt_run uuid,
-    completed_payload jsonb,
     cancelled_at timestamptz
 );
 

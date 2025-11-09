@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use sqlx::{PgPool, migrate::MigrateError};
+use sqlx::{PgPool, migrate::MigrateError, Row};
 use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum TaskTurbineError {
     EncodeError(serde_json::Error),
     SqlError(sqlx::Error),
+    NotFound(Uuid),
+    NotRunning(Uuid),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, sqlx::Type)]
@@ -19,6 +21,13 @@ pub enum TaskState {
     Completed,
     Failed,
     Cancelled,
+}
+
+/// Result of spawning a task.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SpawnResult {
+    pub task_id: Uuid,
+    pub run_id: Uuid,
 }
 
 /// Options for spawning a task.
@@ -93,13 +102,13 @@ impl Storage {
     }
 
     /// Spawn a task and initialize a run.
-    pub async fn spawn_job(
+    pub async fn spawn_task(
         &self,
         namespace: &str,
         task_name: &str,
         payload: &[u8],
         options: Option<TaskOptions>,
-    ) -> Result<Uuid, TaskTurbineError> {
+    ) -> Result<SpawnResult, TaskTurbineError> {
         let options = options.or_else(|| Some(TaskOptions::default())).unwrap();
         let header_json =
             serde_json::to_vec(&options.headers).map_err(TaskTurbineError::EncodeError)?;
@@ -153,7 +162,60 @@ impl Storage {
             .await
             .map_err(TaskTurbineError::SqlError)?;
 
-        Ok(task_id)
+        Ok(SpawnResult { task_id, run_id })
+    }
+
+    /// Mark a run as completed with the provided state.
+    /// When a run is completed, the task is also considered complete.
+    pub async fn complete_run(&self, run_id: Uuid, run_result: &[u8]) -> Result<(), TaskTurbineError> {
+        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+        let res = sqlx::query(
+            "SELECT task_id, state FROM taskturbine.runs WHERE run_id = $1 FOR UPDATE"
+        ).bind(run_id)
+        .fetch_one(&mut *atomic)
+        .await;
+        if let Err(_) = res {
+            return Err(TaskTurbineError::NotFound(run_id));
+        }
+
+        let row = res.unwrap();
+        let task_id: Uuid = row.get("task_id");
+        let state: TaskState = row.get("state");
+        if state != TaskState::Completed {
+            // Already completed
+            atomic.commit().await.map_err(|e| TaskTurbineError::SqlError(e))?;
+            return Err(TaskTurbineError::NotRunning(run_id));
+        }
+        let res = sqlx::query(
+            "UPDATE taskturbine.runs
+            SET state = $1, completed_at = NOW(), result = $2
+            WHERE run_id = $3",
+        )
+        .bind(TaskState::Completed)
+        .bind(run_result)
+        .bind(run_id)
+        .execute(&mut *atomic)
+        .await;
+        if let Err(e) = res {
+            return Err(TaskTurbineError::SqlError(e));
+        }
+
+        let res = sqlx::query(
+            "UPDATE taskturbine.tasks
+            SET state = $1, last_attempt_run = $2 WHERE task_id = $3",
+        )
+        .bind(TaskState::Completed)
+        .bind(run_id)
+        .bind(task_id)
+        .execute(&mut *atomic)
+        .await;
+        if let Err(e) = res {
+            return Err(TaskTurbineError::SqlError(e));
+        }
+
+        atomic.commit().await.map_err(|e| TaskTurbineError::SqlError(e))?;
+
+        Ok(())
     }
 }
 
@@ -176,16 +238,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_spawn_job_get_task_id() {
-        let runtime = create_storage().await;
+    async fn test_spawn_task_get_task_id() {
+        let storage = create_storage().await;
         let namespace = "demo";
         let task_name = "say_hello";
         let payload = b"{\"key\": \"value\"}";
 
-        let result = runtime.spawn_job(namespace, task_name, payload, None).await;
+        let result = storage.spawn_task(namespace, task_name, payload, None).await;
         assert!(result.is_ok(), "Failed to spawn job: {result:?}");
 
-        let task_id = result.unwrap();
-        assert!(!task_id.to_string().is_empty());
+        let spawn_res = result.unwrap();
+        assert!(!spawn_res.task_id.to_string().is_empty());
+        assert!(!spawn_res.run_id.to_string().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_complete_run_not_running() {
+        let storage = create_storage().await;
+        let namespace = "demo";
+        let task_name = "say_hello";
+        let payload = b"{\"key\": \"value\"}";
+        let result = storage.spawn_task(namespace, task_name, payload, None).await;
+        assert!(result.is_ok(), "Failed to spawn job: {result:?}");
+
+        let spawn_res = result.unwrap();
+        let res = storage.complete_run(spawn_res.run_id, b"{\"result\": \"success\"}").await;
+        assert!(res.is_err());
+        assert!(matches!(res.err().unwrap(), TaskTurbineError::NotRunning {..}));
+    }
+
+    #[tokio::test]
+    async fn test_complete_run_success() {
+        todo!();
     }
 }
