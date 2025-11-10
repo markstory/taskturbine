@@ -15,7 +15,7 @@ CREATE TABLE taskturbine.tasks (
     max_attempts integer,
     -- Cancel a task if (now() - first_started_at >= max_age) to prevent tasks retrying infinitely
     cancellation_max_age int,
-    -- When to next run the task
+    -- When to start running the task
     enqueue_at timestamptz not null default current_timestamp,
     -- When the task was moved to running.
     first_started_at timestamptz,
