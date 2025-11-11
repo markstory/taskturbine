@@ -8,7 +8,7 @@ CREATE TABLE taskturbine.tasks (
     headers bytea,
     -- Each retry increments enqueue_at = enqueue_at + (retry_seconds * retry_factor * attempts)
     retry_seconds integer,
-    retry_factor integer,
+    retry_factor float,
     retry_max_seconds integer,
     -- Incremented on each claim
     attempts integer not null default 0,
@@ -46,12 +46,12 @@ CREATE INDEX runs_taskid ON taskturbine.runs (task_id);
  
 CREATE TABLE taskturbine.checkpoints (
     task_id uuid not null,
-    checkpoint_name text not null,
+    step_name text not null,
     state bytea,
     status text not null default 'committed',
     owner_run_id uuid,
     updated_at timestamptz not null default current_timestamp,
-    primary key (task_id, checkpoint_name)
+    primary key (task_id, step_name)
 );
 
 CREATE TABLE taskturbine.events (
@@ -64,9 +64,8 @@ CREATE TABLE taskturbine.waits (
     task_id uuid not null,
     run_id uuid not null,
     step_name text not null,
-    event_name text not null,
+    event_name text not null UNIQUE,
     timeout_at timestamptz,
     created_at timestamptz not null default current_timestamp,
     primary key (run_id, step_name)
 );
-CREATE INDEX waits_event ON taskturbine.waits (event_name);
