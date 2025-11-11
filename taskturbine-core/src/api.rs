@@ -173,7 +173,7 @@ impl Storage {
             .bind(run_id)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| TaskTurbineError::SqlError(e))?;
+            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(res)
     }
@@ -184,7 +184,7 @@ impl Storage {
             .bind(run_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|e| TaskTurbineError::SqlError(e))?;
+            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(res)
     }
@@ -311,7 +311,7 @@ impl Storage {
             atomic
                 .commit()
                 .await
-                .map_err(|e| TaskTurbineError::SqlError(e))?;
+                .map_err(TaskTurbineError::SqlError)?;
             return Err(TaskTurbineError::NotRunning(run_id));
         }
         let res = sqlx::query(
@@ -346,7 +346,7 @@ impl Storage {
         atomic
             .commit()
             .await
-            .map_err(|e| TaskTurbineError::SqlError(e))?;
+            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
@@ -358,7 +358,7 @@ impl Storage {
         ).bind(run_id)
         .execute(&mut *conn)
         .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
@@ -385,7 +385,7 @@ impl Storage {
                 atomic
                     .commit()
                     .await
-                    .map_err(|e| TaskTurbineError::SqlError(e))?;
+                    .map_err(TaskTurbineError::SqlError)?;
                 return Err(TaskTurbineError::NotRunning(run_id));
             }
         }
@@ -401,7 +401,7 @@ impl Storage {
         .execute(&mut *atomic)
         .await;
 
-        res.map_err(|e| TaskTurbineError::SqlError(e))?;
+        res.map_err(TaskTurbineError::SqlError)?;
 
         let next_attempt = task.attempts + 1;
         if next_attempt <= task.max_attempts {
@@ -455,7 +455,7 @@ impl Storage {
                 .bind(next_available_at)
                 .execute(&mut *atomic)
                 .await
-                .map_err(|e| TaskTurbineError::SqlError(e))?;
+                .map_err(TaskTurbineError::SqlError)?;
             }
         }
 
@@ -473,13 +473,13 @@ impl Storage {
         .bind(task.task_id)
         .execute(&mut *atomic)
         .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         self.clear_waits(run_id, &mut *atomic).await?;
         atomic
             .commit()
             .await
-            .map_err(|e| TaskTurbineError::SqlError(e))?;
+            .map_err(TaskTurbineError::SqlError)?;
         Ok(())
     }
 
@@ -491,7 +491,7 @@ impl Storage {
         if let Some(extension) = extend_claim {
             // TODO extend claim
         }
-        atomic.commit().await.map_err(|e| TaskTurbineError::SqlError(e))?;
+        atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
@@ -506,7 +506,6 @@ impl Storage {
         event_name: &str,
         timeout: Option<i32>,
     ) -> Result<AwaitResult, TaskTurbineError> {
-        // TODO add transaction
         // Ensure the task & run exist and are running.
         let mut atomic = self
             .pool
@@ -527,7 +526,7 @@ impl Storage {
         .bind(step_name)
         .fetch_optional(&mut *atomic)
         .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         // If we have a checkpoint already, return early.
         if let Some(checkpoint) = checkpoint_opt {
@@ -560,7 +559,7 @@ impl Storage {
         // Suspend the current run and mark the task as sleeping
         let _ = self.suspend_run(&mut atomic, &task_id, &run_id, timeout_ts).await?;
 
-        let _ = atomic.commit().await.map_err(|e| TaskTurbineError::SqlError(e));
+        let _ = atomic.commit().await.map_err(TaskTurbineError::SqlError);
 
         Ok(AwaitResult { should_suspend: true, payload: b"".to_vec() })
     }
@@ -595,7 +594,7 @@ impl Storage {
         .bind(timeout)
         .execute(conn)
         .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
@@ -625,7 +624,7 @@ impl Storage {
         .bind(state)
         .execute(conn)
         .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
@@ -643,7 +642,7 @@ impl Storage {
         .bind(event_name)
         .fetch_optional(conn)
         .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         if let Some(event) = event_opt {
             let payload: Vec<u8> = event.get("payload");
@@ -668,14 +667,14 @@ impl Storage {
             .bind(run_id)
             .execute(&mut *conn)
             .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         let _ = sqlx::query("UPDATE taskturbine.tasks SET state = $1 WHERE task_id = $2")
             .bind(TaskState::Sleeping)
             .bind(task_id)
             .execute(&mut *conn)
             .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
@@ -696,7 +695,7 @@ impl Storage {
         .bind(payload)
         .execute(&mut *atomic)
         .await
-        .map_err(|e| TaskTurbineError::SqlError(e))?;
+        .map_err(TaskTurbineError::SqlError)?;
 
         // TODO wake up the task/run.
 
