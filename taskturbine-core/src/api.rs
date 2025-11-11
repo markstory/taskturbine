@@ -729,6 +729,21 @@ mod tests {
         storage
     }
 
+    async fn create_task() -> Result<(Storage, SpawnResult), TaskTurbineError> {
+        let storage = create_storage().await;
+        let namespace = "demo";
+        let task_name = "say_hello";
+        let payload = b"{\"key\": \"value\"}";
+
+        let result = storage
+            .spawn_task(namespace, task_name, payload, None)
+            .await;
+        assert!(result.is_ok(), "Failed to spawn task {:?}", result.err());
+        let spawned = result.unwrap();
+
+        Ok((storage, spawned))
+    }
+
     #[tokio::test]
     async fn test_spawn_task_invalid_retry_factor() {
         let storage = create_storage().await;
@@ -750,37 +765,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_spawn_task_get_task_id() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok(), "Failed to spawn job: {result:?}");
-
-        let spawn_res = result.unwrap();
-        assert!(!spawn_res.task_id.to_string().is_empty());
-        assert!(!spawn_res.run_id.to_string().is_empty());
+        let (_, spawned) = create_task().await.unwrap();
+        assert!(!spawned.task_id.to_string().is_empty());
+        assert!(!spawned.run_id.to_string().is_empty());
     }
 
     #[tokio::test]
     async fn test_complete_run_not_running() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok(), "Failed to spawn job: {result:?}");
-
-        let spawn_res = result.unwrap();
+        let (storage, spawned) = create_task().await.unwrap();
         let res = storage
-            .complete_run(spawn_res.run_id, b"{\"result\": \"success\"}")
+            .complete_run(spawned.run_id, b"{\"result\": \"success\"}")
             .await;
-        dbg!(&res);
         assert!(res.is_err());
         assert!(matches!(
             res.err().unwrap(),
@@ -790,37 +785,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_complete_run_success() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok(), "Failed to spawn job: {result:?}");
-        let task_run = result.unwrap();
-
-        let _ = storage.set_run_state(task_run.task_id, TaskState::Running).await;
+        let (storage, spawned) = create_task().await.unwrap();
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
 
         let res = storage
-            .complete_run(task_run.run_id, b"{\"result\": \"success\"}")
+            .complete_run(spawned.run_id, b"{\"result\": \"success\"}")
             .await;
         assert!(res.is_ok(), "Failed to complete run: {res:?}");
     }
 
     #[tokio::test]
     async fn test_complete_run_clears_waits() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok());
-        let spawned = result.unwrap();
+        let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce task & run to running state
         let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
@@ -856,44 +832,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_fail_run_ok_no_retry_at() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok(), "Failed to spawn job: {result:?}");
-
-        let task_run = result.unwrap();
-        let _ = storage.set_run_state(task_run.task_id, TaskState::Running).await;
+        let (storage, spawned) = create_task().await.unwrap();
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
 
         let res = storage
-            .fail_run(task_run.run_id, b"{\"error\": \"something went wrong\"}", None)
+            .fail_run(spawned.run_id, b"{\"error\": \"something went wrong\"}", None)
             .await;
         assert!(res.is_ok(), "Failed to fail run: {res:?}");
     }
 
     #[tokio::test]
     async fn test_fail_run_ok_with_retry_at() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok(), "Failed to spawn job: {result:?}");
-
-        let task_run = result.unwrap();
-        let _ = storage.set_run_state(task_run.task_id, TaskState::Running).await;
+        let (storage, spawned) = create_task().await.unwrap();
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
 
         let retry_at = Utc::now() + chrono::Duration::seconds(120);
         let res = storage
             .fail_run(
-                task_run.run_id,
+                spawned.run_id,
                 b"{\"error\": \"something went wrong\"}",
                 Some(retry_at),
             )
@@ -903,16 +859,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fail_run_remove_wait() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok());
-        let spawned = result.unwrap();
+        let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce task & run to running state
         let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
@@ -949,16 +896,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_await_event_not_running() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok());
-        let spawned = result.unwrap();
+        let (storage, spawned) = create_task().await.unwrap();
 
         // Fails because the run is not running.
         let res = storage.await_event(spawned.task_id, spawned.run_id, "step_name", "event_name", None).await;
@@ -969,16 +907,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_await_event_existing_checkpoint() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok());
-        let spawned = result.unwrap();
+        let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and set a checkpoint
         let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
@@ -997,16 +926,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_await_event_record_wait_advance_to_sleeping() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok());
-        let spawned = result.unwrap();
+        let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and store a wait
         let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
@@ -1023,16 +943,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_await_event_has_event() {
-        let storage = create_storage().await;
-        let namespace = "demo";
-        let task_name = "say_hello";
-        let payload = b"{\"key\": \"value\"}";
-
-        let result = storage
-            .spawn_task(namespace, task_name, payload, None)
-            .await;
-        assert!(result.is_ok());
-        let spawned = result.unwrap();
+        let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and set a checkpoint
         let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
