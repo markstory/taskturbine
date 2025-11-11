@@ -134,7 +134,8 @@ impl Storage {
         Ok(())
     }
 
-    /// Helper for setting run + task to a specific state.
+    /// Testing Helper for setting run + task to a specific state.
+    #[cfg(test)]
     async fn set_run_state(&self, task_id: Uuid, state: TaskState) -> Result<(), TaskTurbineError> {
         let res = sqlx::query(
             "UPDATE taskturbine.runs
@@ -163,6 +164,29 @@ impl Storage {
             return Err(TaskTurbineError::SqlError(e));
         }
         Ok(())
+    }
+
+    /// Test helper for reading task runs
+    #[cfg(test)]
+    async fn get_run(&self, run_id: Uuid) -> Result<PgRow, TaskTurbineError> {
+        let res = sqlx::query("SELECT * FROM taskturbine.runs WHERE run_id = $1")
+            .bind(run_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| TaskTurbineError::SqlError(e))?;
+
+        Ok(res)
+    }
+
+    #[cfg(test)]
+    async fn get_wait_by_run_id(&self, run_id: Uuid) -> Result<Option<PgRow>, TaskTurbineError> {
+        let res = sqlx::query("SELECT * FROM taskturbine.waits WHERE run_id = $1")
+            .bind(run_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| TaskTurbineError::SqlError(e))?;
+
+        Ok(res)
     }
 
     /// Spawn a task and initialize a run.
@@ -536,6 +560,8 @@ impl Storage {
         // Suspend the current run and mark the task as sleeping
         let _ = self.suspend_run(&mut atomic, &task_id, &run_id, timeout_ts).await?;
 
+        let _ = atomic.commit().await.map_err(|e| TaskTurbineError::SqlError(e));
+
         Ok(AwaitResult { should_suspend: true, payload: b"".to_vec() })
     }
 
@@ -619,7 +645,6 @@ impl Storage {
         .await
         .map_err(|e| TaskTurbineError::SqlError(e))?;
 
-        dbg!(&event_opt);
         if let Some(event) = event_opt {
             let payload: Vec<u8> = event.get("payload");
 
@@ -787,7 +812,37 @@ mod tests {
 
     #[tokio::test]
     async fn test_complete_run_clears_waits() {
-        todo!("Implement this when await_event exists.");
+        let storage = create_storage().await;
+        let namespace = "demo";
+        let task_name = "say_hello";
+        let payload = b"{\"key\": \"value\"}";
+
+        let result = storage
+            .spawn_task(namespace, task_name, payload, None)
+            .await;
+        assert!(result.is_ok());
+        let spawned = result.unwrap();
+
+        // Coerce task & run to running state
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+
+        // Register a wait, run will become sleeping
+        let res = storage.await_event(spawned.task_id, spawned.run_id, "step_name", "event_name", None).await;
+        assert!(res.is_ok());
+
+        // Coerce back to running state
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+
+        // complete the run
+        let res = storage
+            .complete_run(spawned.run_id, b"{\"result\": \"success\"}")
+            .await;
+
+        assert!(res.is_ok());
+        let wait_res = storage.get_wait_by_run_id(spawned.run_id).await;
+
+        assert!(wait_res.is_ok());
+        assert!(wait_res.unwrap().is_none(), "wait should be deleted on run completion");
     }
 
     #[tokio::test]
@@ -849,7 +904,37 @@ mod tests {
 
     #[tokio::test]
     async fn test_fail_run_remove_wait() {
-        todo!("Implement this when await_event exists.");
+        let storage = create_storage().await;
+        let namespace = "demo";
+        let task_name = "say_hello";
+        let payload = b"{\"key\": \"value\"}";
+
+        let result = storage
+            .spawn_task(namespace, task_name, payload, None)
+            .await;
+        assert!(result.is_ok());
+        let spawned = result.unwrap();
+
+        // Coerce task & run to running state
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+
+        // Register a wait
+        let res = storage.await_event(spawned.task_id, spawned.run_id, "step_name", "event_name", None).await;
+        assert!(res.is_ok());
+
+        // Fail the run
+        let res = storage
+            .fail_run(
+                spawned.run_id,
+                b"{\"error\": \"something went wrong\"}",
+                None,
+            )
+            .await;
+        assert!(res.is_ok());
+        let wait_res = storage.get_wait_by_run_id(spawned.run_id).await;
+        assert!(wait_res.is_ok());
+        let wait = wait_res.unwrap();
+        assert!(wait.is_none(), "wait should be deleted on fail");
     }
 
     #[tokio::test]
@@ -907,12 +992,34 @@ mod tests {
         assert_eq!(await_result.should_suspend, false);
         assert_eq!(await_result.payload, b"results");
 
-        // TODO make sure run is still running.
+        let run = storage.get_run(spawned.run_id).await.unwrap();
+        assert_eq!(run.get::<String, _>("state"), "running");
     }
 
     #[tokio::test]
     async fn test_await_event_record_wait_advance_to_sleeping() {
-        todo!();
+        let storage = create_storage().await;
+        let namespace = "demo";
+        let task_name = "say_hello";
+        let payload = b"{\"key\": \"value\"}";
+
+        let result = storage
+            .spawn_task(namespace, task_name, payload, None)
+            .await;
+        assert!(result.is_ok());
+        let spawned = result.unwrap();
+
+        // Coerce to running and store a wait
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+
+        let res = storage.await_event(spawned.task_id, spawned.run_id, "first-step", "event_name", None).await;
+        assert!(res.is_ok());
+        let await_result = res.unwrap();
+        assert_eq!(await_result.should_suspend, true);
+        assert_eq!(await_result.payload, b"");
+
+        let run = storage.get_run(spawned.run_id).await.unwrap();
+        assert_eq!(run.get::<String, _>("state"), "sleeping");
     }
 
     #[tokio::test]
@@ -938,5 +1045,8 @@ mod tests {
         let await_result = res.unwrap();
         assert_eq!(await_result.payload, b"event-payload");
         assert_eq!(await_result.should_suspend, false);
+
+        let run = storage.get_run(spawned.run_id).await.unwrap();
+        assert_eq!(run.get::<String, _>("state"), "running");
     }
 }
