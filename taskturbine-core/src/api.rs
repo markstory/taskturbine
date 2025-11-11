@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use sqlx::{
     PgConnection, PgPool, Postgres, Row, Transaction, migrate::MigrateError, postgres::PgRow,
     query::Query,
@@ -153,7 +153,7 @@ impl Storage {
         let res = sqlx::query(
             "UPDATE taskturbine.tasks
             SET state = $1
-            WHERE task_id = $2"
+            WHERE task_id = $2",
         )
         .bind(state)
         .bind(task_id)
@@ -275,12 +275,16 @@ impl Storage {
         Ok(row)
     }
 
-    async fn get_locked_task(&self, task_id: Uuid, conn: &mut PgConnection) -> Result<Task, TaskTurbineError> {
+    async fn get_locked_task(
+        &self,
+        task_id: Uuid,
+        conn: &mut PgConnection,
+    ) -> Result<Task, TaskTurbineError> {
         let row: Task = sqlx::query_as(
             "SELECT *
              FROM taskturbine.tasks
              WHERE task_id = $1
-             FOR UPDATE"
+             FOR UPDATE",
         )
         .bind(task_id)
         .fetch_one(&mut *conn)
@@ -302,16 +306,13 @@ impl Storage {
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        let run_row = self.get_run_state(&mut *atomic, run_id).await?;
+        let run_row = self.get_run_state(&mut atomic, run_id).await?;
 
         let task_id: Uuid = run_row.get("task_id");
         let state: TaskState = run_row.get("state");
         if state != TaskState::Running {
             // Not running
-            atomic
-                .commit()
-                .await
-                .map_err(TaskTurbineError::SqlError)?;
+            atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
             return Err(TaskTurbineError::NotRunning(run_id));
         }
         let res = sqlx::query(
@@ -341,24 +342,24 @@ impl Storage {
             return Err(TaskTurbineError::SqlError(e));
         }
 
-        self.clear_waits(run_id, &mut *atomic).await?;
+        self.clear_waits(run_id, &mut atomic).await?;
 
-        atomic
-            .commit()
-            .await
-            .map_err(TaskTurbineError::SqlError)?;
+        atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
 
     /// Clear waits on runs that we are no longer interested in.
-    async fn clear_waits(&self, run_id: Uuid, conn: &mut PgConnection) -> Result<(), TaskTurbineError> {
-        let _ = sqlx::query(
-            "DELETE FROM taskturbine.waits WHERE run_id = $1",
-        ).bind(run_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(TaskTurbineError::SqlError)?;
+    async fn clear_waits(
+        &self,
+        run_id: Uuid,
+        conn: &mut PgConnection,
+    ) -> Result<(), TaskTurbineError> {
+        let _ = sqlx::query("DELETE FROM taskturbine.waits WHERE run_id = $1")
+            .bind(run_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
@@ -377,25 +378,25 @@ impl Storage {
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        let run_row = self.get_run_state(&mut *atomic, run_id).await?;
+        let run_row = self.get_run_state(&mut atomic, run_id).await?;
         let state: TaskState = run_row.get("state");
         match state {
             TaskState::Running | TaskState::Sleeping => {}
             _ => {
-                atomic
-                    .commit()
-                    .await
-                    .map_err(TaskTurbineError::SqlError)?;
+                atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
                 return Err(TaskTurbineError::NotRunning(run_id));
             }
         }
-        let mut task = self.get_locked_task(run_row.get("task_id"), &mut *atomic).await?;
+        let mut task = self
+            .get_locked_task(run_row.get("task_id"), &mut atomic)
+            .await?;
         let res = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1, failed_at = NOW(), 
                 wake_event = NULL, failure_reason = $2
             WHERE run_id = $3",
-        ).bind(TaskState::Failed)
+        )
+        .bind(TaskState::Failed)
         .bind(reason)
         .bind(run_id)
         .execute(&mut *atomic)
@@ -466,7 +467,8 @@ impl Storage {
                 last_attempt_run = $3, 
                 cancelled_at = COALESCE(cancelled_at, $4)
             WHERE task_id = $5",
-        ).bind(task.state)
+        )
+        .bind(task.state)
         .bind(task.attempts)
         .bind(task.last_attempt_run)
         .bind(task.cancelled_at)
@@ -475,19 +477,29 @@ impl Storage {
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
-        self.clear_waits(run_id, &mut *atomic).await?;
-        atomic
-            .commit()
-            .await
-            .map_err(TaskTurbineError::SqlError)?;
+        self.clear_waits(run_id, &mut atomic).await?;
+        atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
         Ok(())
     }
 
     /// Record a checkpoint for a task and step name.
     /// The worker can extend its claim on the task each time it creates a checkpoint.
-    pub async fn set_task_checkpoint(&self, task_id: Uuid, run_id: Uuid, step_name: &str, state: &[u8], extend_claim: Option<Duration>) -> Result<(), TaskTurbineError> {
-        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
-        let _ = self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state).await?;
+    pub async fn set_task_checkpoint(
+        &self,
+        task_id: Uuid,
+        run_id: Uuid,
+        step_name: &str,
+        state: &[u8],
+        extend_claim: Option<Duration>,
+    ) -> Result<(), TaskTurbineError> {
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+        self
+            .store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
+            .await?;
         if let Some(extension) = extend_claim {
             // TODO extend claim
         }
@@ -512,7 +524,7 @@ impl Storage {
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        let run_row = self.get_run_state(&mut *atomic, run_id).await?;
+        let run_row = self.get_run_state(&mut atomic, run_id).await?;
         if run_row.get::<TaskState, _>("state") != TaskState::Running {
             return Err(TaskTurbineError::NotRunning(run_id));
         }
@@ -520,7 +532,7 @@ impl Storage {
         // Fetch the checkpoint if it exists
         let checkpoint_opt = sqlx::query(
             "SELECT state FROM taskturbine.checkpoints
-            WHERE task_id = $1 AND step_name = $2"
+            WHERE task_id = $1 AND step_name = $2",
         )
         .bind(task_id)
         .bind(step_name)
@@ -537,10 +549,12 @@ impl Storage {
         }
 
         // Check for an event that was received while we were waiting.
-        let event = self.get_event(&mut *atomic, event_name).await?;
+        let event = self.get_event(&mut atomic, event_name).await?;
         if let Some(payload) = event {
             // There was an event, store a checkpoint and return
-            let _ = self.store_checkpoint(&mut *atomic, &task_id, &run_id, step_name, &payload).await?;
+            self
+                .store_checkpoint(&mut atomic, &task_id, &run_id, step_name, &payload)
+                .await?;
 
             return Ok(AwaitResult {
                 payload,
@@ -554,14 +568,28 @@ impl Storage {
             Utc::now() + Duration::seconds(60 * 10)
         };
         // Record the event wait
-        let _ = self.store_wait(&mut atomic, &task_id, &run_id, step_name, event_name, timeout_ts).await?;
+        self
+            .store_wait(
+                &mut atomic,
+                &task_id,
+                &run_id,
+                step_name,
+                event_name,
+                timeout_ts,
+            )
+            .await?;
 
         // Suspend the current run and mark the task as sleeping
-        let _ = self.suspend_run(&mut atomic, &task_id, &run_id, timeout_ts).await?;
+        self
+            .suspend_run(&mut atomic, &task_id, &run_id, timeout_ts)
+            .await?;
 
         let _ = atomic.commit().await.map_err(TaskTurbineError::SqlError);
 
-        Ok(AwaitResult { should_suspend: true, payload: b"".to_vec() })
+        Ok(AwaitResult {
+            should_suspend: true,
+            payload: b"".to_vec(),
+        })
     }
 
     /// Store a wait for a task
@@ -631,13 +659,13 @@ impl Storage {
 
     /// Read an event by name or None
     async fn get_event(
-        &self, 
+        &self,
         conn: &mut PgConnection,
-        event_name: &str
+        event_name: &str,
     ) -> Result<Option<Vec<u8>>, TaskTurbineError> {
         let event_opt = sqlx::query(
             "SELECT payload FROM taskturbine.events
-            WHERE event_name = $1"
+            WHERE event_name = $1",
         )
         .bind(event_name)
         .fetch_optional(conn)
@@ -654,19 +682,26 @@ impl Storage {
     }
 
     /// Advance a task and run to sleeping state until available_at
-    async fn suspend_run(&self, conn: &mut PgConnection, task_id: &Uuid, run_id: &Uuid, available_at: DateTime<Utc>) -> Result<(), TaskTurbineError> {
+    async fn suspend_run(
+        &self,
+        conn: &mut PgConnection,
+        task_id: &Uuid,
+        run_id: &Uuid,
+        available_at: DateTime<Utc>,
+    ) -> Result<(), TaskTurbineError> {
         let _ = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1,
                 claimed_by = NULL,
                 claim_expires_at = NULL,
                 available_at = $2
-            WHERE run_id = $3"
-        ).bind(TaskState::Sleeping)
-            .bind(available_at)
-            .bind(run_id)
-            .execute(&mut *conn)
-            .await
+            WHERE run_id = $3",
+        )
+        .bind(TaskState::Sleeping)
+        .bind(available_at)
+        .bind(run_id)
+        .execute(&mut *conn)
+        .await
         .map_err(TaskTurbineError::SqlError)?;
 
         let _ = sqlx::query("UPDATE taskturbine.tasks SET state = $1 WHERE task_id = $2")
@@ -674,13 +709,17 @@ impl Storage {
             .bind(task_id)
             .execute(&mut *conn)
             .await
-        .map_err(TaskTurbineError::SqlError)?;
+            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
 
     /// Record an external event that a task/run is waiting for.
-    pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), TaskTurbineError> {
+    pub async fn emit_event(
+        &self,
+        event_name: &str,
+        payload: &[u8],
+    ) -> Result<(), TaskTurbineError> {
         let mut atomic = self
             .pool
             .begin()
@@ -689,7 +728,7 @@ impl Storage {
 
         let _ = sqlx::query(
             "INSERT INTO taskturbine.events (event_name, payload, created_at)
-            VALUES ($1, $2, NOW())"
+            VALUES ($1, $2, NOW())",
         )
         .bind(event_name)
         .bind(payload)
@@ -752,15 +791,19 @@ mod tests {
         let payload = b"{\"key\": \"value\"}";
 
         let result = storage
-            .spawn_task(namespace, task_name, payload, Some(TaskOptions {
-                retry_factor: 0.0,
-                ..Default::default()
-            }))
+            .spawn_task(
+                namespace,
+                task_name,
+                payload,
+                Some(TaskOptions {
+                    retry_factor: 0.0,
+                    ..Default::default()
+                }),
+            )
             .await;
         assert!(result.is_err(), "Should fail");
         let err = result.err().unwrap();
         assert!(matches!(err, TaskTurbineError::ValidationError(..)));
-
     }
 
     #[tokio::test]
@@ -786,7 +829,9 @@ mod tests {
     #[tokio::test]
     async fn test_complete_run_success() {
         let (storage, spawned) = create_task().await.unwrap();
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
         let res = storage
             .complete_run(spawned.run_id, b"{\"result\": \"success\"}")
@@ -799,14 +844,26 @@ mod tests {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce task & run to running state
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
         // Register a wait, run will become sleeping
-        let res = storage.await_event(spawned.task_id, spawned.run_id, "step_name", "event_name", None).await;
+        let res = storage
+            .await_event(
+                spawned.task_id,
+                spawned.run_id,
+                "step_name",
+                "event_name",
+                None,
+            )
+            .await;
         assert!(res.is_ok());
 
         // Coerce back to running state
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
         // complete the run
         let res = storage
@@ -817,7 +874,10 @@ mod tests {
         let wait_res = storage.get_wait_by_run_id(spawned.run_id).await;
 
         assert!(wait_res.is_ok());
-        assert!(wait_res.unwrap().is_none(), "wait should be deleted on run completion");
+        assert!(
+            wait_res.unwrap().is_none(),
+            "wait should be deleted on run completion"
+        );
     }
 
     #[tokio::test]
@@ -833,10 +893,16 @@ mod tests {
     #[tokio::test]
     async fn test_fail_run_ok_no_retry_at() {
         let (storage, spawned) = create_task().await.unwrap();
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
         let res = storage
-            .fail_run(spawned.run_id, b"{\"error\": \"something went wrong\"}", None)
+            .fail_run(
+                spawned.run_id,
+                b"{\"error\": \"something went wrong\"}",
+                None,
+            )
             .await;
         assert!(res.is_ok(), "Failed to fail run: {res:?}");
     }
@@ -844,7 +910,9 @@ mod tests {
     #[tokio::test]
     async fn test_fail_run_ok_with_retry_at() {
         let (storage, spawned) = create_task().await.unwrap();
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
         let retry_at = Utc::now() + chrono::Duration::seconds(120);
         let res = storage
@@ -862,10 +930,20 @@ mod tests {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce task & run to running state
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
         // Register a wait
-        let res = storage.await_event(spawned.task_id, spawned.run_id, "step_name", "event_name", None).await;
+        let res = storage
+            .await_event(
+                spawned.task_id,
+                spawned.run_id,
+                "step_name",
+                "event_name",
+                None,
+            )
+            .await;
         assert!(res.is_ok());
 
         // Fail the run
@@ -888,7 +966,9 @@ mod tests {
         let storage = create_storage().await;
         let task_id = Uuid::now_v7();
         let run_id = Uuid::now_v7();
-        let res = storage.await_event(task_id, run_id, "step_name", "event_name", None).await;
+        let res = storage
+            .await_event(task_id, run_id, "step_name", "event_name", None)
+            .await;
         assert!(res.is_err());
         let err = res.err().unwrap();
         assert!(matches!(err, TaskTurbineError::NotFound(_)));
@@ -899,7 +979,15 @@ mod tests {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Fails because the run is not running.
-        let res = storage.await_event(spawned.task_id, spawned.run_id, "step_name", "event_name", None).await;
+        let res = storage
+            .await_event(
+                spawned.task_id,
+                spawned.run_id,
+                "step_name",
+                "event_name",
+                None,
+            )
+            .await;
         assert!(res.is_err());
         let err = res.err().unwrap();
         assert!(matches!(err, TaskTurbineError::NotRunning(_)));
@@ -910,14 +998,32 @@ mod tests {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and set a checkpoint
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
-        let _ = storage.set_task_checkpoint(spawned.task_id, spawned.run_id, "first-step", b"results", None).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
+        let _ = storage
+            .set_task_checkpoint(
+                spawned.task_id,
+                spawned.run_id,
+                "first-step",
+                b"results",
+                None,
+            )
+            .await;
 
-        let res = storage.await_event(spawned.task_id, spawned.run_id, "first-step", "event_name", None).await;
+        let res = storage
+            .await_event(
+                spawned.task_id,
+                spawned.run_id,
+                "first-step",
+                "event_name",
+                None,
+            )
+            .await;
         assert!(res.is_ok());
         let await_result = res.unwrap();
 
-        assert_eq!(await_result.should_suspend, false);
+        assert!(!await_result.should_suspend);
         assert_eq!(await_result.payload, b"results");
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
@@ -929,12 +1035,22 @@ mod tests {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and store a wait
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
-        let res = storage.await_event(spawned.task_id, spawned.run_id, "first-step", "event_name", None).await;
+        let res = storage
+            .await_event(
+                spawned.task_id,
+                spawned.run_id,
+                "first-step",
+                "event_name",
+                None,
+            )
+            .await;
         assert!(res.is_ok());
         let await_result = res.unwrap();
-        assert_eq!(await_result.should_suspend, true);
+        assert!(await_result.should_suspend);
         assert_eq!(await_result.payload, b"");
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
@@ -946,15 +1062,25 @@ mod tests {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and set a checkpoint
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
         let _ = storage.emit_event("event-123", b"event-payload").await;
 
         // Should get the event payload back
-        let res = storage.await_event(spawned.task_id, spawned.run_id, "first-step", "event-123", None).await;
+        let res = storage
+            .await_event(
+                spawned.task_id,
+                spawned.run_id,
+                "first-step",
+                "event-123",
+                None,
+            )
+            .await;
         assert!(res.is_ok());
         let await_result = res.unwrap();
         assert_eq!(await_result.payload, b"event-payload");
-        assert_eq!(await_result.should_suspend, false);
+        assert!(!await_result.should_suspend);
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.get::<String, _>("state"), "running");
