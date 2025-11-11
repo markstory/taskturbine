@@ -57,7 +57,7 @@ CREATE TABLE taskturbine.checkpoints (
 CREATE TABLE taskturbine.events (
     event_name text primary key,
     payload bytea,
-    emitted_at timestamptz not null default current_timestamp
+    created_at timestamptz not null default current_timestamp
 );
 
 CREATE TABLE taskturbine.waits (

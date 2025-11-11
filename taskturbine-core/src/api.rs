@@ -234,8 +234,8 @@ impl Storage {
 
     async fn get_run_state(
         &self,
-        run_id: Uuid,
         conn: &mut PgConnection,
+        run_id: Uuid,
     ) -> Result<PgRow, TaskTurbineError> {
         let res =
             sqlx::query("SELECT task_id, state FROM taskturbine.runs WHERE run_id = $1 FOR UPDATE")
@@ -278,7 +278,7 @@ impl Storage {
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        let run_row = self.get_run_state(run_id, &mut *atomic).await?;
+        let run_row = self.get_run_state(&mut *atomic, run_id).await?;
 
         let task_id: Uuid = run_row.get("task_id");
         let state: TaskState = run_row.get("state");
@@ -353,7 +353,7 @@ impl Storage {
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        let run_row = self.get_run_state(run_id, &mut *atomic).await?;
+        let run_row = self.get_run_state(&mut *atomic, run_id).await?;
         let state: TaskState = run_row.get("state");
         match state {
             TaskState::Running | TaskState::Sleeping => {}
@@ -459,6 +459,19 @@ impl Storage {
         Ok(())
     }
 
+    /// Record a checkpoint for a task and step name.
+    /// The worker can extend its claim on the task each time it creates a checkpoint.
+    pub async fn set_task_checkpoint(&self, task_id: Uuid, run_id: Uuid, step_name: &str, state: &[u8], extend_claim: Option<Duration>) -> Result<(), TaskTurbineError> {
+        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+        let _ = self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state).await?;
+        if let Some(extension) = extend_claim {
+            // TODO extend claim
+        }
+        atomic.commit().await.map_err(|e| TaskTurbineError::SqlError(e))?;
+
+        Ok(())
+    }
+
     /// Await for an external event to be received
     /// or for the timeout to expire.
     pub async fn await_event(
@@ -471,6 +484,15 @@ impl Storage {
     ) -> Result<AwaitResult, TaskTurbineError> {
         // TODO add transaction
         // Ensure the task & run exist and are running.
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+        let run_row = self.get_run_state(&mut *atomic, run_id).await?;
+        if run_row.get::<TaskState, _>("state") != TaskState::Running {
+            return Err(TaskTurbineError::NotRunning(run_id));
+        }
 
         // Fetch the checkpoint if it exists
         let checkpoint_opt = sqlx::query(
@@ -479,7 +501,7 @@ impl Storage {
         )
         .bind(task_id)
         .bind(step_name)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *atomic)
         .await
         .map_err(|e| TaskTurbineError::SqlError(e))?;
 
@@ -492,10 +514,10 @@ impl Storage {
         }
 
         // Check for an event that was received while we were waiting.
-        let event = self.get_event(event_name).await?;
+        let event = self.get_event(&mut *atomic, event_name).await?;
         if let Some(payload) = event {
             // There was an event, store a checkpoint and return
-            let _ = self.store_checkpoint(&task_id, &run_id, step_name, &payload).await?;
+            let _ = self.store_checkpoint(&mut *atomic, &task_id, &run_id, step_name, &payload).await?;
 
             return Ok(AwaitResult {
                 payload,
@@ -509,10 +531,10 @@ impl Storage {
             Utc::now() + Duration::seconds(60 * 10)
         };
         // Record the event wait
-        let _ = self.store_wait(&task_id, &run_id, step_name, event_name, timeout_ts).await?;
+        let _ = self.store_wait(&mut atomic, &task_id, &run_id, step_name, event_name, timeout_ts).await?;
 
         // Suspend the current run and mark the task as sleeping
-        let _ = self.suspend_run(&task_id, &run_id, timeout_ts).await?;
+        let _ = self.suspend_run(&mut atomic, &task_id, &run_id, timeout_ts).await?;
 
         Ok(AwaitResult { should_suspend: true, payload: b"".to_vec() })
     }
@@ -522,6 +544,7 @@ impl Storage {
     /// wait record is updated to reflect the provided run information.
     async fn store_wait(
         &self,
+        conn: &mut PgConnection,
         task_id: &Uuid,
         run_id: &Uuid,
         step_name: &str,
@@ -529,14 +552,14 @@ impl Storage {
         timeout: DateTime<Utc>,
     ) -> Result<(), TaskTurbineError> {
         let _ = sqlx::query(
-            "INSERT INTO taskturbine.waits (task_id, run_id, step_name, event_name, timeout, created_at)
+            "INSERT INTO taskturbine.waits (task_id, run_id, step_name, event_name, timeout_at, created_at)
             VALUES ($1, $2, $3, $4, $5, NOW())
             ON CONFLICT (event_name)
             DO UPDATE
             SET task_id = EXCLUDED.task_id,
                 run_id = EXCLUDED.run_id,
                 step_name = EXCLUDED.step_name,
-                timeout = EXCLUDED.timeout,
+                timeout_at = EXCLUDED.timeout_at,
                 created_at = EXCLUDED.created_at"
         )
         .bind(task_id)
@@ -544,7 +567,7 @@ impl Storage {
         .bind(step_name)
         .bind(event_name)
         .bind(timeout)
-        .execute(&self.pool)
+        .execute(conn)
         .await
         .map_err(|e| TaskTurbineError::SqlError(e))?;
 
@@ -555,6 +578,7 @@ impl Storage {
     /// If the checkpoint already exists, it will be updated with the run_id and state.
     async fn store_checkpoint(
         &self,
+        conn: &mut PgConnection,
         task_id: &Uuid,
         run_id: &Uuid,
         step_name: &str,
@@ -573,7 +597,7 @@ impl Storage {
         .bind(run_id)
         .bind(step_name)
         .bind(state)
-        .execute(&self.pool)
+        .execute(conn)
         .await
         .map_err(|e| TaskTurbineError::SqlError(e))?;
 
@@ -581,16 +605,21 @@ impl Storage {
     }
 
     /// Read an event by name or None
-    async fn get_event(&self, event_name: &str) -> Result<Option<Vec<u8>>, TaskTurbineError> {
+    async fn get_event(
+        &self, 
+        conn: &mut PgConnection,
+        event_name: &str
+    ) -> Result<Option<Vec<u8>>, TaskTurbineError> {
         let event_opt = sqlx::query(
             "SELECT payload FROM taskturbine.events
             WHERE event_name = $1"
         )
         .bind(event_name)
-        .fetch_optional(&self.pool)
+        .fetch_optional(conn)
         .await
         .map_err(|e| TaskTurbineError::SqlError(e))?;
 
+        dbg!(&event_opt);
         if let Some(event) = event_opt {
             let payload: Vec<u8> = event.get("payload");
 
@@ -601,7 +630,7 @@ impl Storage {
     }
 
     /// Advance a task and run to sleeping state until available_at
-    async fn suspend_run(&self, task_id: &Uuid, run_id: &Uuid, available_at: DateTime<Utc>) -> Result<(), TaskTurbineError> {
+    async fn suspend_run(&self, conn: &mut PgConnection, task_id: &Uuid, run_id: &Uuid, available_at: DateTime<Utc>) -> Result<(), TaskTurbineError> {
         let _ = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1,
@@ -612,22 +641,48 @@ impl Storage {
         ).bind(TaskState::Sleeping)
             .bind(available_at)
             .bind(run_id)
-            .execute(&self.pool)
+            .execute(&mut *conn)
             .await
         .map_err(|e| TaskTurbineError::SqlError(e))?;
 
         let _ = sqlx::query("UPDATE taskturbine.tasks SET state = $1 WHERE task_id = $2")
             .bind(TaskState::Sleeping)
             .bind(task_id)
-            .execute(&self.pool)
+            .execute(&mut *conn)
             .await
         .map_err(|e| TaskTurbineError::SqlError(e))?;
 
         Ok(())
     }
+
+    /// Record an external event that a task/run is waiting for.
+    pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), TaskTurbineError> {
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+
+        let _ = sqlx::query(
+            "INSERT INTO taskturbine.events (event_name, payload, created_at)
+            VALUES ($1, $2, NOW())"
+        )
+        .bind(event_name)
+        .bind(payload)
+        .execute(&mut *atomic)
+        .await
+        .map_err(|e| TaskTurbineError::SqlError(e))?;
+
+        // TODO wake up the task/run.
+
+        let _ = atomic.commit().await;
+
+        Ok(())
+    }
 }
 
-struct AwaitResult {
+#[derive(Debug, Clone)]
+pub struct AwaitResult {
     pub payload: Vec<u8>,
     pub should_suspend: bool,
 }
@@ -799,26 +854,89 @@ mod tests {
 
     #[tokio::test]
     async fn test_await_event_missing_run() {
-        todo!();
+        let storage = create_storage().await;
+        let task_id = Uuid::now_v7();
+        let run_id = Uuid::now_v7();
+        let res = storage.await_event(task_id, run_id, "step_name", "event_name", None).await;
+        assert!(res.is_err());
+        let err = res.err().unwrap();
+        assert!(matches!(err, TaskTurbineError::NotFound(_)));
     }
 
     #[tokio::test]
-    async fn test_await_event_missing_task() {
-        todo!();
+    async fn test_await_event_not_running() {
+        let storage = create_storage().await;
+        let namespace = "demo";
+        let task_name = "say_hello";
+        let payload = b"{\"key\": \"value\"}";
+
+        let result = storage
+            .spawn_task(namespace, task_name, payload, None)
+            .await;
+        assert!(result.is_ok());
+        let spawned = result.unwrap();
+
+        // Fails because the run is not running.
+        let res = storage.await_event(spawned.task_id, spawned.run_id, "step_name", "event_name", None).await;
+        assert!(res.is_err());
+        let err = res.err().unwrap();
+        assert!(matches!(err, TaskTurbineError::NotRunning(_)));
     }
 
     #[tokio::test]
     async fn test_await_event_existing_checkpoint() {
+        let storage = create_storage().await;
+        let namespace = "demo";
+        let task_name = "say_hello";
+        let payload = b"{\"key\": \"value\"}";
+
+        let result = storage
+            .spawn_task(namespace, task_name, payload, None)
+            .await;
+        assert!(result.is_ok());
+        let spawned = result.unwrap();
+
+        // Coerce to running and set a checkpoint
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage.set_task_checkpoint(spawned.task_id, spawned.run_id, "first-step", b"results", None).await;
+
+        let res = storage.await_event(spawned.task_id, spawned.run_id, "first-step", "event_name", None).await;
+        assert!(res.is_ok());
+        let await_result = res.unwrap();
+
+        assert_eq!(await_result.should_suspend, false);
+        assert_eq!(await_result.payload, b"results");
+
+        // TODO make sure run is still running.
+    }
+
+    #[tokio::test]
+    async fn test_await_event_record_wait_advance_to_sleeping() {
         todo!();
     }
 
     #[tokio::test]
     async fn test_await_event_has_event() {
-        todo!();
-    }
+        let storage = create_storage().await;
+        let namespace = "demo";
+        let task_name = "say_hello";
+        let payload = b"{\"key\": \"value\"}";
 
-    #[tokio::test]
-    async fn test_await_event_record_wait_and_new_run() {
-        todo!();
+        let result = storage
+            .spawn_task(namespace, task_name, payload, None)
+            .await;
+        assert!(result.is_ok());
+        let spawned = result.unwrap();
+
+        // Coerce to running and set a checkpoint
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage.emit_event("event-123", b"event-payload").await;
+
+        // Should get the event payload back
+        let res = storage.await_event(spawned.task_id, spawned.run_id, "first-step", "event-123", None).await;
+        assert!(res.is_ok());
+        let await_result = res.unwrap();
+        assert_eq!(await_result.payload, b"event-payload");
+        assert_eq!(await_result.should_suspend, false);
     }
 }
