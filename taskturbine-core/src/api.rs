@@ -959,4 +959,14 @@ mod tests {
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.get::<String, _>("state"), "running");
     }
+
+    #[tokio::test]
+    async fn test_set_task_checkpoint_extend_claim() {
+        todo!();
+    }
+
+    #[tokio::test]
+    async fn test_set_task_checkpoint_store_state() {
+        todo!();
+    }
 }
