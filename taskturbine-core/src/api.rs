@@ -114,12 +114,6 @@ impl Storage {
         Self { config, pool }
     }
 
-    // Run migrations to create or update the database schema.
-    // Will create a taskturbine schema and add all tables inside that schema.
-    pub async fn update_schema(&self) -> Result<(), MigrateError> {
-        sqlx::migrate!("./migrations").run(&self.pool).await
-    }
-
     /// {{{ Testing helpers
     /// Testing helper: Delete all data from the storage tables.
     #[cfg(test)]
@@ -217,7 +211,18 @@ impl Storage {
     }
     /// }}}
 
+    // Run migrations to create or update the database schema.
+    // Will create a taskturbine schema and add all tables inside that schema.
+    pub async fn update_schema(&self) -> Result<(), MigrateError> {
+        sqlx::migrate!("./migrations").run(&self.pool).await
+    }
+
     /// Spawn a task and initialize a run.
+    ///
+    /// Tasks belong to a namespace. Namespaces allow you to split up your task
+    /// workload into different worker pools. This is ideal for spliting up orthoganal
+    /// workloads, or to handling various priorities and throughput on the same
+    /// taskturbine database.
     pub async fn spawn_task(
         &self,
         namespace: &str,
@@ -284,7 +289,8 @@ impl Storage {
         Ok(SpawnResult { task_id, run_id })
     }
 
-    async fn get_run_state(
+    /// Get a run state in FOR UPDATE mode
+    async fn get_locked_run_state(
         &self,
         conn: &mut PgConnection,
         run_id: Uuid,
@@ -303,6 +309,7 @@ impl Storage {
         Ok(row)
     }
 
+    /// Get a task record locked with FOR UPDATE
     async fn get_locked_task(
         &self,
         task_id: Uuid,
@@ -334,12 +341,12 @@ impl Storage {
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        let run_row = self.get_run_state(&mut atomic, run_id).await?;
-
+        let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
         let task_id: Uuid = run_row.get("task_id");
         let state: TaskState = run_row.get("state");
+
         if state != TaskState::Running {
-            // Not running
+            // Need to be running to complete.
             atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
             return Err(TaskTurbineError::NotRunning(run_id));
         }
@@ -377,7 +384,8 @@ impl Storage {
         Ok(())
     }
 
-    /// Clear waits on runs that we are no longer interested in.
+    /// Clear waits on runs that we are no longer interested in
+    /// as the run is complete or cancelled.
     async fn clear_waits(
         &self,
         run_id: Uuid,
@@ -406,11 +414,13 @@ impl Storage {
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        let run_row = self.get_run_state(&mut atomic, run_id).await?;
+
+        let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
         let state: TaskState = run_row.get("state");
         match state {
             TaskState::Running | TaskState::Sleeping => {}
             _ => {
+                // If the run is not active/sleeping it cannot be failed.
                 atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
                 return Err(TaskTurbineError::NotRunning(run_id));
             }
@@ -422,7 +432,7 @@ impl Storage {
             "UPDATE taskturbine.runs
             SET state = $1, failed_at = NOW(), 
                 wake_event = NULL, failure_reason = $2
-            WHERE run_id = $3",
+            WHERE run_id = $3"
         )
         .bind(TaskState::Failed)
         .bind(reason)
@@ -462,7 +472,7 @@ impl Storage {
                 task.state = TaskState::Cancelled;
                 task.cancelled_at = Some(now);
             } else {
-                // Clear cancellation and advance state
+                // Not cancelled, advance to next state
                 task.cancelled_at = None;
                 task.state = if next_available_at > now {
                     TaskState::Sleeping
@@ -506,6 +516,7 @@ impl Storage {
         .map_err(TaskTurbineError::SqlError)?;
 
         self.clear_waits(run_id, &mut atomic).await?;
+
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
         Ok(())
     }
@@ -547,6 +558,7 @@ impl Storage {
 
     /// Await for an external event to be received
     /// or for the timeout to expire.
+    /// Events must be recorded with [`Storage::emit_event()`]
     pub async fn await_event(
         &self,
         task_id: Uuid,
@@ -555,13 +567,14 @@ impl Storage {
         event_name: &str,
         timeout: Option<i32>,
     ) -> Result<AwaitResult, TaskTurbineError> {
-        // Ensure the task & run exist and are running.
         let mut atomic = self
             .pool
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        let run_row = self.get_run_state(&mut atomic, run_id).await?;
+
+        // Ensure the task & run exist and are running.
+        let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
         if run_row.get::<TaskState, _>("state") != TaskState::Running {
             return Err(TaskTurbineError::NotRunning(run_id));
         }
@@ -585,7 +598,7 @@ impl Storage {
             });
         }
 
-        // Check for an event that was received while we were waiting.
+        // Check for an event that was received while we were sleeping/running.
         let event = self.get_event(&mut atomic, event_name).await?;
         if let Some(payload) = event {
             // There was an event, store a checkpoint and return
@@ -597,6 +610,9 @@ impl Storage {
                 should_suspend: false,
             });
         }
+
+        // Store a wait and reschedule this run for when the timeout occurs.
+        // If an event is emit before that time, we'll be woken up.
         let timeout_ts = if let Some(timeout) = timeout {
             Utc::now() + Duration::seconds(timeout as i64)
         } else {
@@ -691,7 +707,7 @@ impl Storage {
         Ok(())
     }
 
-    /// Read an event by name or None
+    /// Read an event's payload by name or None
     async fn get_event(
         &self,
         conn: &mut PgConnection,
@@ -749,6 +765,10 @@ impl Storage {
     }
 
     /// Record an external event that a task/run is waiting for.
+    /// This is ideal for receiving webhooks, or waiting for other tasks
+    /// to complete.
+    ///
+    /// Tasks can wait for events with [`Storage::await_event()`]
     pub async fn emit_event(
         &self,
         event_name: &str,
