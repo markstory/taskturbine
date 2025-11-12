@@ -120,8 +120,9 @@ impl Storage {
         sqlx::migrate!("./migrations").run(&self.pool).await
     }
 
-    /// Delete all data from the storage tables.
-    /// This is a destructive operation that should only really be used in tests.
+    /// {{{ Testing helpers
+    /// Testing helper: Delete all data from the storage tables.
+    #[cfg(test)]
     pub async fn clear_storage(&self) -> Result<(), TaskTurbineError> {
         let tables = ["events", "waits", "checkpoints", "runs", "tasks"];
         for table in tables.iter() {
@@ -134,7 +135,7 @@ impl Storage {
         Ok(())
     }
 
-    /// Testing Helper for setting run + task to a specific state.
+    /// Testing Helper: setting run + task to a specific state.
     #[cfg(test)]
     async fn set_run_state(&self, task_id: Uuid, state: TaskState) -> Result<(), TaskTurbineError> {
         let res = sqlx::query(
@@ -166,7 +167,7 @@ impl Storage {
         Ok(())
     }
 
-    /// Test helper for reading task runs
+    /// Testing helper: reading task runs
     #[cfg(test)]
     async fn get_run(&self, run_id: Uuid) -> Result<PgRow, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.runs WHERE run_id = $1")
@@ -178,6 +179,7 @@ impl Storage {
         Ok(res)
     }
 
+    // Testing helper: get waits for a run
     #[cfg(test)]
     async fn get_wait_by_run_id(&self, run_id: Uuid) -> Result<Option<PgRow>, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.waits WHERE run_id = $1")
@@ -189,6 +191,7 @@ impl Storage {
         Ok(res)
     }
 
+    // Testing helper: get a run
     #[cfg(test)]
     async fn get_task(&self, task_id: Uuid) -> Result<Option<PgRow>, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
@@ -200,6 +203,7 @@ impl Storage {
         Ok(res)
     }
 
+    // Testing helper: get a checkpoint
     #[cfg(test)]
     async fn get_checkpoint(&self, task_id: Uuid, step_name: &str) -> Result<Option<PgRow>, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 AND step_name = $2")
@@ -211,6 +215,7 @@ impl Storage {
 
         Ok(res)
     }
+    /// }}}
 
     /// Spawn a task and initialize a run.
     pub async fn spawn_task(
