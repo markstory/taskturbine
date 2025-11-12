@@ -189,6 +189,29 @@ impl Storage {
         Ok(res)
     }
 
+    #[cfg(test)]
+    async fn get_task(&self, task_id: Uuid) -> Result<Option<PgRow>, TaskTurbineError> {
+        let res = sqlx::query("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
+            .bind(task_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+
+        Ok(res)
+    }
+
+    #[cfg(test)]
+    async fn get_checkpoint(&self, task_id: Uuid, step_name: &str) -> Result<Option<PgRow>, TaskTurbineError> {
+        let res = sqlx::query("SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 AND step_name = $2")
+            .bind(task_id)
+            .bind(step_name)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+
+        Ok(res)
+    }
+
     /// Spawn a task and initialize a run.
     pub async fn spawn_task(
         &self,
@@ -497,11 +520,20 @@ impl Storage {
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        self
-            .store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
+        self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
             .await?;
         if let Some(extension) = extend_claim {
-            // TODO extend claim
+            let seconds = extension.num_seconds();
+            let _ = sqlx::query(
+                "UPDATE taskturbine.runs 
+                SET claim_expires_at = COALESCE(claim_expires_at, NOW()) + $1 * INTERVAL '1 second'
+                WHERE run_id = $2",
+            )
+            .bind(seconds)
+            .bind(run_id)
+            .execute(&self.pool)
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
         }
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
@@ -552,8 +584,7 @@ impl Storage {
         let event = self.get_event(&mut atomic, event_name).await?;
         if let Some(payload) = event {
             // There was an event, store a checkpoint and return
-            self
-                .store_checkpoint(&mut atomic, &task_id, &run_id, step_name, &payload)
+            self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, &payload)
                 .await?;
 
             return Ok(AwaitResult {
@@ -568,20 +599,18 @@ impl Storage {
             Utc::now() + Duration::seconds(60 * 10)
         };
         // Record the event wait
-        self
-            .store_wait(
-                &mut atomic,
-                &task_id,
-                &run_id,
-                step_name,
-                event_name,
-                timeout_ts,
-            )
-            .await?;
+        self.store_wait(
+            &mut atomic,
+            &task_id,
+            &run_id,
+            step_name,
+            event_name,
+            timeout_ts,
+        )
+        .await?;
 
         // Suspend the current run and mark the task as sleeping
-        self
-            .suspend_run(&mut atomic, &task_id, &run_id, timeout_ts)
+        self.suspend_run(&mut atomic, &task_id, &run_id, timeout_ts)
             .await?;
 
         let _ = atomic.commit().await.map_err(TaskTurbineError::SqlError);
@@ -784,7 +813,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_spawn_task_invalid_retry_factor() {
+    async fn spawn_task_invalid_retry_factor() {
         let storage = create_storage().await;
         let namespace = "demo";
         let task_name = "say_hello";
@@ -807,14 +836,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_spawn_task_get_task_id() {
+    async fn spawn_task_get_task_id() {
         let (_, spawned) = create_task().await.unwrap();
         assert!(!spawned.task_id.to_string().is_empty());
         assert!(!spawned.run_id.to_string().is_empty());
     }
 
     #[tokio::test]
-    async fn test_complete_run_not_running() {
+    async fn complete_run_not_running() {
         let (storage, spawned) = create_task().await.unwrap();
         let res = storage
             .complete_run(spawned.run_id, b"{\"result\": \"success\"}")
@@ -827,7 +856,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_complete_run_success() {
+    async fn complete_run_success() {
         let (storage, spawned) = create_task().await.unwrap();
         let _ = storage
             .set_run_state(spawned.task_id, TaskState::Running)
@@ -840,7 +869,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_complete_run_clears_waits() {
+    async fn complete_run_clears_waits() {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce task & run to running state
@@ -881,7 +910,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fail_run_missing() {
+    async fn fail_run_missing() {
         let storage = create_storage().await;
         let id = Uuid::now_v7();
         let res = storage.fail_run(id, b"", None).await;
@@ -891,7 +920,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fail_run_ok_no_retry_at() {
+    async fn fail_run_ok_no_retry_at() {
         let (storage, spawned) = create_task().await.unwrap();
         let _ = storage
             .set_run_state(spawned.task_id, TaskState::Running)
@@ -908,7 +937,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fail_run_ok_with_retry_at() {
+    async fn fail_run_ok_with_retry_at() {
         let (storage, spawned) = create_task().await.unwrap();
         let _ = storage
             .set_run_state(spawned.task_id, TaskState::Running)
@@ -926,7 +955,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fail_run_remove_wait() {
+    async fn fail_run_remove_wait() {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce task & run to running state
@@ -962,7 +991,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_await_event_missing_run() {
+    async fn await_event_missing_run() {
         let storage = create_storage().await;
         let task_id = Uuid::now_v7();
         let run_id = Uuid::now_v7();
@@ -975,7 +1004,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_await_event_not_running() {
+    async fn await_event_not_running() {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Fails because the run is not running.
@@ -994,7 +1023,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_await_event_existing_checkpoint() {
+    async fn await_event_reads_from_existing_checkpoint() {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and set a checkpoint
@@ -1031,7 +1060,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_await_event_record_wait_advance_to_sleeping() {
+    async fn await_event_record_wait_advance_to_sleeping() {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and store a wait
@@ -1058,7 +1087,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_await_event_has_event() {
+    async fn await_event_has_event() {
         let (storage, spawned) = create_task().await.unwrap();
 
         // Coerce to running and set a checkpoint
@@ -1087,12 +1116,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_task_checkpoint_extend_claim() {
-        todo!();
-    }
+    async fn set_task_checkpoint_extend_claim() {
+        let (storage, spawned) = create_task().await.unwrap();
 
-    #[tokio::test]
-    async fn test_set_task_checkpoint_store_state() {
-        todo!();
+        let now = Utc::now();
+        let res = storage
+            .set_task_checkpoint(
+                spawned.task_id,
+                spawned.run_id,
+                "step-1",
+                b"event-payload",
+                Some(Duration::minutes(5)),
+            )
+            .await;
+        assert!(res.is_ok());
+
+        let run = storage.get_run(spawned.run_id).await.unwrap();
+        let claim_expires = run.get::<DateTime<Utc>, _>("claim_expires_at");
+        let delta = claim_expires - now;
+        assert!(
+            delta.num_seconds() >= 300,
+            "claim should expire at least 290s in the future "
+        );
+
+        // Ensure the checkpoint stores state as well.
+        let checkpoint_opt = storage.get_checkpoint(spawned.task_id, "step-1").await.unwrap();
+        assert!(checkpoint_opt.is_some());
+        let checkpoint = checkpoint_opt.unwrap();
+        assert_eq!(b"event-payload".to_vec(), checkpoint.get::<Vec<u8>, _>("state"));
     }
 }
