@@ -209,6 +209,18 @@ impl Storage {
 
         Ok(res)
     }
+
+    // Testing helper: get an event
+    #[cfg(test)]
+    async fn get_event_row(&self, event_name: &str) -> Result<Option<PgRow>, TaskTurbineError> {
+        let res = sqlx::query("SELECT * FROM taskturbine.events WHERE event_name = $1")
+            .bind(event_name)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+
+        Ok(res)
+    }
     /// }}}
 
     // Run migrations to create or update the database schema.
@@ -523,7 +535,7 @@ impl Storage {
 
     /// Record a checkpoint for a task and step name.
     /// The worker can extend its claim on the task each time it creates a checkpoint.
-    pub async fn set_task_checkpoint(
+    pub async fn set_checkpoint(
         &self,
         task_id: Uuid,
         run_id: Uuid,
@@ -782,7 +794,11 @@ impl Storage {
 
         let _ = sqlx::query(
             "INSERT INTO taskturbine.events (event_name, payload, created_at)
-            VALUES ($1, $2, NOW())",
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (event_name)
+            DO UPDATE 
+            SET payload = excluded.payload,
+                created_at = excluded.created_at"
         )
         .bind(event_name)
         .bind(payload)
@@ -790,7 +806,33 @@ impl Storage {
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
-        // TODO wake up the task/run.
+        // Wake up the task/run.
+        // Clear any valid waits, and wake up those runs.
+        let _ = sqlx::query(
+            "WITH matching_waits AS (
+                DELETE FROM taskturbine.waits
+                WHERE event_name = $1
+                AND (timeout_at IS NULL OR timeout_at >= NOW())
+                RETURNING run_id
+            ),
+            updated_runs AS (
+                UPDATE taskturbine.runs
+                SET state = $2,
+                    available_at = NOW(),
+                    claimed_by = NULL,
+                    claim_expires_at = NULL
+                WHERE run_id IN (SELECT run_id FROM matching_waits)
+                RETURNING task_id
+            )
+            UPDATE taskturbine.tasks
+            SET state = $2
+            WHERE task_id IN (SELECT task_id FROM updated_runs)
+        ")
+        .bind(event_name)
+        .bind(TaskState::Pending)
+        .execute(&mut *atomic)
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
 
         let _ = atomic.commit().await;
 
@@ -817,7 +859,6 @@ mod tests {
 
         // Ensure migrations have been applied and that storage is cleared.
         storage.update_schema().await.unwrap();
-        // storage.clear_storage().await.unwrap();
 
         storage
     }
@@ -1056,7 +1097,7 @@ mod tests {
             .set_run_state(spawned.task_id, TaskState::Running)
             .await;
         let _ = storage
-            .set_task_checkpoint(
+            .set_checkpoint(
                 spawned.task_id,
                 spawned.run_id,
                 "first-step",
@@ -1119,7 +1160,10 @@ mod tests {
         let _ = storage
             .set_run_state(spawned.task_id, TaskState::Running)
             .await;
-        let _ = storage.emit_event("event-123", b"event-payload").await;
+
+        let task_id = spawned.task_id;
+        let event_id = format!("event-{task_id}");
+        let _ = storage.emit_event(&event_id, b"event-payload").await;
 
         // Should get the event payload back
         let res = storage
@@ -1127,7 +1171,7 @@ mod tests {
                 spawned.task_id,
                 spawned.run_id,
                 "first-step",
-                "event-123",
+                &event_id,
                 None,
             )
             .await;
@@ -1141,12 +1185,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_task_checkpoint_extend_claim() {
+    async fn set_checkpoint_extend_claim() {
         let (storage, spawned) = create_task().await.unwrap();
 
         let now = Utc::now();
         let res = storage
-            .set_task_checkpoint(
+            .set_checkpoint(
                 spawned.task_id,
                 spawned.run_id,
                 "step-1",
@@ -1169,5 +1213,59 @@ mod tests {
         assert!(checkpoint_opt.is_some());
         let checkpoint = checkpoint_opt.unwrap();
         assert_eq!(b"event-payload".to_vec(), checkpoint.get::<Vec<u8>, _>("state"));
+    }
+
+    #[tokio::test]
+    async fn emit_event_records() {
+        let storage = create_storage().await;
+        let uuid = Uuid::now_v7();
+        let event_id = format!("event-{uuid}");
+        let res = storage.emit_event(&event_id, b"payload data").await;
+        assert!(res.is_ok());
+
+        let res = storage.get_event_row(&event_id).await;
+        assert!(res.is_ok());
+        let opt = res.unwrap();
+        assert!(opt.is_some());
+        let event = opt.unwrap();
+        assert_eq!(
+            b"payload data".to_vec(),
+            event.get::<Vec<u8>, _>("payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn emit_event_clears_task_waits() {
+        let (storage, spawned) = create_task().await.unwrap();
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let uuid = Uuid::now_v7();
+        let event_id = format!("event-{uuid}");
+
+        let res = storage.await_event(
+            spawned.task_id,
+            spawned.run_id,
+            "step-1",
+            &event_id,
+            None
+        ).await;
+        assert!(res.is_ok());
+
+        let res = storage.get_wait_by_run_id(spawned.run_id).await;
+        let opt = res.unwrap();
+        assert!(opt.is_some(), "a wait should be saved");
+
+        // Capture an event which should wait up the task
+        let res = storage.emit_event(&event_id, b"payload data").await;
+        assert!(res.is_ok());
+
+        let res = storage.get_wait_by_run_id(spawned.run_id).await;
+        let opt = res.unwrap();
+        assert!(opt.is_none(), "no wait should remain");
+
+        let run = storage.get_run(spawned.run_id).await.unwrap();
+        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Pending);
+
+        let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
+        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Pending);
     }
 }
