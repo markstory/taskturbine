@@ -546,6 +546,20 @@ impl Storage {
         Ok(res)
     }
 
+    /// Get a list of checkpoints saved for this task.
+    /// If there are no checkpoints an empty Vec will be returned.
+    pub async fn get_checkpoints(&self, task_id: Uuid) -> Result<Vec<Checkpoint>, TaskTurbineError> {
+        let res: Vec<Checkpoint> = sqlx::query_as(
+            "SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 ORDER by updated_at"
+        )
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
+
+        Ok(res)
+    }
+
     /// Record a checkpoint for a task and step name.
     /// The worker can extend its claim on the task each time it creates a checkpoint.
     pub async fn set_checkpoint(
@@ -1303,5 +1317,39 @@ mod tests {
         let maybe_checkpoint = res.unwrap();
         let checkpoint = maybe_checkpoint.unwrap();
         assert_eq!(b"results".to_vec(), checkpoint.state);
+    }
+
+    #[tokio::test]
+    async fn test_get_checkpoints() {
+        let (storage, spawned) = create_task().await.unwrap();
+
+        // Coerce to running and set a checkpoint
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
+        let _ = storage
+            .set_checkpoint(
+                spawned.task_id,
+                spawned.run_id,
+                "first-step",
+                b"results",
+                None,
+            )
+            .await;
+        let _ = storage
+            .set_checkpoint(
+                spawned.task_id,
+                spawned.run_id,
+                "second-step",
+                b"second result",
+                None,
+            )
+            .await;
+
+        let res = storage.get_checkpoints(spawned.task_id).await;
+        let rows = res.unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(b"results".to_vec(), rows[0].state);
+        assert_eq!(b"second result".to_vec(), rows[1].state);
     }
 }
