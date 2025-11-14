@@ -531,6 +531,29 @@ impl Storage {
         Ok(())
     }
 
+    /// Pause a run and reschedule it to run later.
+    /// This is the simplest form of performing a retry
+    /// on a run. Scheduling a run this way does not increment
+    /// the attempt counter, or count as a fail.
+    ///
+    /// Runs can go to sleep for reasons like waiting for an event.
+    pub async fn schedule_run(&self, run_id: Uuid, wake_at: DateTime<Utc>) -> Result<(), TaskTurbineError> {
+        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+
+        let run = self.get_locked_run_state(&mut *atomic, run_id).await.map_err(|_| TaskTurbineError::NotFound(run_id))?;
+        if run.get::<TaskState, _>("state") != TaskState::Running {
+            return Err(TaskTurbineError::NotRunning(run_id));
+        }
+        self.suspend_run(
+            &mut *atomic, 
+            &run.get::<Uuid, _>("task_id"),
+            &run_id,
+            wake_at
+        ).await?;
+
+        Ok(())
+    }
+
     /// Get the state of a single checkpoint
     pub async fn get_checkpoint(
         &self,
@@ -1357,5 +1380,30 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(b"results".to_vec(), rows[0].state);
         assert_eq!(b"second result".to_vec(), rows[1].state);
+    }
+
+    #[tokio::test]
+    async fn test_schedule_run_fail_not_running() {
+        let (storage, spawned) = create_task().await.unwrap();
+
+        let later = Utc::now() + Duration::minutes(5);
+        let res = storage
+            .schedule_run(spawned.run_id, later)
+            .await;
+        assert!(res.is_err());
+        assert!(matches!(res.err().unwrap(), TaskTurbineError::NotRunning(_)));
+    }
+
+
+    #[tokio::test]
+    async fn test_schedule_run_running() {
+        let (storage, spawned) = create_task().await.unwrap();
+        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+
+        let later = Utc::now() + Duration::minutes(5);
+        let res = storage
+            .schedule_run(spawned.run_id, later)
+            .await;
+        assert!(res.is_ok());
     }
 }
