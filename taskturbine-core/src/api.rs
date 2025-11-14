@@ -442,7 +442,7 @@ impl Storage {
             "UPDATE taskturbine.runs
             SET state = $1, failed_at = NOW(), 
                 wake_event = NULL, failure_reason = $2
-            WHERE run_id = $3"
+            WHERE run_id = $3",
         )
         .bind(TaskState::Failed)
         .bind(reason)
@@ -532,10 +532,14 @@ impl Storage {
     }
 
     /// Get the state of a single checkpoint
-    pub async fn get_checkpoint(&self, task_id: Uuid, step_name: &str) -> Result<Option<Checkpoint>, TaskTurbineError> {
+    pub async fn get_checkpoint(
+        &self,
+        task_id: Uuid,
+        step_name: &str,
+    ) -> Result<Option<Checkpoint>, TaskTurbineError> {
         let res: Option<Checkpoint> = sqlx::query_as(
             "SELECT * FROM taskturbine.checkpoints
-            WHERE task_id = $1 AND step_name = $2"
+            WHERE task_id = $1 AND step_name = $2",
         )
         .bind(task_id)
         .bind(step_name)
@@ -548,9 +552,12 @@ impl Storage {
 
     /// Get a list of checkpoints saved for this task.
     /// If there are no checkpoints an empty Vec will be returned.
-    pub async fn get_checkpoints(&self, task_id: Uuid) -> Result<Vec<Checkpoint>, TaskTurbineError> {
+    pub async fn get_checkpoints(
+        &self,
+        task_id: Uuid,
+    ) -> Result<Vec<Checkpoint>, TaskTurbineError> {
         let res: Vec<Checkpoint> = sqlx::query_as(
-            "SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 ORDER by updated_at"
+            "SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 ORDER by updated_at",
         )
         .bind(task_id)
         .fetch_all(&self.pool)
@@ -825,7 +832,7 @@ impl Storage {
             ON CONFLICT (event_name)
             DO UPDATE 
             SET payload = excluded.payload,
-                created_at = excluded.created_at"
+                created_at = excluded.created_at",
         )
         .bind(event_name)
         .bind(payload)
@@ -854,7 +861,8 @@ impl Storage {
             UPDATE taskturbine.tasks
             SET state = $2
             WHERE task_id IN (SELECT task_id FROM updated_runs)
-        ")
+        ",
+        )
         .bind(event_name)
         .bind(TaskState::Pending)
         .execute(&mut *atomic)
@@ -1236,7 +1244,10 @@ mod tests {
         );
 
         // Ensure the checkpoint stores state as well.
-        let checkpoint_opt = storage.get_checkpoint(spawned.task_id, "step-1").await.unwrap();
+        let checkpoint_opt = storage
+            .get_checkpoint(spawned.task_id, "step-1")
+            .await
+            .unwrap();
         assert!(checkpoint_opt.is_some());
         let checkpoint = checkpoint_opt.unwrap();
         assert_eq!(b"event-payload".to_vec(), checkpoint.state);
@@ -1255,26 +1266,21 @@ mod tests {
         let opt = res.unwrap();
         assert!(opt.is_some());
         let event = opt.unwrap();
-        assert_eq!(
-            b"payload data".to_vec(),
-            event.get::<Vec<u8>, _>("payload")
-        );
+        assert_eq!(b"payload data".to_vec(), event.get::<Vec<u8>, _>("payload"));
     }
 
     #[tokio::test]
     async fn emit_event_clears_task_waits() {
         let (storage, spawned) = create_task().await.unwrap();
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
         let uuid = Uuid::now_v7();
         let event_id = format!("event-{uuid}");
 
-        let res = storage.await_event(
-            spawned.task_id,
-            spawned.run_id,
-            "step-1",
-            &event_id,
-            None
-        ).await;
+        let res = storage
+            .await_event(spawned.task_id, spawned.run_id, "step-1", &event_id, None)
+            .await;
         assert!(res.is_ok());
 
         let res = storage.get_wait_by_run_id(spawned.run_id).await;
