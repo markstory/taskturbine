@@ -140,6 +140,27 @@ impl Storage {
         Ok(())
     }
 
+    /// Garbage collect events.
+    ///
+    /// Delete events that have created_at older than `older_than`.
+    /// Only `limit` or fewer records will be deleted.
+    /// Returns the number of events that were deleted.
+    pub async fn cleanup_events(&self, older_than: DateTime<Utc>, limit: i32) -> Result<u64, TaskTurbineError> {
+        let res = sqlx::query(
+            "DELETE FROM taskturbine.events WHERE event_name IN (
+                SELECT event_name FROM taskturbine.events
+                WHERE created_at < $1 LIMIT $2
+            )"
+        )
+        .bind(older_than)
+        .bind(limit)
+        .execute(&self.pool)
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
+
+        Ok(res.rows_affected())
+    }
+
     /// Testing Helper: setting run + task to a specific state.
     #[cfg(test)]
     async fn set_run_state(&self, task_id: Uuid, state: TaskState) -> Result<(), TaskTurbineError> {
@@ -1405,5 +1426,18 @@ mod tests {
             .schedule_run(spawned.run_id, later)
             .await;
         assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_events() {
+        let storage = create_storage().await;
+        let _ = storage.emit_event("event-1", b"hi");
+        let _ = storage.emit_event("event-2", b"hi");
+        let _ = storage.emit_event("event-3", b"hi");
+
+        let cutoff = Utc::now() - Duration::minutes(15);
+        let res = storage.cleanup_events(cutoff, 2).await;
+        assert!(res.is_ok());
+        assert_eq!(2, res.unwrap());
     }
 }
