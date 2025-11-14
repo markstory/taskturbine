@@ -35,6 +35,7 @@ pub struct SpawnResult {
     pub run_id: Uuid,
 }
 
+/// Entity structure for a task
 #[derive(sqlx::FromRow, Debug, PartialEq)]
 pub struct Task {
     pub task_id: Uuid,
@@ -61,6 +62,16 @@ impl Task {
         let capped = total_delay.min(self.retry_max_seconds as f64);
         now + chrono::Duration::seconds(capped as i64)
     }
+}
+
+/// Entity structure for a task checkpoint
+#[derive(sqlx::FromRow, Debug, PartialEq)]
+pub struct Checkpoint {
+    task_id: Uuid,
+    step_name: String,
+    state: Vec<u8>,
+    owner_run_id: Uuid,
+    updated_at: DateTime<Utc>,
 }
 
 /// Options for spawning a task.
@@ -190,19 +201,6 @@ impl Storage {
     async fn get_task(&self, task_id: Uuid) -> Result<Option<PgRow>, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
             .bind(task_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(TaskTurbineError::SqlError)?;
-
-        Ok(res)
-    }
-
-    // Testing helper: get a checkpoint
-    #[cfg(test)]
-    async fn get_checkpoint(&self, task_id: Uuid, step_name: &str) -> Result<Option<PgRow>, TaskTurbineError> {
-        let res = sqlx::query("SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 AND step_name = $2")
-            .bind(task_id)
-            .bind(step_name)
             .fetch_optional(&self.pool)
             .await
             .map_err(TaskTurbineError::SqlError)?;
@@ -531,6 +529,21 @@ impl Storage {
 
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
         Ok(())
+    }
+
+    /// Get the state of a single checkpoint
+    pub async fn get_checkpoint(&self, task_id: Uuid, step_name: &str) -> Result<Option<Checkpoint>, TaskTurbineError> {
+        let res: Option<Checkpoint> = sqlx::query_as(
+            "SELECT * FROM taskturbine.checkpoints
+            WHERE task_id = $1 AND step_name = $2"
+        )
+        .bind(task_id)
+        .bind(step_name)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
+
+        Ok(res)
     }
 
     /// Record a checkpoint for a task and step name.
@@ -1212,7 +1225,7 @@ mod tests {
         let checkpoint_opt = storage.get_checkpoint(spawned.task_id, "step-1").await.unwrap();
         assert!(checkpoint_opt.is_some());
         let checkpoint = checkpoint_opt.unwrap();
-        assert_eq!(b"event-payload".to_vec(), checkpoint.get::<Vec<u8>, _>("state"));
+        assert_eq!(b"event-payload".to_vec(), checkpoint.state);
     }
 
     #[tokio::test]
@@ -1267,5 +1280,28 @@ mod tests {
 
         let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
         assert_eq!(task.get::<TaskState, _>("state"), TaskState::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_get_checkpoint_and_set() {
+        let (storage, spawned) = create_task().await.unwrap();
+
+        // Coerce to running and set a checkpoint
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
+        let _ = storage
+            .set_checkpoint(
+                spawned.task_id,
+                spawned.run_id,
+                "first-step",
+                b"results",
+                None,
+            )
+            .await;
+        let res = storage.get_checkpoint(spawned.task_id, "first-step").await;
+        let maybe_checkpoint = res.unwrap();
+        let checkpoint = maybe_checkpoint.unwrap();
+        assert_eq!(b"results".to_vec(), checkpoint.state);
     }
 }
