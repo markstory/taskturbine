@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use crate::config::Config;
 use chrono::{DateTime, Duration, Utc};
 use sqlx::{
-    PgConnection, PgPool, Postgres, Row, Transaction, migrate::MigrateError, postgres::PgRow,
-    query::Query,
+    migrate::MigrateError, postgres::{PgConnectOptions, PgRow}, query::Query, ConnectOptions, PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction
 };
 use uuid::Uuid;
 
@@ -48,7 +47,7 @@ pub struct Task {
     pub retry_max_seconds: i32,
     pub attempts: i32,
     pub max_attempts: i32,
-    pub cancelled_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
     pub cancellation_max_age: i32,
     pub enqueue_at: DateTime<Utc>,
     pub state: TaskState,
@@ -122,6 +121,11 @@ impl Storage {
     pub fn new(config: Config) -> Self {
         let pool = PgPool::connect_lazy(&config.database_url)
             .expect("Failed to create database connection pool");
+        let options: Result<PgConnectOptions, _> = config.database_url.parse();
+        if let Ok(mut opts) = options {
+            opts = opts.log_statements(log::LevelFilter::Debug);
+            pool.set_connect_options(opts);
+        }
         Self { config, pool }
     }
 
@@ -157,6 +161,50 @@ impl Storage {
         .execute(&self.pool)
         .await
         .map_err(TaskTurbineError::SqlError)?;
+
+        Ok(res.rows_affected())
+    }
+
+    /// Garbage collect tasks and related data.
+    ///
+    /// Delete tasks
+    pub async fn cleanup_tasks(&self, older_than: DateTime<Utc>, limit: i32) -> Result<u64, TaskTurbineError> {
+        let mut builder = QueryBuilder::new(
+            "WITH finished_tasks AS (
+                SELECT task_id FROM taskturbine.tasks
+                WHERE state IN ("
+        );
+        let mut separated = builder.separated(", ");
+        separated.push_bind(TaskState::Completed);
+        separated.push_bind(TaskState::Failed);
+        separated.push_bind(TaskState::Cancelled);
+        separated.push_unseparated(")");
+
+        let res = builder
+            .push("AND completed_at <")
+            .push_bind(older_than)
+            .push(format!(" LIMIT {limit}"))
+            .push(
+                "),
+                del_waits AS (
+                    DELETE FROM taskturbine.waits 
+                    WHERE task_id IN (SELECT task_id FROM finished_tasks)
+                ),
+                del_runs AS (
+                    DELETE FROM taskturbine.runs
+                    WHERE task_id IN (SELECT task_id FROM finished_tasks)
+                ),
+                del_checkpoints AS (
+                    DELETE FROM taskturbine.checkpoints
+                    WHERE task_id IN (SELECT task_id FROM finished_tasks)
+                )
+                DELETE FROM taskturbine.tasks 
+                WHERE task_id IN (SELECT task_id FROM finished_tasks)
+            ")
+            .build()
+            .execute(&self.pool)
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(res.rows_affected())
     }
@@ -382,7 +430,7 @@ impl Storage {
             return Err(TaskTurbineError::NotRunning(run_id));
         }
         let res = sqlx::query(
-            "UPDATE taskturbine.runs
+            "UPDATE taskturbine.runs as run
             SET state = $1, completed_at = NOW(), result = $2
             WHERE run_id = $3",
         )
@@ -397,7 +445,8 @@ impl Storage {
 
         let res = sqlx::query(
             "UPDATE taskturbine.tasks
-            SET state = $1, last_attempt_run = $2 WHERE task_id = $3",
+            SET state = $1, last_attempt_run = $2, completed_at = NOW()
+            WHERE task_id = $3",
         )
         .bind(TaskState::Completed)
         .bind(run_id)
@@ -501,10 +550,10 @@ impl Storage {
             if cancel {
                 // Move to cancelled state
                 task.state = TaskState::Cancelled;
-                task.cancelled_at = Some(now);
+                task.completed_at = Some(now);
             } else {
                 // Not cancelled, advance to next state
-                task.cancelled_at = None;
+                task.completed_at = None;
                 task.state = if next_available_at > now {
                     TaskState::Sleeping
                 } else {
@@ -534,13 +583,13 @@ impl Storage {
             SET state = $1, 
                 attempts = $2, 
                 last_attempt_run = $3, 
-                cancelled_at = COALESCE(cancelled_at, $4)
+                completed_at = COALESCE(completed_at, $4)
             WHERE task_id = $5",
         )
         .bind(task.state)
         .bind(task.attempts)
         .bind(task.last_attempt_run)
-        .bind(task.cancelled_at)
+        .bind(task.completed_at)
         .bind(task.task_id)
         .execute(&mut *atomic)
         .await
@@ -1082,6 +1131,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fail_run_can_fail_task() {
+        let storage = create_storage().await;
+        let options = TaskOptions { max_attempts: 0, ..TaskOptions::default() };
+        let spawned = storage.spawn_task("ns", "task-1", b"", Some(options)).await.unwrap();
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
+
+        let res = storage
+            .fail_run(
+                spawned.run_id,
+                b"{\"error\": \"something went wrong\"}",
+                None,
+            )
+            .await;
+        assert!(res.is_ok(), "Failed to fail run: {res:?}");
+        let run = storage.get_run(spawned.run_id).await.unwrap();
+        assert!(matches!(run.get::<TaskState, _>("state"), TaskState::Failed));
+    }
+
+    #[tokio::test]
     async fn fail_run_ok_with_retry_at() {
         let (storage, spawned) = create_task().await.unwrap();
         let _ = storage
@@ -1415,7 +1485,6 @@ mod tests {
         assert!(matches!(res.err().unwrap(), TaskTurbineError::NotRunning(_)));
     }
 
-
     #[tokio::test]
     async fn test_schedule_run_running() {
         let (storage, spawned) = create_task().await.unwrap();
@@ -1429,15 +1498,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cleanup_events() {
+    async fn cleanup_events_with_limit() {
         let storage = create_storage().await;
         let _ = storage.emit_event("event-1", b"hi");
         let _ = storage.emit_event("event-2", b"hi");
         let _ = storage.emit_event("event-3", b"hi");
 
-        let cutoff = Utc::now() - Duration::minutes(15);
+        // Use future time as event times are not mockable/mutatable
+        let cutoff = Utc::now() + Duration::minutes(1);
         let res = storage.cleanup_events(cutoff, 2).await;
         assert!(res.is_ok());
         assert_eq!(2, res.unwrap());
+    }
+
+    #[tokio::test]
+    async fn cleanup_tasks_with_limit() {
+        let storage = create_storage().await;
+        let _ = storage.clear_storage().await;
+
+        let completed = storage.spawn_task("ns", "task1", b"{}", None).await.unwrap();
+        let _ = storage.set_run_state(completed.task_id, TaskState::Running).await;
+        let _ = storage.complete_run(completed.run_id, b"").await;
+
+        // Skip any retries.
+        let options = TaskOptions {max_attempts: 0, ..TaskOptions::default()};
+        let failed = storage.spawn_task("ns", "task1", b"{}", Some(options)).await.unwrap();
+        let _ = storage.set_run_state(failed.task_id, TaskState::Running).await;
+        let _ = storage.fail_run(failed.run_id, b"", None).await;
+
+        let pending = storage.spawn_task("ns", "task1", b"{}", None).await.unwrap();
+
+        // Use a time in the future as I've not built methods
+        // to manipulate time of tasks.
+        let cutoff = Utc::now() + Duration::minutes(5);
+        let res = storage.cleanup_tasks(cutoff, 2).await;
+        assert!(res.is_ok());
+        assert_eq!(1, res.unwrap());
+
+        let task = storage.get_task(pending.task_id).await.unwrap().unwrap();
+        assert_eq!(task.get::<Option<DateTime<Utc>>, _>("completed_at"), None);
     }
 }

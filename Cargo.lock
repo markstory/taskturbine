@@ -1374,6 +1374,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "figment",
+ "log",
  "serde_json",
  "sqlx",
  "tokio",

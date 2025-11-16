@@ -21,7 +21,8 @@ CREATE TABLE taskturbine.tasks (
     first_started_at timestamptz,
     state text not null check (state in ('pending', 'running', 'sleeping', 'completed', 'failed', 'cancelled')),
     last_attempt_run uuid,
-    cancelled_at timestamptz
+    -- When the task was completed/failed/cancelled.
+    completed_at timestamptz
 );
 
 CREATE TABLE taskturbine.runs (
