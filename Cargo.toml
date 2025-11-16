@@ -1,3 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["taskturbine-core"]
+
+[alias]
+t = "test -- --test-threads=4"
