@@ -1311,8 +1311,8 @@ mod tests {
             .await;
 
         let task_id = spawned.task_id;
-        let event_id = format!("event-{task_id}");
-        let _ = storage.emit_event(&event_id, b"event-payload").await;
+        let event_name = format!("event-{task_id}");
+        let _ = storage.emit_event(&event_name, b"event-payload").await;
 
         // Should get the event payload back
         let res = storage
@@ -1320,7 +1320,7 @@ mod tests {
                 spawned.task_id,
                 spawned.run_id,
                 "first-step",
-                &event_id,
+                &event_name,
                 None,
             )
             .await;
