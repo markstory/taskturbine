@@ -49,7 +49,7 @@ pub struct Task {
     pub max_attempts: i32,
     pub completed_at: Option<DateTime<Utc>>,
     pub cancellation_max_age: i32,
-    pub enqueue_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
     pub state: TaskState,
     pub last_attempt_run: Option<Uuid>,
 }
@@ -93,7 +93,7 @@ pub struct TaskOptions {
     retry_max_seconds: i32,
 
     /// The maximum age of a task before it should not be run.
-    /// Measured in seconds from when the task was first stored.
+    /// Measured in seconds from when the task was created.
     cancellation_max_age: i32,
 }
 
@@ -329,7 +329,7 @@ impl Storage {
             "INSERT INTO taskturbine.tasks (
                 task_id, namespace, task_name, params, headers,
                 retry_seconds, retry_factor, retry_max_seconds,
-                max_attempts, cancellation_max_age, enqueue_at, state
+                max_attempts, cancellation_max_age, created_at, state
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11)",
         )
         .bind(task_id)
@@ -366,6 +366,198 @@ impl Storage {
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
         Ok(SpawnResult { task_id, run_id })
+    }
+
+    /// Claim one or more tasks for processing.
+    /// Workers use this method to acquire work to do.
+    ///
+    /// The `claim_timeout` indicates how long the worker intends to hold the task for.
+    /// After this period if the task run is not complete it will be eligible to be
+    /// claimed by another worker. That worker will continue processing from the last
+    /// checkpoint if any exist.
+    pub async fn claim_task(&self, worker_id: &str, claim_timeout: DateTime<Utc>, qty: i32) -> Result<Vec<Task>, TaskTurbineError> {
+        if qty <= 0 {
+            return Err(TaskTurbineError::ValidationError(
+                "qty must be greater than zero",
+            ));
+        }
+        let now = Utc::now();
+        if claim_timeout < now {
+            return Err(TaskTurbineError::ValidationError(
+                "claim_timeout must be in the future"
+            ));
+        }
+        let tasks = vec![];
+        // Fetch and update N runs that are pending or sleeping.
+        // state = sleeping|pending and available_at < now()
+        // and first_started_at is null, or now() - first_started_at < max_duration
+        //
+        // Use FOR UPDATE SKIP LOCKED
+        //
+        // Move those tasks and runs to state=running, set claim timeout
+        // and claimed by. Set tasks.first_started_at if null, set runs.started_at as well.
+
+        /*
+declare
+  v_now timestamptz := absurd.current_time();
+  v_claim_timeout integer := greatest(coalesce(p_claim_timeout, 30), 0);
+  v_worker_id text := coalesce(nullif(p_worker_id, ''), 'worker');
+  v_qty integer := greatest(coalesce(p_qty, 1), 1);
+  v_claim_until timestamptz := null;
+  v_sql text;
+  v_expired_run record;
+begin
+  if v_claim_timeout > 0 then
+    v_claim_until := v_now + make_interval(secs => v_claim_timeout);
+  end if;
+
+  -- Apply cancellation rules before claiming.
+  execute format(
+    'with limits as (
+        select task_id,
+               (cancellation->>''max_delay'')::bigint as max_delay,
+               (cancellation->>''max_duration'')::bigint as max_duration,
+               enqueue_at,
+               first_started_at,
+               state
+          from absurd.%I
+        where state in (''pending'', ''sleeping'', ''running'')
+     ),
+     to_cancel as (
+        select task_id
+          from limits
+         where
+           (
+             max_delay is not null
+             and first_started_at is null
+             and extract(epoch from ($1 - enqueue_at)) >= max_delay
+           )
+           or
+           (
+             max_duration is not null
+             and first_started_at is not null
+             and extract(epoch from ($1 - first_started_at)) >= max_duration
+           )
+     )
+     update absurd.%I t
+        set state = ''cancelled'',
+            cancelled_at = coalesce(t.cancelled_at, $1)
+      where t.task_id in (select task_id from to_cancel)',
+    't_' || p_queue_name,
+    't_' || p_queue_name
+  ) using v_now;
+
+  for v_expired_run in
+    execute format(
+      'select run_id,
+              claimed_by,
+              claim_expires_at,
+              attempt
+         from absurd.%I
+        where state = ''running''
+          and claim_expires_at is not null
+          and claim_expires_at <= $1
+        for update skip locked',
+      'r_' || p_queue_name
+    )
+  using v_now
+  loop
+    perform absurd.fail_run(
+      p_queue_name,
+      v_expired_run.run_id,
+      jsonb_strip_nulls(jsonb_build_object(
+        'name', '$ClaimTimeout',
+        'message', 'worker did not finish task within claim interval',
+        'workerId', v_expired_run.claimed_by,
+        'claimExpiredAt', v_expired_run.claim_expires_at,
+        'attempt', v_expired_run.attempt
+      )),
+      null
+    );
+  end loop;
+
+  execute format(
+    'update absurd.%I r
+        set state = ''cancelled'',
+            claimed_by = null,
+            claim_expires_at = null,
+            available_at = $1,
+            wake_event = null
+      where task_id in (select task_id from absurd.%I where state = ''cancelled'')
+        and r.state <> ''cancelled''',
+    'r_' || p_queue_name,
+    't_' || p_queue_name
+  ) using v_now;
+
+  v_sql := format(
+    'with candidate as (
+        select r.run_id
+          from absurd.%1$I r
+          join absurd.%2$I t on t.task_id = r.task_id
+         where r.state in (''pending'', ''sleeping'')
+           and t.state in (''pending'', ''sleeping'', ''running'')
+           and r.available_at <= $1
+         order by r.available_at, r.run_id
+         limit $2
+         for update skip locked
+     ),
+     updated as (
+        update absurd.%1$I r
+           set state = ''running'',
+               claimed_by = $3,
+               claim_expires_at = $4,
+               started_at = $1,
+               available_at = $1
+         where run_id in (select run_id from candidate)
+         returning r.run_id, r.task_id, r.attempt
+     ),
+     task_upd as (
+        update absurd.%2$I t
+           set state = ''running'',
+               attempts = greatest(t.attempts, u.attempt),
+               first_started_at = coalesce(t.first_started_at, $1),
+               last_attempt_run = u.run_id
+          from updated u
+         where t.task_id = u.task_id
+         returning t.task_id
+     ),
+     wait_cleanup as (
+        delete from absurd.%3$I w
+         using updated u
+        where w.run_id = u.run_id
+          and w.timeout_at is not null
+          and w.timeout_at <= $1
+        returning w.run_id
+     )
+     select
+       u.run_id,
+       u.task_id,
+       u.attempt,
+       t.task_name,
+       t.params,
+       t.retry_strategy,
+       t.max_attempts,
+      t.headers,
+      r.wake_event,
+      r.event_payload
+     from updated u
+     join absurd.%1$I r on r.run_id = u.run_id
+     join absurd.%2$I t on t.task_id = u.task_id
+     order by r.available_at, u.run_id',
+    'r_' || p_queue_name,
+    't_' || p_queue_name,
+    'w_' || p_queue_name
+  );
+  return query execute v_sql using v_now, v_qty, v_worker_id, v_claim_until;
+*/
+
+        Ok(tasks)
+    }
+
+    pub async fn handle_expired_claims(&self) -> Result<(), TaskTurbineError> {
+        // Find all runs that have expired claims
+        // and fail them with a ClaimTimeout reason.
+        Ok(())
     }
 
     /// Get a run state in FOR UPDATE mode
@@ -510,7 +702,7 @@ impl Storage {
             .await?;
         let res = sqlx::query(
             "UPDATE taskturbine.runs
-            SET state = $1, failed_at = NOW(), 
+            SET state = $1, completed_at = NOW(), 
                 wake_event = NULL, failure_reason = $2
             WHERE run_id = $3",
         )
@@ -539,7 +731,7 @@ impl Storage {
             // Check if the task has expired due to cancellation age.
             if task.cancellation_max_age > 0 {
                 let max_age = chrono::Duration::seconds(task.cancellation_max_age as i64);
-                if next_available_at.signed_duration_since(task.enqueue_at) >= max_age {
+                if next_available_at.signed_duration_since(task.created_at) >= max_age {
                     cancel = true;
                 }
             }
@@ -878,6 +1070,7 @@ impl Storage {
         run_id: &Uuid,
         available_at: DateTime<Utc>,
     ) -> Result<(), TaskTurbineError> {
+        // TODO combine these queries with a CTE
         let _ = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1,
@@ -1537,5 +1730,23 @@ mod tests {
 
         let task = storage.get_task(pending.task_id).await.unwrap().unwrap();
         assert_eq!(task.get::<Option<DateTime<Utc>>, _>("completed_at"), None);
+    }
+
+    #[tokio::test]
+    async fn claim_task_zero_qty() {
+        let storage = create_storage().await;
+        let timeout = Utc::now() + Duration::minutes(5);
+        let res = storage.claim_task("worker-1", timeout, 0).await;
+        assert!(res.is_err());
+        assert!(matches!(res.err().unwrap(), TaskTurbineError::ValidationError(_)));
+    }
+
+    #[tokio::test]
+    async fn claim_task_past_expiration() {
+        let storage = create_storage().await;
+        let timeout = Utc::now() - Duration::seconds(1);
+        let res = storage.claim_task("worker-1", timeout, 0).await;
+        assert!(res.is_err());
+        assert!(matches!(res.err().unwrap(), TaskTurbineError::ValidationError(_)));
     }
 }

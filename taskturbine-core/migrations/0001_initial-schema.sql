@@ -15,9 +15,8 @@ CREATE TABLE taskturbine.tasks (
     max_attempts integer,
     -- Cancel a task if (now() - first_started_at >= max_age) to prevent tasks retrying infinitely
     cancellation_max_age int,
-    -- When to start running the task
-    enqueue_at timestamptz not null default current_timestamp,
-    -- When the task was moved to running.
+    created_at timestamptz not null default current_timestamp,
+    -- When the task was moved to running for the first time
     first_started_at timestamptz,
     state text not null check (state in ('pending', 'running', 'sleeping', 'completed', 'failed', 'cancelled')),
     last_attempt_run uuid,
@@ -35,9 +34,10 @@ CREATE TABLE taskturbine.runs (
     available_at timestamptz not null,
     wake_event text,
     event_payload bytea,
+    -- When the run was moved to running the first time.
     started_at timestamptz,
+    -- Timestamp of when the run was completed/failed/cancelled.
     completed_at timestamptz,
-    failed_at timestamptz,
     result bytea,
     failure_reason bytea,
     created_at timestamptz not null default current_timestamp
