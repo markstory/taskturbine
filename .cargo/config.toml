@@ -1,2 +1,4 @@
 [alias]
-t = "test -- --test-threads=4"
+# Sadly the api tests have a bunch of bleed through between
+# tasks and I don't know how to fix that yet.
+t = "test -- --test-threads=1"
