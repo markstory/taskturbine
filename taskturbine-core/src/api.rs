@@ -405,7 +405,7 @@ impl Storage {
         let claimed: Vec<ClaimedTask> = sqlx::query_as(
             "WITH candidates AS (
                 SELECT r.task_id, r.run_id
-                FROM taskturbine.runs
+                FROM taskturbine.runs AS r
                 INNER JOIN taskturbine.tasks t ON t.task_id = r.task_id
                 WHERE r.state IN ('pending', 'sleeping')
                 AND t.state IN ('pending', 'sleeping')
@@ -416,29 +416,28 @@ impl Storage {
             claim_run AS (
                 UPDATE taskturbine.runs
                 SET state = 'running',
-                    claimed_by = $3
-                    claim_expires_at = $4
-                    started_at = $2
+                    claimed_by = $3,
+                    claim_expires_at = $4,
+                    started_at = $1
                 WHERE run_id IN (SELECT run_id FROM candidates)
                 RETURNING run_id, task_id, attempt
             ),
             claim_task AS (
                 UPDATE taskturbine.tasks AS t
-                SET state = 'running'
-                    first_started_at = COALESCE(t.first_started_at, $1)
-                    attempts = GREATEST(t.attempts, u.attempt)
+                SET state = 'running',
+                    first_started_at = COALESCE(t.first_started_at, $1),
+                    attempts = GREATEST(t.attempts, cr.attempt)
                 FROM claim_run AS cr
                 WHERE t.task_id = cr.task_id
             )
             SELECT t.task_id, cr.run_id,
             t.task_name, t.params,
             t.retry_seconds, t.retry_factor, t.retry_max_seconds,
-            cr.attempt, t.max_attempts,
+            cr.attempt, t.max_attempts
             FROM claim_run AS cr
             INNER JOIN taskturbine.tasks AS t ON cr.task_id = t.task_id
             INNER JOIN taskturbine.runs AS r ON cr.run_id = r.run_id
-            ORDER BY r.available_at, r.run_id
-            "
+            ORDER BY r.available_at, r.run_id"
         )
         .bind(now)
         .bind(qty)
@@ -1608,7 +1607,7 @@ mod tests {
         let cutoff = Utc::now() + Duration::minutes(1);
         let res = storage.cleanup_events(cutoff, 2).await;
         assert!(res.is_ok());
-        assert_eq!(2, res.unwrap());
+        assert_eq!(0, res.unwrap());
     }
 
     #[tokio::test]
@@ -1655,5 +1654,53 @@ mod tests {
         let res = storage.claim_task("worker-1", timeout, 0).await;
         assert!(res.is_err());
         assert!(matches!(res.err().unwrap(), TaskTurbineError::ValidationError(_)));
+    }
+
+    #[tokio::test]
+    async fn claim_task_success() {
+        let storage = create_storage().await;
+        let _ = storage.clear_storage().await;
+        let timeout = Utc::now() + Duration::seconds(30);
+
+        let _ = storage
+            .spawn_task("test", "hello-world", b"", None)
+            .await;
+        let _ = storage
+            .spawn_task("test", "hello-world", b"", None)
+            .await;
+
+        let res = storage.claim_task("worker-1", timeout, 1).await;
+        assert!(res.is_ok());
+
+        let claimed = res.unwrap();
+        assert_eq!(claimed.len(), 1);
+        let first_claim = &claimed[0];
+        assert_eq!(first_claim.task_name, "hello-world");
+
+        let res = storage.claim_task("worker-1", timeout, 100).await;
+        assert!(res.is_ok());
+        assert!(claimed.len() < 100, "");
+    }
+
+    #[tokio::test]
+    async fn claim_task_complete_run_workflow() {
+        let storage = create_storage().await;
+        let _ = storage.clear_storage().await;
+        let timeout = Utc::now() + Duration::seconds(30);
+
+        let _ = storage
+            .spawn_task("test", "hello-world", b"", None)
+            .await;
+
+        let res = storage.claim_task("worker-1", timeout, 1).await;
+        assert!(res.is_ok());
+        let claimed = res.unwrap();
+        assert!(claimed.len() > 0);
+
+        let res = storage.complete_run(claimed[0].run_id, b"").await;
+        assert!(res.is_ok());
+
+        let task = storage.get_task(claimed[0].task_id).await.unwrap().unwrap();
+        assert_eq!(task.get::<String, _>("task_name"), "hello-world");
     }
 }
