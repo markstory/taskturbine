@@ -450,6 +450,37 @@ impl Storage {
         Ok(claimed)
     }
 
+    /// Extend the claim on a running task.
+    /// Can be used by workers to 'heartbeat' and avoid missing their deadlines.
+    pub async fn extend_claim(&self, worker_id: &str, run_id: Uuid, claim_timeout: DateTime<Utc>) -> Result<(), TaskTurbineError> {
+        let now = Utc::now();
+        if claim_timeout < now {
+            return Err(TaskTurbineError::ValidationError(
+                "claim_timeout must be in the future"
+            ));
+        }
+
+        let res = sqlx::query(
+            "UPDATE taskturbine.runs
+            SET claim_expires_at = $1
+            WHERE run_id = $2
+            AND claimed_by = $3
+            AND state = 'running'"
+        )
+        .bind(claim_timeout)
+        .bind(run_id)
+        .bind(worker_id)
+        .execute(&self.pool)
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
+
+        if res.rows_affected() == 0 {
+            return Err(TaskTurbineError::NotRunning(run_id));
+        }
+
+        Ok(())
+    }
+
     /// Release claims on tasks where the claim_timeout_at has passed.
     pub async fn handle_expired_claims(&self) -> Result<i64, TaskTurbineError> {
         let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
@@ -1747,5 +1778,17 @@ mod tests {
         let res = storage.handle_expired_claims().await;
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn extend_claim_on_run_not_running() {
+        let (storage, spawned) = create_task().await.unwrap();
+        let timeout = Utc::now() + Duration::from_secs(1);
+
+        let res = storage
+            .extend_claim("worker-1", spawned.run_id, timeout)
+            .await;
+        assert!(res.is_err());
+        assert!(matches!(res.err().unwrap(), TaskTurbineError::NotRunning(_)));
     }
 }
