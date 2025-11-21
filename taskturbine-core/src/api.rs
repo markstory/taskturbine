@@ -2,10 +2,13 @@ use std::collections::HashMap;
 
 use crate::config::Config;
 use chrono::{DateTime, Utc};
-use std::time::Duration;
 use sqlx::{
-    migrate::MigrateError, postgres::{PgConnectOptions, PgRow}, query::Query, ConnectOptions, PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction
+    ConnectOptions, PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction,
+    migrate::MigrateError,
+    postgres::{PgConnectOptions, PgRow},
+    query::Query,
 };
+use std::time::Duration;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -149,12 +152,16 @@ impl Storage {
     /// Delete events that have created_at older than `older_than`.
     /// Only `limit` or fewer records will be deleted.
     /// Returns the number of events that were deleted.
-    pub async fn cleanup_events(&self, older_than: DateTime<Utc>, limit: i32) -> Result<u64, TaskTurbineError> {
+    pub async fn cleanup_events(
+        &self,
+        older_than: DateTime<Utc>,
+        limit: i32,
+    ) -> Result<u64, TaskTurbineError> {
         let res = sqlx::query(
             "DELETE FROM taskturbine.events WHERE event_name IN (
                 SELECT event_name FROM taskturbine.events
                 WHERE created_at < $1 LIMIT $2
-            )"
+            )",
         )
         .bind(older_than)
         .bind(limit)
@@ -168,11 +175,15 @@ impl Storage {
     /// Garbage collect tasks and related data.
     ///
     /// Delete tasks
-    pub async fn cleanup_tasks(&self, older_than: DateTime<Utc>, limit: i32) -> Result<u64, TaskTurbineError> {
+    pub async fn cleanup_tasks(
+        &self,
+        older_than: DateTime<Utc>,
+        limit: i32,
+    ) -> Result<u64, TaskTurbineError> {
         let mut builder = QueryBuilder::new(
             "WITH finished_tasks AS (
                 SELECT task_id FROM taskturbine.tasks
-                WHERE state IN ("
+                WHERE state IN (",
         );
         let mut separated = builder.separated(", ");
         separated.push_bind(TaskState::Completed);
@@ -200,7 +211,8 @@ impl Storage {
                 )
                 DELETE FROM taskturbine.tasks 
                 WHERE task_id IN (SELECT task_id FROM finished_tasks)
-            ")
+            ",
+            )
             .build()
             .execute(&self.pool)
             .await
@@ -334,7 +346,11 @@ impl Storage {
             ));
         }
 
-        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
         let task_id = Uuid::now_v7();
         let res = sqlx::query(
             "INSERT INTO taskturbine.tasks (
@@ -386,7 +402,12 @@ impl Storage {
     /// After this period if the task run is not complete it will be eligible to be
     /// claimed by another worker. That worker will continue processing from the last
     /// checkpoint if any exist.
-    pub async fn claim_task(&self, worker_id: &str, claim_timeout: DateTime<Utc>, qty: i32) -> Result<Vec<ClaimedTask>, TaskTurbineError> {
+    pub async fn claim_task(
+        &self,
+        worker_id: &str,
+        claim_timeout: DateTime<Utc>,
+        qty: i32,
+    ) -> Result<Vec<ClaimedTask>, TaskTurbineError> {
         if qty <= 0 {
             return Err(TaskTurbineError::ValidationError(
                 "qty must be greater than zero",
@@ -395,7 +416,7 @@ impl Storage {
         let now = Utc::now();
         if claim_timeout < now {
             return Err(TaskTurbineError::ValidationError(
-                "claim_timeout must be in the future"
+                "claim_timeout must be in the future",
             ));
         }
 
@@ -435,7 +456,7 @@ impl Storage {
             FROM claim_run AS cr
             INNER JOIN taskturbine.tasks AS t ON cr.task_id = t.task_id
             INNER JOIN taskturbine.runs AS r ON cr.run_id = r.run_id
-            ORDER BY r.available_at, r.run_id"
+            ORDER BY r.available_at, r.run_id",
         )
         .bind(qty)
         .bind(worker_id)
@@ -449,11 +470,16 @@ impl Storage {
 
     /// Extend the claim on a running task.
     /// Can be used by workers to 'heartbeat' and avoid missing their deadlines.
-    pub async fn extend_claim(&self, worker_id: &str, run_id: Uuid, claim_timeout: DateTime<Utc>) -> Result<(), TaskTurbineError> {
+    pub async fn extend_claim(
+        &self,
+        worker_id: &str,
+        run_id: Uuid,
+        claim_timeout: DateTime<Utc>,
+    ) -> Result<(), TaskTurbineError> {
         let now = Utc::now();
         if claim_timeout < now {
             return Err(TaskTurbineError::ValidationError(
-                "claim_timeout must be in the future"
+                "claim_timeout must be in the future",
             ));
         }
 
@@ -462,7 +488,7 @@ impl Storage {
             SET claim_expires_at = $1
             WHERE run_id = $2
             AND claimed_by = $3
-            AND state = 'running'"
+            AND state = 'running'",
         )
         .bind(claim_timeout)
         .bind(run_id)
@@ -480,14 +506,19 @@ impl Storage {
 
     /// Release claims on tasks where the claim_timeout_at has passed.
     pub async fn handle_expired_claims(&self) -> Result<i64, TaskTurbineError> {
-        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
         // Find all runs that have expired claims
         let res = sqlx::query(
             "SELECT run_id, task_id, claimed_by, claim_expires_at
             FROM taskturbine.runs
             WHERE claim_expires_at <= NOW()
-            AND state IN ('running', 'pending', 'sleeping')"
-        ).fetch_all(&mut *atomic)
+            AND state IN ('running', 'pending', 'sleeping')",
+        )
+        .fetch_all(&mut *atomic)
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
@@ -496,7 +527,9 @@ impl Storage {
             let run_id = run.get::<Uuid, _>("run_id");
             let failure_reason = b"{\"reason\":\"claim timeout\"}";
             // TODO error handling?
-            let _ = self.do_fail_run(&mut atomic, run_id, failure_reason, None).await;
+            let _ = self
+                .do_fail_run(&mut atomic, run_id, failure_reason, None)
+                .await;
         }
 
         Ok(res.len() as i64)
@@ -633,8 +666,14 @@ impl Storage {
         reason: &[u8],
         retry_at: Option<DateTime<Utc>>,
     ) -> Result<(), TaskTurbineError> {
-        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
-        let res = self.do_fail_run(&mut *atomic, run_id, reason, retry_at).await;
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+        let res = self
+            .do_fail_run(&mut atomic, run_id, reason, retry_at)
+            .await;
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
         res
@@ -758,19 +797,31 @@ impl Storage {
     /// the attempt counter, or count as a fail.
     ///
     /// Runs can go to sleep for reasons like waiting for an event.
-    pub async fn schedule_run(&self, run_id: Uuid, wake_at: DateTime<Utc>) -> Result<(), TaskTurbineError> {
-        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+    pub async fn schedule_run(
+        &self,
+        run_id: Uuid,
+        wake_at: DateTime<Utc>,
+    ) -> Result<(), TaskTurbineError> {
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
 
-        let run = self.get_locked_run_state(&mut *atomic, run_id).await.map_err(|_| TaskTurbineError::NotFound(run_id))?;
+        let run = self
+            .get_locked_run_state(&mut atomic, run_id)
+            .await
+            .map_err(|_| TaskTurbineError::NotFound(run_id))?;
         if run.get::<TaskState, _>("state") != TaskState::Running {
             return Err(TaskTurbineError::NotRunning(run_id));
         }
         self.suspend_run(
-            &mut *atomic, 
+            &mut atomic,
             &run.get::<Uuid, _>("task_id"),
             &run_id,
-            wake_at
-        ).await?;
+            wake_at,
+        )
+        .await?;
 
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
@@ -823,7 +874,11 @@ impl Storage {
         state: &[u8],
         extend_claim: Option<Duration>,
     ) -> Result<(), TaskTurbineError> {
-        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
         self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
             .await?;
         if let Some(extension) = extend_claim {
@@ -855,7 +910,11 @@ impl Storage {
         event_name: &str,
         timeout: Option<i32>,
     ) -> Result<AwaitResult, TaskTurbineError> {
-        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
 
         // Ensure the task & run exist and are running.
         let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
@@ -1059,7 +1118,11 @@ impl Storage {
         event_name: &str,
         payload: &[u8],
     ) -> Result<(), TaskTurbineError> {
-        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
 
         let _ = sqlx::query(
             "INSERT INTO taskturbine.events (event_name, payload, created_at)
@@ -1123,7 +1186,8 @@ mod tests {
     use super::*;
 
     async fn create_storage() -> Storage {
-        let db_url = std::env::var("TASKTURBINE_DATABASE_URL").expect("Missing required TASKTURBINE_DATABASE_URL env var");
+        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
+            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
         let config = Config {
             database_url: db_url,
         };
@@ -1277,8 +1341,14 @@ mod tests {
     #[tokio::test]
     async fn fail_run_can_fail_task() {
         let storage = create_storage().await;
-        let options = TaskOptions { max_attempts: 0, ..TaskOptions::default() };
-        let spawned = storage.spawn_task("ns", "task-1", b"", Some(options)).await.unwrap();
+        let options = TaskOptions {
+            max_attempts: 0,
+            ..TaskOptions::default()
+        };
+        let spawned = storage
+            .spawn_task("ns", "task-1", b"", Some(options))
+            .await
+            .unwrap();
         let _ = storage
             .set_run_state(spawned.task_id, TaskState::Running)
             .await;
@@ -1292,7 +1362,10 @@ mod tests {
             .await;
         assert!(res.is_ok(), "Failed to fail run: {res:?}");
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        assert!(matches!(run.get::<TaskState, _>("state"), TaskState::Failed));
+        assert!(matches!(
+            run.get::<TaskState, _>("state"),
+            TaskState::Failed
+        ));
     }
 
     #[tokio::test]
@@ -1622,37 +1695,38 @@ mod tests {
         let (storage, spawned) = create_task().await.unwrap();
 
         let later = Utc::now() + Duration::from_secs(5 * 60);
-        let res = storage
-            .schedule_run(spawned.run_id, later)
-            .await;
+        let res = storage.schedule_run(spawned.run_id, later).await;
         assert!(res.is_err());
-        assert!(matches!(res.err().unwrap(), TaskTurbineError::NotRunning(_)));
+        assert!(matches!(
+            res.err().unwrap(),
+            TaskTurbineError::NotRunning(_)
+        ));
     }
 
     #[tokio::test]
     async fn test_schedule_run_running() {
         let (storage, spawned) = create_task().await.unwrap();
-        let _ = storage.set_run_state(spawned.task_id, TaskState::Running).await;
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
         let later = Utc::now() + Duration::from_secs(5 * 60);
-        let res = storage
-            .schedule_run(spawned.run_id, later)
-            .await;
+        let res = storage.schedule_run(spawned.run_id, later).await;
         assert!(res.is_ok());
     }
 
     #[tokio::test]
     async fn cleanup_events_with_limit() {
         let storage = create_storage().await;
-        let _ = storage.emit_event("event-1", b"hi");
-        let _ = storage.emit_event("event-2", b"hi");
-        let _ = storage.emit_event("event-3", b"hi");
+        let _ = storage.emit_event("event-1", b"hi").await;
+        let _ = storage.emit_event("event-2", b"hi").await;
+        let _ = storage.emit_event("event-3", b"hi").await;
 
         // Use future time as event times are not mockable/mutatable
         let cutoff = Utc::now() + Duration::from_secs(60);
         let res = storage.cleanup_events(cutoff, 2).await;
         assert!(res.is_ok());
-        assert_eq!(0, res.unwrap());
+        assert_eq!(2, res.unwrap());
     }
 
     #[tokio::test]
@@ -1660,17 +1734,33 @@ mod tests {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
 
-        let completed = storage.spawn_task("ns", "task1", b"{}", None).await.unwrap();
-        let _ = storage.set_run_state(completed.task_id, TaskState::Running).await;
+        let completed = storage
+            .spawn_task("ns", "task1", b"{}", None)
+            .await
+            .unwrap();
+        let _ = storage
+            .set_run_state(completed.task_id, TaskState::Running)
+            .await;
         let _ = storage.complete_run(completed.run_id, b"").await;
 
         // Skip any retries.
-        let options = TaskOptions {max_attempts: 0, ..TaskOptions::default()};
-        let failed = storage.spawn_task("ns", "task1", b"{}", Some(options)).await.unwrap();
-        let _ = storage.set_run_state(failed.task_id, TaskState::Running).await;
+        let options = TaskOptions {
+            max_attempts: 0,
+            ..TaskOptions::default()
+        };
+        let failed = storage
+            .spawn_task("ns", "task1", b"{}", Some(options))
+            .await
+            .unwrap();
+        let _ = storage
+            .set_run_state(failed.task_id, TaskState::Running)
+            .await;
         let _ = storage.fail_run(failed.run_id, b"", None).await;
 
-        let pending = storage.spawn_task("ns", "task1", b"{}", None).await.unwrap();
+        let pending = storage
+            .spawn_task("ns", "task1", b"{}", None)
+            .await
+            .unwrap();
 
         // Use a time in the future as I've not built methods
         // to manipulate time of tasks.
@@ -1689,7 +1779,10 @@ mod tests {
         let timeout = Utc::now() + Duration::from_secs(60 * 5);
         let res = storage.claim_task("worker-1", timeout, 0).await;
         assert!(res.is_err());
-        assert!(matches!(res.err().unwrap(), TaskTurbineError::ValidationError(_)));
+        assert!(matches!(
+            res.err().unwrap(),
+            TaskTurbineError::ValidationError(_)
+        ));
     }
 
     #[tokio::test]
@@ -1698,7 +1791,10 @@ mod tests {
         let timeout = Utc::now() - Duration::from_secs(1);
         let res = storage.claim_task("worker-1", timeout, 0).await;
         assert!(res.is_err());
-        assert!(matches!(res.err().unwrap(), TaskTurbineError::ValidationError(_)));
+        assert!(matches!(
+            res.err().unwrap(),
+            TaskTurbineError::ValidationError(_)
+        ));
     }
 
     #[tokio::test]
@@ -1707,12 +1803,8 @@ mod tests {
         let _ = storage.clear_storage().await;
         let timeout = Utc::now() + Duration::from_secs(30);
 
-        let _ = storage
-            .spawn_task("test", "hello-world", b"", None)
-            .await;
-        let _ = storage
-            .spawn_task("test", "hello-world", b"", None)
-            .await;
+        let _ = storage.spawn_task("test", "hello-world", b"", None).await;
+        let _ = storage.spawn_task("test", "hello-world", b"", None).await;
 
         let res = storage.claim_task("worker-1", timeout, 1).await;
         assert!(res.is_ok());
@@ -1733,14 +1825,12 @@ mod tests {
         let _ = storage.clear_storage().await;
         let timeout = Utc::now() + Duration::from_secs(30);
 
-        let _ = storage
-            .spawn_task("test", "hello-world", b"", None)
-            .await;
+        let _ = storage.spawn_task("test", "hello-world", b"", None).await;
 
         let res = storage.claim_task("worker-1", timeout, 1).await;
         assert!(res.is_ok());
         let claimed = res.unwrap();
-        assert!(claimed.len() > 0);
+        assert!(!claimed.is_empty());
 
         let res = storage.complete_run(claimed[0].run_id, b"").await;
         assert!(res.is_ok());
@@ -1755,9 +1845,7 @@ mod tests {
         let storage = create_storage().await;
         let timeout = Utc::now() + Duration::from_secs(1);
 
-        let _ = storage
-            .spawn_task("test", "hello-world", b"", None)
-            .await;
+        let _ = storage.spawn_task("test", "hello-world", b"", None).await;
         let res = storage.claim_task("worker-1", timeout, 1).await;
         assert!(res.is_ok());
 
@@ -1777,6 +1865,9 @@ mod tests {
             .extend_claim("worker-1", spawned.run_id, timeout)
             .await;
         assert!(res.is_err());
-        assert!(matches!(res.err().unwrap(), TaskTurbineError::NotRunning(_)));
+        assert!(matches!(
+            res.err().unwrap(),
+            TaskTurbineError::NotRunning(_)
+        ));
     }
 }
