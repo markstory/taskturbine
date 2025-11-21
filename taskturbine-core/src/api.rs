@@ -54,6 +54,7 @@ pub struct Task {
     pub state: TaskState,
     pub last_attempt_run: Option<Uuid>,
 }
+
 impl Task {
     /// Calculate the next retry based on retry attributes.
     pub fn next_retry_at(&self) -> DateTime<Utc> {
@@ -143,21 +144,6 @@ impl Storage {
         Self { config, pool }
     }
 
-    /// {{{ Testing helpers
-    /// Testing helper: Delete all data from the storage tables.
-    #[cfg(test)]
-    pub async fn clear_storage(&self) -> Result<(), TaskTurbineError> {
-        let tables = ["events", "waits", "checkpoints", "runs", "tasks"];
-        for table in tables.iter() {
-            let query = format!("TRUNCATE taskturbine.{table} CASCADE");
-            sqlx::query(&query)
-                .execute(&self.pool)
-                .await
-                .map_err(TaskTurbineError::SqlError)?;
-        }
-        Ok(())
-    }
-
     /// Garbage collect events.
     ///
     /// Delete events that have created_at older than `older_than`.
@@ -221,6 +207,21 @@ impl Storage {
             .map_err(TaskTurbineError::SqlError)?;
 
         Ok(res.rows_affected())
+    }
+
+    /// {{{ Testing helpers
+    /// Testing helper: Delete all data from the storage tables.
+    #[cfg(test)]
+    pub async fn clear_storage(&self) -> Result<(), TaskTurbineError> {
+        let tables = ["events", "waits", "checkpoints", "runs", "tasks"];
+        for table in tables.iter() {
+            let query = format!("TRUNCATE taskturbine.{table} CASCADE");
+            sqlx::query(&query)
+                .execute(&self.pool)
+                .await
+                .map_err(TaskTurbineError::SqlError)?;
+        }
+        Ok(())
     }
 
     /// Testing Helper: setting run + task to a specific state.
@@ -333,11 +334,7 @@ impl Storage {
             ));
         }
 
-        let mut atomic = self
-            .pool
-            .begin()
-            .await
-            .map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
         let task_id = Uuid::now_v7();
         let res = sqlx::query(
             "INSERT INTO taskturbine.tasks (
@@ -643,6 +640,7 @@ impl Storage {
         res
     }
 
+    /// Internal method to fail a run. Can be used within an existing transaction.
     async fn do_fail_run(
         &self,
         conn: &mut PgConnection,
@@ -774,6 +772,8 @@ impl Storage {
             wake_at
         ).await?;
 
+        atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
+
         Ok(())
     }
 
@@ -823,11 +823,7 @@ impl Storage {
         state: &[u8],
         extend_claim: Option<Duration>,
     ) -> Result<(), TaskTurbineError> {
-        let mut atomic = self
-            .pool
-            .begin()
-            .await
-            .map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
         self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
             .await?;
         if let Some(extension) = extend_claim {
@@ -859,11 +855,7 @@ impl Storage {
         event_name: &str,
         timeout: Option<i32>,
     ) -> Result<AwaitResult, TaskTurbineError> {
-        let mut atomic = self
-            .pool
-            .begin()
-            .await
-            .map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
 
         // Ensure the task & run exist and are running.
         let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
@@ -1067,11 +1059,7 @@ impl Storage {
         event_name: &str,
         payload: &[u8],
     ) -> Result<(), TaskTurbineError> {
-        let mut atomic = self
-            .pool
-            .begin()
-            .await
-            .map_err(TaskTurbineError::SqlError)?;
+        let mut atomic = self.pool.begin().await.map_err(TaskTurbineError::SqlError)?;
 
         let _ = sqlx::query(
             "INSERT INTO taskturbine.events (event_name, payload, created_at)
