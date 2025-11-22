@@ -1843,6 +1843,7 @@ mod tests {
     #[tokio::test]
     async fn handle_expired_claims() {
         let storage = create_storage().await;
+        let _ = storage.clear_storage().await;
         let timeout = Utc::now() + Duration::from_secs(1);
 
         let _ = storage.spawn_task("test", "hello-world", b"", None).await;
