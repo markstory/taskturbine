@@ -1870,4 +1870,47 @@ mod tests {
             TaskTurbineError::NotRunning(_)
         ));
     }
+
+    #[tokio::test]
+    async fn extend_claim_on_run_running() {
+        let (storage, _) = create_task().await.unwrap();
+        let timeout = Utc::now() + Duration::from_secs(1);
+
+        let res = storage.claim_task("worker-1", timeout, 1).await;
+        assert!(res.is_ok());
+        let claimed = &res.unwrap()[0];
+
+        let extended_timeout = Utc::now() + Duration::from_secs(60);
+        let res = storage
+            .extend_claim("worker-1", claimed.run_id, extended_timeout)
+            .await;
+        assert!(res.is_ok());
+
+        let run = storage.get_run(claimed.run_id).await.unwrap();
+        assert!(
+            run.get::<DateTime<Utc>, _>("claim_expires_at")
+            >= timeout + Duration::from_secs(30),
+            "Should be after the original timeout."
+        );
+    }
+
+    #[tokio::test]
+    async fn extend_claim_on_other_worker() {
+        let (storage, _) = create_task().await.unwrap();
+        let timeout = Utc::now() + Duration::from_secs(1);
+
+        let res = storage.claim_task("worker-1", timeout, 1).await;
+        assert!(res.is_ok());
+        let claimed = &res.unwrap()[0];
+
+        let extended_timeout = Utc::now() + Duration::from_secs(60);
+        let res = storage
+            .extend_claim("worker-2", claimed.run_id, extended_timeout)
+            .await;
+        assert!(res.is_err());
+        assert!(matches!(
+            res.err().unwrap(),
+            TaskTurbineError::NotRunning(_)
+        ));
+    }
 }
