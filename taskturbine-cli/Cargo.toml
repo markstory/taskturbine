@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 taskturbine-core = { path = "../taskturbine-core" }
+tokio = { workspace = true }

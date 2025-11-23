@@ -1,3 +1,3 @@
 #[expect(unused_imports)]
-mod api;
-mod config;
+pub mod api;
+pub mod config;

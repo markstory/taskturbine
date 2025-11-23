@@ -1488,6 +1488,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "taskturbine-core",
+ "tokio",
 ]
 
 [[package]]

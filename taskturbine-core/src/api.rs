@@ -95,24 +95,24 @@ pub struct Checkpoint {
 /// Default values are drawn from the TaskRuntime and TaskOptions defaults.
 pub struct TaskOptions {
     /// Map of headers to include with the task activation
-    headers: HashMap<String, String>,
+    pub headers: HashMap<String, String>,
 
     /// The maximum number of attempts to make on this task
-    max_attempts: i32,
+    pub max_attempts: i32,
 
     /// The minimum number of seconds to wait between retries.
-    retry_seconds: i32,
+    pub retry_seconds: i32,
 
     /// The multipier to apply to retry delays between attempts.
     /// Use > 1.0 to create exponential backoff.
-    retry_factor: f64,
+    pub retry_factor: f64,
 
     /// The maximum number of seconds to wait between retries.
-    retry_max_seconds: i32,
+    pub retry_max_seconds: i32,
 
     /// The maximum age of a task before it should not be run.
     /// Measured in seconds from when the task was created.
-    cancellation_max_age: i32,
+    pub cancellation_max_age: i32,
 }
 
 impl Default for TaskOptions {
@@ -333,7 +333,7 @@ impl Storage {
         &self,
         namespace: &str,
         task_name: &str,
-        payload: &[u8],
+        params: &[u8],
         options: Option<TaskOptions>,
     ) -> Result<SpawnResult, TaskTurbineError> {
         let options = options.or_else(|| Some(TaskOptions::default())).unwrap();
@@ -362,7 +362,7 @@ impl Storage {
         .bind(task_id)
         .bind(namespace)
         .bind(task_name)
-        .bind(payload)
+        .bind(params)
         .bind(header_json)
         .bind(options.retry_seconds)
         .bind(options.retry_factor)
@@ -1889,8 +1889,7 @@ mod tests {
 
         let run = storage.get_run(claimed.run_id).await.unwrap();
         assert!(
-            run.get::<DateTime<Utc>, _>("claim_expires_at")
-            >= timeout + Duration::from_secs(30),
+            run.get::<DateTime<Utc>, _>("claim_expires_at") >= timeout + Duration::from_secs(30),
             "Should be after the original timeout."
         );
     }
