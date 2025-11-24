@@ -221,9 +221,7 @@ impl Storage {
         Ok(res.rows_affected())
     }
 
-    /// {{{ Testing helpers
     /// Testing helper: Delete all data from the storage tables.
-    #[cfg(test)]
     pub async fn clear_storage(&self) -> Result<(), TaskTurbineError> {
         let tables = ["events", "waits", "checkpoints", "runs", "tasks"];
         for table in tables.iter() {
@@ -236,6 +234,7 @@ impl Storage {
         Ok(())
     }
 
+    /// {{{ Testing helpers
     /// Testing Helper: setting run + task to a specific state.
     #[cfg(test)]
     async fn set_run_state(&self, task_id: Uuid, state: TaskState) -> Result<(), TaskTurbineError> {

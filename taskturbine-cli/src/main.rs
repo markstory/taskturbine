@@ -25,6 +25,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Spawn(SpawnArgs),
+    Clear,
 }
 
 #[derive(Args, Debug)]
@@ -108,9 +109,6 @@ impl Into<TaskOptions> for SpawnArgs {
 
 #[tokio::main]
 async fn main() {
-    // TODO make a CLI tool to spawn a task
-    // - build a storage interface
-    // - use it to spawn a task
     let args = Cli::parse();
 
     // Find the database url. Use both CLI options and environment variables.
@@ -126,7 +124,8 @@ async fn main() {
     };
     let storage = Storage::new(config);
     let result = match args.command {
-        Commands::Spawn(args) => spawn_task(storage, args).await
+        Commands::Spawn(args) => spawn_task(storage, args).await,
+        Commands::Clear => clear_storage(storage).await,
     };
     if let Ok(_) = result {
         println!("Complete");
@@ -136,6 +135,7 @@ async fn main() {
     }
 }
 
+/// Spawn a task based on the command like parameters.
 async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliError> {
     let taskname = args.taskname.clone();
     let namespace = args.namespace.clone();
@@ -153,5 +153,17 @@ async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliError> {
             Ok(())
         },
         Err(err) => Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
+    }
+}
+
+async fn clear_storage(storage: Storage) -> Result<(), CliError> {
+    println!("Clearing all tasks from the database");
+
+    // TODO this is a big footgun.
+    let res = storage.clear_storage().await;
+
+    return match res {
+        Ok(_) => Ok(()),
+        Err(err) => Err(CliError::Message(format!("Failed to clear tasks {err:?}"))),
     }
 }
