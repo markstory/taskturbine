@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 use taskturbine_core::api::Storage;
 
@@ -53,8 +53,11 @@ async fn main() {
     };
     if let Ok(_) = result {
         println!("Complete");
-    } else {
-        let err = result.err().unwrap();
-        println!("Failed {err:?}");
+    } else if let Err(err) = result {
+        match err {
+            CliError::Message(msg) => {
+                println!("Failed: {msg}");
+            },
+        }
     }
 }
