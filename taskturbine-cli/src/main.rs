@@ -25,7 +25,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Spawn(SpawnArgs),
-    Clear,
+    Clear(ClearArgs),
 }
 
 #[derive(Args, Debug)]
@@ -107,6 +107,12 @@ impl Into<TaskOptions> for SpawnArgs {
     }
 }
 
+#[derive(Args, Debug)]
+struct ClearArgs {
+    #[arg(long, help = "Confirm that you want to clear all data")]
+    pub execute: bool,
+}
+
 #[tokio::main]
 async fn main() {
     let args = Cli::parse();
@@ -125,7 +131,7 @@ async fn main() {
     let storage = Storage::new(config);
     let result = match args.command {
         Commands::Spawn(args) => spawn_task(storage, args).await,
-        Commands::Clear => clear_storage(storage).await,
+        Commands::Clear(args) => clear_storage(storage, args).await,
     };
     if let Ok(_) = result {
         println!("Complete");
@@ -156,14 +162,18 @@ async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliError> {
     }
 }
 
-async fn clear_storage(storage: Storage) -> Result<(), CliError> {
+async fn clear_storage(storage: Storage, args: ClearArgs) -> Result<(), CliError> {
     println!("Clearing all tasks from the database");
+    if args.execute {
+        let res = storage.clear_storage().await;
 
-    // TODO this is a big footgun.
-    let res = storage.clear_storage().await;
+        return match res {
+            Ok(_) => Ok(()),
+            Err(err) => Err(CliError::Message(format!("Failed to clear tasks {err:?}"))),
+        }
+    } else {
+        println!("SKIP: You did not provide --execute to confirm execution.");
 
-    return match res {
-        Ok(_) => Ok(()),
-        Err(err) => Err(CliError::Message(format!("Failed to clear tasks {err:?}"))),
+        Ok(())
     }
 }
