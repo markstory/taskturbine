@@ -1486,6 +1486,7 @@ dependencies = [
 name = "taskturbine-cli"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "taskturbine-core",
  "tokio",

@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use taskturbine_core::api::Storage;
 
 mod clear;
+mod demo;
 mod spawn;
 
 #[derive(Debug)]
@@ -29,6 +30,7 @@ struct Cli {
 enum Commands {
     Spawn(spawn::SpawnArgs),
     Clear(clear::ClearArgs),
+    Demo,
 }
 
 #[tokio::main]
@@ -50,6 +52,7 @@ async fn main() {
     let result = match args.command {
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
+        Commands::Demo => demo::demo(storage).await,
     };
     if let Ok(_) = result {
         println!("Complete");
