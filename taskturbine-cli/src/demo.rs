@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use taskturbine_core::api::{ClaimedTask, Storage};
+use taskturbine_core::api::Storage;
+use taskturbine_core::context::TaskContext;
+use taskturbine_core::models::ClaimedTask;
 
 use crate::CliError;
 
@@ -18,7 +20,9 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
         let task_id = &task.task_id;
         println!("Attemting to execute {task_id}");
 
-        match execute_task(task).await {
+        let context = TaskContext::build(task, &storage);
+
+        match execute_task(task, context).await {
             Ok(_) => { 
                 let _ = storage.complete_run(task.run_id, b"").await;
                 println!("Task excecution complete");
@@ -34,18 +38,20 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
     Ok(())
 }
 
-async fn execute_task(task: &ClaimedTask) -> Result<(), CliError> {
+// Worker isolate. Ideally failures here don't spiral out.
+async fn execute_task(task: &ClaimedTask, context: TaskContext) -> Result<(), CliError> {
     let taskname = &task.task_name;
 
     // TODO have a task registry, and do dynamic lookups and calls.
     if taskname == "hello_world" {
         // TODO parse args, make context
-        hello_world();
+        hello_world(context);
     }
 
     Ok(())
 }
 
-fn hello_world() {
+// Userland code
+fn hello_world(ctx: TaskContext) {
     println!("Ran 'userland' task function - hello_world");
 }

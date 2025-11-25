@@ -26,7 +26,6 @@ pub enum TaskTurbineError {
     ValidationError(&'static str),
 }
 
-
 /// Result of spawning a task.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpawnResult {
@@ -480,6 +479,7 @@ impl Storage {
     }
 
     pub async fn handle_cancellation_max_age(&self) -> Result<(), TaskTurbineError> {
+        // TODO Build this method, and an upkeep style wrapper.
         // Find all rows that are
         // (t.first_started_at IS NULL OR (
         //  $1 - t.first_started_at < t.cancellation_max_age * INTERVAL '1 SECOND')
