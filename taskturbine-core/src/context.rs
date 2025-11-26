@@ -84,27 +84,60 @@ impl TaskContext {
     /// When steps complete, they create checkpoints of the
     /// step results which enables re-runs of the task to durably
     /// resume from their last checkpoint.
-    pub async fn step<T>(&self, name: &str, step_fn: impl FnOnce(T) -> ()) -> String {
-        // TODO Need to capture more about the types here.
-        "result".to_string()
+    pub async fn step<E>(
+        &mut self,
+        name: &str,
+        step_fn: impl FnOnce() -> Result<Vec<u8>, E>,
+    ) -> Result<Vec<u8>, FlowControl> {
+        // See if the step has a completed checkpoint
+        let checkpoint_name = self.checkpoint_name(name);
+        let res = self
+            .storage
+            .get_checkpoint(self.task.task_id, &checkpoint_name)
+            .await;
+        if let Err(err) = res {
+            return Err(FlowControl::Failure(format!(
+                "Failed to read checkpoint {err:?}"
+            )));
+        }
+        let checkpoint_opt = res.unwrap();
+        if let Some(checkpoint) = checkpoint_opt {
+            return Ok(checkpoint.state);
+        }
+        let res = step_fn();
+        if let Ok(state) = res {
+            let res = self
+                .storage
+                .set_checkpoint(
+                    self.task.task_id,
+                    self.task.run_id,
+                    &checkpoint_name,
+                    state.as_slice(),
+                    None,
+                )
+                .await;
+            if let Err(err) = res {
+                return Err(FlowControl::Failure(format!(
+                    "Could not store checkpoint {err:?}"
+                )));
+            }
+
+            return Ok(state)
+        }
+        return Err(FlowControl::Failure("Task execution failed".to_string()));
     }
 
     /// Record an event as having completed.
     /// Events allow you to synchronize tasks with external actions
     /// that can be recorded as events. Events can have a Payload of bytes.
     /// How those bytes are encoded is an application concern.
-    pub async fn emit_event(
-        &self,
-        event_name: &str,
-        payload: &[u8],
-    ) -> Result<(), FlowControl> {
-        let res = self
-            .storage
-            .emit_event(event_name, payload)
-            .await;
+    pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
+        let res = self.storage.emit_event(event_name, payload).await;
 
         if let Err(err) = res {
-            return Err(FlowControl::Failure(format!("Could not store event {err:?}")));
+            return Err(FlowControl::Failure(format!(
+                "Could not store event {err:?}"
+            )));
         }
         Ok(())
     }
