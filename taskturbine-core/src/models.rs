@@ -43,7 +43,7 @@ impl Task {
     }
 }
 
-#[derive(sqlx::FromRow, Debug, PartialEq)]
+#[derive(sqlx::FromRow, Clone, Debug, PartialEq)]
 pub struct ClaimedTask {
     pub task_id: Uuid,
     pub run_id: Uuid,
@@ -60,7 +60,7 @@ impl ClaimedTask {
     /// Calculate the next retry based on retry attributes.
     pub fn next_retry_at(&self) -> DateTime<Utc> {
         let now = Utc::now();
-        // Increment to avoid 
+        // Increment to avoid
         let total_delay = self.retry_seconds as f64 * self.retry_factor.powi(self.attempt + 1);
         let capped = total_delay.min(self.retry_max_seconds as f64);
         now + Duration::from_secs(capped as u64)

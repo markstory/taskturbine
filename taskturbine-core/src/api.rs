@@ -1,12 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use crate::models::{
-    Checkpoint,
-    ClaimedTask,
-    Task,
-    TaskState
-};
+use crate::models::{Checkpoint, ClaimedTask, Task, TaskState};
 use chrono::{DateTime, Utc};
 use sqlx::{
     ConnectOptions, PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction,
@@ -32,7 +27,6 @@ pub struct SpawnResult {
     pub task_id: Uuid,
     pub run_id: Uuid,
 }
-
 
 /// Options for spawning a task.
 /// Default values are drawn from the TaskRuntime and TaskOptions defaults.
@@ -852,7 +846,7 @@ impl Storage {
         run_id: Uuid,
         step_name: &str,
         event_name: &str,
-        timeout: Option<i32>,
+        timeout: Option<u64>,
     ) -> Result<AwaitResult, TaskTurbineError> {
         let mut atomic = self
             .pool

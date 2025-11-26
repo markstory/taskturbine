@@ -1,21 +1,21 @@
-use std::{collections::HashMap, str::Bytes, time::Duration};
-
 use chrono::Utc;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{api::Storage, models::ClaimedTask};
 
 /// Used as signaling 'errors' to the worker runtime
 /// from userland operations. For example, when a task
 /// needs to be suspended because it is waiting on an event.
-enum FlowControl {
+#[derive(Debug)]
+pub enum FlowControl {
     InvalidValue(String),
     Failure(String),
     Suspend(Duration),
 }
 
-pub struct Event<'a> {
+pub struct Event {
     pub event_name: String,
-    pub payload: Bytes<'a>,
+    pub payload: Vec<u8>,
 }
 
 struct Checkpoints {
@@ -23,17 +23,24 @@ struct Checkpoints {
 }
 impl Checkpoints {
     pub fn new() -> Self {
-        Self { counters: HashMap::new() }
+        Self {
+            counters: HashMap::new(),
+        }
     }
 
     /// Incrment the counter for a given name and get the new value.
-    pub fn incr(&self, name: &str) -> u32 {
-        let updated = match self.counters.get_mut(name) {
-            Some(value) => *value = *value + 1 as u32,
-            None => 1,
+    pub fn incr(&mut self, name: &str) -> u32 {
+        if !self.counters.contains_key(name) {
+            self.counters.insert(name.to_string(), 0);
         }
-
-        updated
+        if let Some(value) = self.counters.get_mut(name) {
+            *value += 1;
+        }
+        if let Some(value) = self.counters.get(name) {
+            return value.clone();
+        } else {
+            0
+        }
     }
 }
 
@@ -44,18 +51,22 @@ impl Checkpoints {
 /// interface method.
 pub struct TaskContext {
     task: ClaimedTask,
-    storage: Storage,
+    storage: Arc<Storage>,
     checkpoints: Checkpoints,
 }
 
 impl TaskContext {
-    pub fn build(task: ClaimedTask, storage: Storage) -> Self {
+    pub fn build(task: ClaimedTask, storage: Arc<Storage>) -> Self {
         let checkpoints = Checkpoints::new();
 
-        Self { task, storage, checkpoints}
+        Self {
+            task,
+            storage,
+            checkpoints,
+        }
     }
 
-    fn checkpoint_name(&self, name: &str) -> String {
+    fn checkpoint_name(&mut self, name: &str) -> String {
         let count = self.checkpoints.incr(name);
         let suffix = if count == 1 {
             "".to_string()
@@ -63,7 +74,7 @@ impl TaskContext {
             format!("#{count}")
         };
 
-        return format!({name}{suffix});
+        return format!("{name}{suffix}");
     }
 
     /// Define a new step with a name
@@ -79,32 +90,86 @@ impl TaskContext {
     /// When the event has not happened, the Result will be an Err
     /// that indicates that the worker should sleep. You almost
     /// always want to call this with `?`
-    pub async fn await_event(&self, event_name: &str, timeout: Option<Duration>) -> Result<Event, FlowControl> {
+    pub async fn await_event(
+        &self,
+        event_name: &str,
+        timeout: Option<Duration>,
+    ) -> Result<Event, FlowControl> {
         // TODO Use config?
         let wait_for = timeout.unwrap_or_else(|| Duration::from_secs(60));
-        let wake_at = Utc::now() + wait_for;
-
         let step_name = format!("$awaitEvent:{event_name}");
 
-        let res = self.storage.await_event(
-            self.task.task_id,
-            self.task.run_id, 
-            step_name,
-            event_name,
-            wake_at).await;
-        if let Ok(wait) = res {
+        let res = self
+            .storage
+            .await_event(
+                self.task.task_id,
+                self.task.run_id,
+                &step_name,
+                event_name,
+                Some(wait_for.as_secs()),
+            )
+            .await;
+
+        if let Ok(wait) = &res {
             if wait.should_suspend {
-                return Err(FlowControl::Suspend(wait_for))
+                return Err(FlowControl::Suspend(wait_for));
             }
+            let event = Event {
+                event_name: event_name.to_string(),
+                payload: wait.payload.to_vec(),
+            };
+            return Ok(event);
         }
 
+        // TODO use thiserror to make error casting more succinct
         let err = res.err().unwrap();
-        return Err(FlowControl::Failure(format!("Could not store an event wait: {err:?}")))
+        return Err(FlowControl::Failure(format!(
+            "Could not store an event wait: {err:?}"
+        )));
     }
 
     /// Suspend the current task until the provided duration has elapsed.
     /// You almost always want to call this with `?`
-    pub async fn sleep_for(&self, duration: Duration) -> Result<(), FlowControl> {
-        Ok(())
+    pub async fn sleep_for(
+        &mut self,
+        step_name: &str,
+        duration: Duration,
+    ) -> Result<(), FlowControl> {
+        // Look for an existing checkpoint, return if it exists.
+        let checkpoint_name = self.checkpoint_name(step_name);
+        let res = self
+            .storage
+            .get_checkpoint(self.task.task_id, &checkpoint_name)
+            .await;
+        if let Err(err) = res {
+            return Err(FlowControl::Failure(format!(
+                "failed to get checkpoint, {err:?}"
+            )));
+        }
+        let checkpoint_opt = res.unwrap();
+        if let Some(_value) = checkpoint_opt {
+            // Found a checkpoint continue.
+            return Ok(());
+        }
+
+        // Create a checkpoint, and schedule a run in the future.
+        let payload = step_name;
+        let res = self
+            .storage
+            .set_checkpoint(
+                self.task.task_id,
+                self.task.run_id,
+                step_name,
+                payload.as_bytes(),
+                None,
+            )
+            .await;
+        if let Err(err) = res {
+            return Err(FlowControl::Failure(format!(
+                "Could not store checkpoint. {err:?}"
+            )));
+        }
+
+        Err(FlowControl::Suspend(duration))
     }
 }
