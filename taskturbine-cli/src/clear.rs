@@ -1,7 +1,7 @@
 use clap::Args;
 
-use taskturbine_core::api::Storage;
 use crate::CliError;
+use taskturbine_core::api::Storage;
 
 #[derive(Args, Debug)]
 pub struct ClearArgs {
@@ -17,11 +17,10 @@ pub async fn clear_storage(storage: Storage, args: ClearArgs) -> Result<(), CliE
         return match res {
             Ok(_) => Ok(()),
             Err(err) => Err(CliError::Message(format!("Failed to clear tasks {err:?}"))),
-        }
+        };
     } else {
         println!("SKIP: You did not provide --execute to confirm execution.");
 
         Ok(())
     }
 }
-

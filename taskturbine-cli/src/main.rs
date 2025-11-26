@@ -42,8 +42,10 @@ async fn main() {
         Some(db_url) => db_url,
         None => match std::env::var("TASKTURBINE_DATABASE_URL") {
             Ok(db_url) => db_url,
-            Err(_) => panic!("Could not determine database url from options or TASKTURBINE_DATABSE_URL"),
-        }
+            Err(_) => {
+                panic!("Could not determine database url from options or TASKTURBINE_DATABSE_URL")
+            }
+        },
     };
     let config = taskturbine_core::config::Config {
         database_url: db_url,
@@ -60,7 +62,7 @@ async fn main() {
         match err {
             CliError::Message(msg) => {
                 println!("Failed: {msg}");
-            },
+            }
         }
     }
 }

@@ -1,8 +1,7 @@
 use clap::Args;
 
-use taskturbine_core::api::{Storage, TaskOptions};
 use crate::CliError;
-
+use taskturbine_core::api::{Storage, TaskOptions};
 
 #[derive(Args, Debug)]
 pub struct SpawnArgs {
@@ -83,7 +82,6 @@ impl Into<TaskOptions> for SpawnArgs {
     }
 }
 
-
 /// Spawn a task based on the command like parameters.
 pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliError> {
     let taskname = args.taskname.clone();
@@ -91,7 +89,9 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
     println!("Spawning task in namespace={namespace} for task={taskname}");
 
     let params = args.params.clone().unwrap_or("{\"args\":[]}".to_string());
-    let res = storage.spawn_task(&namespace, &taskname, params.as_ref(), Some(args.into())).await;
+    let res = storage
+        .spawn_task(&namespace, &taskname, params.as_ref(), Some(args.into()))
+        .await;
 
     return match res {
         Ok(spawned) => {
@@ -100,7 +100,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
             println!("Spawned task_id={task_id} run_id={run_id}");
 
             Ok(())
-        },
+        }
         Err(err) => Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
-    }
+    };
 }
