@@ -69,7 +69,7 @@ async fn execute_task(task: &ClaimedTask, storage: Arc<Storage>) -> Result<(), C
             },
             Ok(_) => {
                 println!("Completed task {taskname}");
-                let res = storage.complete_run(task.task_id, b"").await;
+                let res = storage.complete_run(task.run_id, b"").await;
                 if let Err(msg) = res {
                     println!("Failed to complete run {msg:?}");
                 }
