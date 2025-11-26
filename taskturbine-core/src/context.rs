@@ -66,6 +66,9 @@ impl TaskContext {
         }
     }
 
+    /// Convert a step name into a unique checkpoint name.
+    /// Handles the scenario where userland code has multiple
+    /// steps with the same name.
     fn checkpoint_name(&mut self, name: &str) -> String {
         let count = self.checkpoints.incr(name);
         let suffix = if count == 1 {
@@ -84,6 +87,26 @@ impl TaskContext {
     pub async fn step<T>(&self, name: &str, step_fn: impl FnOnce(T) -> ()) -> String {
         // TODO Need to capture more about the types here.
         "result".to_string()
+    }
+
+    /// Record an event as having completed.
+    /// Events allow you to synchronize tasks with external actions
+    /// that can be recorded as events. Events can have a Payload of bytes.
+    /// How those bytes are encoded is an application concern.
+    pub async fn emit_event(
+        &self,
+        event_name: &str,
+        payload: &[u8],
+    ) -> Result<(), FlowControl> {
+        let res = self
+            .storage
+            .emit_event(event_name, payload)
+            .await;
+
+        if let Err(err) = res {
+            return Err(FlowControl::Failure(format!("Could not store event {err:?}")));
+        }
+        Ok(())
     }
 
     /// Await for an event to be captured by emit_event.
