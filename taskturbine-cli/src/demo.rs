@@ -21,24 +21,14 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
         let task_id = &task.task_id;
 
         println!("Attemting to execute {task_id}");
-        match execute_task(task, storage.clone()).await {
-            Ok(_) => {
-                let _ = storage.complete_run(task.run_id, b"").await;
-                println!("Task excecution complete");
-            }
-            Err(err) => {
-                let retry_at = task.next_retry_at();
-                let _ = storage.fail_run(task.run_id, b"", Some(retry_at)).await;
-                println!("Task execution failed: {err:?}");
-            }
-        }
+        execute_task(task, storage.clone()).await;
     }
 
     Ok(())
 }
 
 // Worker isolate. Ideally failures here don't spiral out.
-async fn execute_task(task: &ClaimedTask, storage: Arc<Storage>) -> Result<(), CliError> {
+async fn execute_task(task: &ClaimedTask, storage: Arc<Storage>) {
     let context = TaskContext::build(task.clone(), storage.clone());
     let taskname = &task.task_name;
 
@@ -75,8 +65,6 @@ async fn execute_task(task: &ClaimedTask, storage: Arc<Storage>) -> Result<(), C
             }
         }
     }
-
-    Ok(())
 }
 
 // Userland code
@@ -89,6 +77,16 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
         Ok(b"a result value".to_vec())
     }
     let step1 = ctx.step("step-1-echo", step_one).await?;
+    println!("Step 1 result {step1:?}");
+
+    fn step_two() -> Result<Vec<u8>, CliError> {
+        // println!("Ran step_two - fails");
+        // Err(CliError::Message("step two failed".to_string()))
+
+        println!("Ran step_two - ok");
+        Ok(b"two results".to_vec())
+    }
+    let step2 = ctx.step("step-2-echo", step_two).await?;
 
     Ok(())
 }
