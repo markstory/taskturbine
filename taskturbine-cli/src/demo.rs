@@ -76,17 +76,17 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
         println!("Ran step_one");
         Ok(b"a result value".to_vec())
     }
-    let step1 = ctx.step("step-1-echo", step_one).await?;
+    let step1 = ctx.step("step-1-echo", step_one).await;
     println!("Step 1 result {step1:?}");
 
-    fn step_two() -> Result<Vec<u8>, CliError> {
+    async fn step_two() -> Result<Vec<u8>, CliError> {
         // println!("Ran step_two - fails");
         // Err(CliError::Message("step two failed".to_string()))
 
         println!("Ran step_two - ok");
         Ok(b"two results".to_vec())
     }
-    let step2 = ctx.step("step-2-echo", step_two).await?;
+    let step2 = ctx.async_step("step-2-echo", step_two).await?;
 
     Ok(())
 }

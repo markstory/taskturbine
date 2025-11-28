@@ -55,6 +55,8 @@ pub struct TaskContext {
     checkpoints: Checkpoints,
 }
 
+type StepData = Vec<u8>;
+
 impl TaskContext {
     pub fn build(task: ClaimedTask, storage: Arc<Storage>) -> Self {
         let checkpoints = Checkpoints::new();
@@ -80,15 +82,69 @@ impl TaskContext {
         return format!("{name}{suffix}");
     }
 
-    /// Define a new step with a name
+    /// Define a new async step with a name
     /// When steps complete, they create checkpoints of the
     /// step results which enables re-runs of the task to durably
     /// resume from their last checkpoint.
-    pub async fn step<E>(
+    pub async fn async_step<E, F, Fut>(
         &mut self,
         name: &str,
-        step_fn: impl FnOnce() -> Result<Vec<u8>, E>,
-    ) -> Result<Vec<u8>, FlowControl> {
+        step_fn: F,
+    ) -> Result<StepData, FlowControl>
+    where
+        Fut: Future<Output = Result<StepData, E>>,
+        F: FnOnce() -> Fut,
+    {
+        // See if the step has a completed checkpoint
+        let checkpoint_name = self.checkpoint_name(name);
+        let res = self
+            .storage
+            .get_checkpoint(self.task.task_id, &checkpoint_name)
+            .await;
+        if let Err(err) = res {
+            return Err(FlowControl::Failure(format!(
+                "Failed to read checkpoint {err:?}"
+            )));
+        }
+        let checkpoint_opt = res.unwrap();
+        if let Some(checkpoint) = checkpoint_opt {
+            return Ok(checkpoint.state);
+        }
+        let res = step_fn().await;
+        if let Ok(state) = res {
+            let res = self
+                .storage
+                .set_checkpoint(
+                    self.task.task_id,
+                    self.task.run_id,
+                    &checkpoint_name,
+                    state.as_slice(),
+                    None,
+                )
+                .await;
+            if let Err(err) = res {
+                return Err(FlowControl::Failure(format!(
+                    "Could not store checkpoint {err:?}"
+                )));
+            }
+
+            return Ok(state as StepData)
+        }
+        return Err(FlowControl::Failure("Task execution failed".to_string()));
+    }
+
+    /// Define a new synchronous step with a name
+    /// When steps complete, they create checkpoints of the
+    /// step results which enables re-runs of the task to durably
+    /// resume from their last checkpoint.
+    pub async fn step<E, F>(
+        &mut self,
+        name: &str,
+        step_fn: F,
+    ) -> Result<StepData, FlowControl>
+    where
+        F: FnOnce() -> Result<StepData, E>,
+    {
         // See if the step has a completed checkpoint
         let checkpoint_name = self.checkpoint_name(name);
         let res = self
@@ -122,7 +178,7 @@ impl TaskContext {
                 )));
             }
 
-            return Ok(state)
+            return Ok(state as StepData)
         }
         return Err(FlowControl::Failure("Task execution failed".to_string()));
     }
