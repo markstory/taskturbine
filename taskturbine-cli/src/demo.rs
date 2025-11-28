@@ -70,8 +70,11 @@ async fn execute_task(task: &ClaimedTask, storage: Arc<Storage>) {
 // Userland code
 async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
     println!("Ran 'userland' task function - hello_world");
-    // let _ = ctx.sleep_for("sleepy-time", Duration::from_secs(60)).await?;
+
+    // let _ = ctx.sleep_for("sleepy-time", Duration::from_secs(20)).await?;
     // println!("Sleep completed");
+
+    // Run synchronous steps
     fn step_one() -> Result<Vec<u8>, CliError> {
         println!("Ran step_one");
         Ok(b"a result value".to_vec())
@@ -79,6 +82,7 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
     let step1 = ctx.step("step-1-echo", step_one).await;
     println!("Step 1 result {step1:?}");
 
+    // Run asynchronous steps
     async fn step_two() -> Result<Vec<u8>, CliError> {
         // println!("Ran step_two - fails");
         // Err(CliError::Message("step two failed".to_string()))
@@ -87,6 +91,7 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
         Ok(b"two results".to_vec())
     }
     let step2 = ctx.async_step("step-2-echo", step_two).await?;
+    println!("Step 2 result {step2:?}");
 
     Ok(())
 }
