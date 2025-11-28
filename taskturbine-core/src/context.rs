@@ -145,42 +145,9 @@ impl TaskContext {
     where
         F: FnOnce() -> Result<StepData, E>,
     {
-        // See if the step has a completed checkpoint
-        let checkpoint_name = self.checkpoint_name(name);
-        let res = self
-            .storage
-            .get_checkpoint(self.task.task_id, &checkpoint_name)
-            .await;
-        if let Err(err) = res {
-            return Err(FlowControl::Failure(format!(
-                "Failed to read checkpoint {err:?}"
-            )));
-        }
-        let checkpoint_opt = res.unwrap();
-        if let Some(checkpoint) = checkpoint_opt {
-            return Ok(checkpoint.state);
-        }
-        let res = step_fn();
-        if let Ok(state) = res {
-            let res = self
-                .storage
-                .set_checkpoint(
-                    self.task.task_id,
-                    self.task.run_id,
-                    &checkpoint_name,
-                    state.as_slice(),
-                    None,
-                )
-                .await;
-            if let Err(err) = res {
-                return Err(FlowControl::Failure(format!(
-                    "Could not store checkpoint {err:?}"
-                )));
-            }
+        let async_step_fn = async || { step_fn() };
 
-            return Ok(state as StepData)
-        }
-        return Err(FlowControl::Failure("Task execution failed".to_string()));
+        self.async_step(name, async_step_fn).await
     }
 
     /// Record an event as having completed.
