@@ -252,3 +252,47 @@ impl TaskContext {
         Err(FlowControl::Suspend(duration))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    async fn create_storage() -> Storage {
+        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
+            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
+        let config = Config {
+            database_url: db_url,
+        };
+        let storage = Storage::new(config);
+
+        // Ensure migrations have been applied and that storage is cleared.
+        storage.update_schema().await.unwrap();
+
+        storage
+    }
+
+    async fn create_context() -> TaskContext {
+        let storage = Arc::new(create_storage().await);
+        let _ = storage.spawn_task("ns", "hello-world", b"", None).await;
+        let claim_until = Utc::now() + Duration::from_secs(60);
+        let claimed = storage.claim_task("worker-1", claim_until, 1).await.unwrap();
+
+        let claim = claimed.first().unwrap();
+        TaskContext::build(claim.clone(), storage)
+    }
+
+    #[tokio::test]
+    async fn step_reads_existing_checkpoint() {
+        let context = create_context().await;
+        // TODO continue from here
+    }
+
+    #[tokio::test]
+    async fn step_stores_checkpoint_on_success() {
+    }
+
+    #[tokio::test]
+    async fn step_no_store_checkpoint_on_failure() {
+    }
+}
