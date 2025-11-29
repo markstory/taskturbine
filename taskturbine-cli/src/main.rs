@@ -56,7 +56,7 @@ async fn main() {
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::Demo => demo::demo(storage).await,
     };
-    if let Ok(_) = result {
+    if result.is_ok() {
         println!("Complete");
     } else if let Err(err) = result {
         match err {

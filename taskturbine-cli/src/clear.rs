@@ -14,10 +14,10 @@ pub async fn clear_storage(storage: Storage, args: ClearArgs) -> Result<(), CliE
     if args.execute {
         let res = storage.clear_storage().await;
 
-        return match res {
+        match res {
             Ok(_) => Ok(()),
             Err(err) => Err(CliError::Message(format!("Failed to clear tasks {err:?}"))),
-        };
+        }
     } else {
         println!("SKIP: You did not provide --execute to confirm execution.");
 

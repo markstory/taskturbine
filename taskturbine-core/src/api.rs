@@ -895,7 +895,7 @@ impl Storage {
         // Store a wait and reschedule this run for when the timeout occurs.
         // If an event is emit before that time, we'll be woken up.
         let timeout_ts = if let Some(timeout) = timeout {
-            Utc::now() + Duration::from_secs(timeout as u64)
+            Utc::now() + Duration::from_secs(timeout)
         } else {
             // TODO use config for default timeout
             Utc::now() + Duration::from_secs(60 * 10)

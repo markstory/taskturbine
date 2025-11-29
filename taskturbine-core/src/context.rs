@@ -47,7 +47,7 @@ impl Checkpoints {
             *value += 1;
         }
         if let Some(value) = self.counters.get(name) {
-            return value.clone();
+            *value
         } else {
             0
         }
@@ -93,7 +93,7 @@ impl TaskContext {
             format!("#{count}")
         };
 
-        return format!("{name}{suffix}");
+        format!("{name}{suffix}")
     }
 
     /// Define a new async step with a name
@@ -144,7 +144,7 @@ impl TaskContext {
 
             return Ok(state as StepData);
         }
-        return Err(FlowControl::Failure("Task execution failed".to_string()));
+        Err(FlowControl::Failure("Task execution failed".to_string()))
     }
 
     /// Define a new synchronous step with a name
@@ -212,9 +212,9 @@ impl TaskContext {
 
         // TODO use thiserror to make error casting more succinct
         let err = res.err().unwrap();
-        return Err(FlowControl::Failure(format!(
+        Err(FlowControl::Failure(format!(
             "Could not store an event wait: {err:?}"
-        )));
+        )))
     }
 
     /// Suspend the current task until the provided duration has elapsed.

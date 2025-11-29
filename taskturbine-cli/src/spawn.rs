@@ -59,22 +59,22 @@ and the time after which it should be considered cancelled."
     cancellation_max_age: Option<i32>,
 }
 
-impl Into<TaskOptions> for SpawnArgs {
-    fn into(self) -> TaskOptions {
+impl From<SpawnArgs> for TaskOptions {
+    fn from(val: SpawnArgs) -> Self {
         let mut options = TaskOptions::default();
-        if let Some(headers) = self.headers {
+        if let Some(headers) = val.headers {
             // TODO use serde
         }
-        if let Some(max_attempts) = self.max_attempts {
+        if let Some(max_attempts) = val.max_attempts {
             options.max_attempts = max_attempts;
         }
-        if let Some(retry_seconds) = self.retry_seconds {
+        if let Some(retry_seconds) = val.retry_seconds {
             options.retry_seconds = retry_seconds;
         }
-        if let Some(retry_factor) = self.retry_factor {
+        if let Some(retry_factor) = val.retry_factor {
             options.retry_factor = retry_factor;
         }
-        if let Some(cancellation_max_age) = self.cancellation_max_age {
+        if let Some(cancellation_max_age) = val.cancellation_max_age {
             options.cancellation_max_age = cancellation_max_age;
         }
 
@@ -93,7 +93,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
         .spawn_task(&namespace, &taskname, params.as_ref(), Some(args.into()))
         .await;
 
-    return match res {
+    match res {
         Ok(spawned) => {
             let run_id = spawned.run_id;
             let task_id = spawned.task_id;
@@ -102,5 +102,5 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
             Ok(())
         }
         Err(err) => Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
-    };
+    }
 }
