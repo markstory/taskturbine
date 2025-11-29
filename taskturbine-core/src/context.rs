@@ -1,4 +1,3 @@
-use chrono::Utc;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{api::Storage, models::ClaimedTask};
@@ -13,14 +12,25 @@ pub enum FlowControl {
     Suspend(Duration),
 }
 
+/// An Event payload
+///
+/// Events are captured with `emit_event` and tasks can register
+/// to wait for events with `await_event`. Events enable you
+/// to synchronize task execution with the completion of work
+/// in other systems. For example, a webhook need to be received.
 pub struct Event {
     pub event_name: String,
     pub payload: Vec<u8>,
 }
 
+/// Provides in memory storage of steps -> checkpoint names
+/// It is possible for userland code to repeat step names
+/// (like in a loop). We need to handle tracking separate
+/// completion states for each iteration.
 struct Checkpoints {
     counters: HashMap<String, u32>,
 }
+
 impl Checkpoints {
     pub fn new() -> Self {
         Self {
@@ -44,6 +54,12 @@ impl Checkpoints {
     }
 }
 
+/// The result of steps. The basic API is just bytes.
+///
+/// TODO figure out how to integrate serde for this.
+/// Perhaps that is best left to userland code?
+pub type StepData = Vec<u8>;
+
 /// Execution context for a task.
 /// Passed to task functions by the Worker runtime.
 ///
@@ -54,8 +70,6 @@ pub struct TaskContext {
     storage: Arc<Storage>,
     checkpoints: Checkpoints,
 }
-
-type StepData = Vec<u8>;
 
 impl TaskContext {
     pub fn build(task: ClaimedTask, storage: Arc<Storage>) -> Self {
@@ -255,6 +269,7 @@ impl TaskContext {
 
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
     use uuid::Uuid;
 
     use super::*;
