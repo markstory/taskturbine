@@ -3,12 +3,18 @@ use std::time::Duration;
 
 use chrono::Utc;
 use taskturbine_core::api::Storage;
+use taskturbine_core::app::TaskturbineApp;
 use taskturbine_core::context::{FlowControl, TaskContext};
 use taskturbine_core::models::ClaimedTask;
 
 use crate::CliError;
 
 pub async fn demo(storage: Storage) -> Result<(), CliError> {
+    let storage = Arc::new(storage);
+    let app = TaskturbineApp::new();
+    app.register_task("hello-world", hello_world);
+
+    // Worker loop
     let timeout = Utc::now() + Duration::from_secs(60);
     let res = storage.claim_task("demo-1", timeout, 1).await;
     let claimed = if let Err(err) = res {
@@ -16,7 +22,6 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
     } else {
         res.unwrap()
     };
-    let storage = Arc::new(storage);
     for task in claimed.iter() {
         let task_id = &task.task_id;
 
