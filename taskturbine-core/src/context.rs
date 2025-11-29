@@ -142,7 +142,7 @@ impl TaskContext {
                 )));
             }
 
-            return Ok(state as StepData)
+            return Ok(state as StepData);
         }
         return Err(FlowControl::Failure("Task execution failed".to_string()));
     }
@@ -151,15 +151,11 @@ impl TaskContext {
     /// When steps complete, they create checkpoints of the
     /// step results which enables re-runs of the task to durably
     /// resume from their last checkpoint.
-    pub async fn step<F, E>(
-        &mut self,
-        name: &str,
-        step_fn: F,
-    ) -> Result<StepData, FlowControl>
+    pub async fn step<F, E>(&mut self, name: &str, step_fn: F) -> Result<StepData, FlowControl>
     where
         F: FnOnce() -> Result<StepData, E>,
     {
-        let async_step_fn = async || { step_fn() };
+        let async_step_fn = async || step_fn();
 
         self.async_step(name, async_step_fn).await
     }
@@ -297,7 +293,10 @@ mod tests {
         let _ = storage.spawn_task("ns", task_name, b"", None).await;
 
         let claim_until = Utc::now() + Duration::from_secs(60);
-        let claimed = storage.claim_task("worker-1", claim_until, 1).await.unwrap();
+        let claimed = storage
+            .claim_task("worker-1", claim_until, 1)
+            .await
+            .unwrap();
         let claim = &claimed[0];
 
         claim.clone()
@@ -307,13 +306,16 @@ mod tests {
     async fn step_reads_existing_checkpoint() {
         let storage = Arc::new(create_storage().await);
         let claim = claim_task(&storage, "hello-world").await;
-        let res = storage.set_checkpoint(claim.task_id, claim.run_id, "first-step", b"hi", None).await;
+        let res = storage
+            .set_checkpoint(claim.task_id, claim.run_id, "first-step", b"hi", None)
+            .await;
         assert!(res.is_ok(), "checkpoint should save");
 
         let mut context = TaskContext::build(claim.clone(), storage);
-        let res = context.step::<_, TaskTurbineError>("first-step", || {
-            Ok(b"should not run".to_vec())
-        }).await.unwrap();
+        let res = context
+            .step::<_, TaskTurbineError>("first-step", || Ok(b"should not run".to_vec()))
+            .await
+            .unwrap();
 
         assert_eq!(res, b"hi".to_vec(), "Should get checkpoint state");
     }
@@ -324,9 +326,10 @@ mod tests {
         let claim = claim_task(&storage, "hello-world").await;
         let mut context = TaskContext::build(claim.clone(), storage.clone());
 
-        let res = context.step::<_, TaskTurbineError>("first-step", || {
-            Ok(b"checkpoint value".to_vec())
-        }).await.unwrap();
+        let res = context
+            .step::<_, TaskTurbineError>("first-step", || Ok(b"checkpoint value".to_vec()))
+            .await
+            .unwrap();
         assert_eq!(res, b"checkpoint value".to_vec());
 
         let stored = storage.get_checkpoint(claim.task_id, "first-step").await;
@@ -342,17 +345,23 @@ mod tests {
         let claim = claim_task(&storage, "hello-world").await;
         let mut context = TaskContext::build(claim.clone(), storage.clone());
 
-        let res = context.step("first-step", || {
-            Err(TestError::GenericError)
-        }).await;
+        let res = context
+            .step("first-step", || Err(TestError::GenericError))
+            .await;
 
         let Err(err) = res else {
             panic!("await_event should return error here");
         };
-        assert!(matches!(err, FlowControl::Failure(_)), "Should get a flow control error");
+        assert!(
+            matches!(err, FlowControl::Failure(_)),
+            "Should get a flow control error"
+        );
 
         let stored = storage.get_checkpoint(claim.task_id, "first-step").await;
-        assert!(stored.unwrap().is_none(), "Should not have stored checkpoint");
+        assert!(
+            stored.unwrap().is_none(),
+            "Should not have stored checkpoint"
+        );
     }
 
     #[tokio::test]
@@ -374,7 +383,9 @@ mod tests {
         let context = TaskContext::build(claim.clone(), storage.clone());
 
         let wait_key = format!("await-{}", Uuid::now_v7());
-        let res = context.await_event(&wait_key, Some(Duration::from_secs(300))).await;
+        let res = context
+            .await_event(&wait_key, Some(Duration::from_secs(300)))
+            .await;
 
         let Err(err) = res else {
             panic!("await_event should return error here");
@@ -389,9 +400,13 @@ mod tests {
         let context = TaskContext::build(claim.clone(), storage.clone());
 
         let wait_key = format!("await-{}", Uuid::now_v7());
-        let res = context.emit_event(&wait_key, b"{wait_key} event payload").await;
+        let res = context
+            .emit_event(&wait_key, b"{wait_key} event payload")
+            .await;
         assert!(res.is_ok());
-        let res = context.await_event(&wait_key, Some(Duration::from_secs(300))).await;
+        let res = context
+            .await_event(&wait_key, Some(Duration::from_secs(300)))
+            .await;
 
         assert!(res.is_ok());
         let event = res.unwrap();
@@ -404,7 +419,9 @@ mod tests {
         let claim = claim_task(&storage, "hello-world").await;
         let mut context = TaskContext::build(claim.clone(), storage.clone());
 
-        let res = context.sleep_for("sleeptime", Duration::from_secs(60)).await;
+        let res = context
+            .sleep_for("sleeptime", Duration::from_secs(60))
+            .await;
         assert!(res.is_err());
         let err = res.err().unwrap();
         assert!(matches!(err, FlowControl::Suspend(v) if v == Duration::from_secs(60)));
