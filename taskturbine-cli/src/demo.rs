@@ -9,10 +9,11 @@ use crate::CliError;
 // Demo application setup
 pub async fn demo(storage: Storage) -> Result<(), CliError> {
     let storage = Arc::new(storage);
+
     // TODO App should likely have a builder to define all the config
     // and then have a .build() or worker() method to create the app/worker.
     let mut app = TaskturbineApp::new(storage.clone());
-    app = app.register_task("hello-world", hello_world);
+    app = app.register_task("hello_world", hello_world);
 
     let worker = app.create_worker("demo-worker-1");
     let _ = worker.run_once().await.map_err(|err| CliError::Message(format!("worker error: {err:?}")))?;
