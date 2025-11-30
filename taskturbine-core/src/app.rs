@@ -1,6 +1,8 @@
-use std::{collections::HashMap, pin::Pin};
+use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
-use crate::context::{FlowControl, TaskContext};
+use chrono::Utc;
+
+use crate::{api::Storage, context::{FlowControl, TaskContext}, models::ClaimedTask};
 
 /// TaskRouter contains a map of task names -> task handlers
 pub type TaskRouter = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
@@ -8,12 +10,14 @@ pub type TaskRouter = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + 
 
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
+    storage: Arc<Storage>,
     tasks: TaskRouter,
 }
 
 impl TaskturbineApp {
-    pub fn new() -> Self {
-        Self { 
+    pub fn new(storage: Arc<Storage>) -> Self {
+        Self {
+            storage,
             tasks: HashMap::new()
         }
     }
@@ -27,6 +31,11 @@ impl TaskturbineApp {
         self.tasks.insert(task_name.to_string(), Box::new(wrapper));
 
         self
+    }
+
+    /// Create a worker by consuming the app.
+    pub fn create_worker(self, worker_id: &str) -> Worker {
+        Worker::new(self, worker_id.to_string())
     }
 }
 
@@ -52,3 +61,86 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum WorkerError {
+    Message(String)
+}
+
+/// Worker instances claim tasks, execute them and update
+/// storage with task results.
+pub struct Worker {
+    app: TaskturbineApp,
+    worker_id: String,
+    claim_count: i32,
+}
+
+impl Worker {
+    /// Create a new worker.
+    pub fn new(app: TaskturbineApp, worker_id: String) -> Self {
+        Worker {
+            app, worker_id, claim_count: 1
+        }
+    }
+
+    /// Runs a single loop of the worker
+    ///
+    /// High level flow is:
+    /// - Claim some tasks
+    /// - Execute those tasks.
+    ///
+    /// Errors from tasks are trapped and reported as task failures.
+    pub async fn run_once(&self) -> Result<(), WorkerError> {
+        let timeout = Utc::now() + Duration::from_secs(60);
+        let res = self.app.storage.claim_task(&self.worker_id, timeout, self.claim_count).await;
+        let claimed = if let Err(err) = res {
+            return Err(WorkerError::Message(format!("{err:?}")));
+        } else {
+            res.unwrap()
+        };
+        for task in claimed.iter() {
+            self.execute_task(task).await;
+        }
+        Ok(())
+    }
+
+    /// Execute a task function and record the execution status.
+    pub async fn execute_task(&self, task: &ClaimedTask) {
+        let task_id = &task.task_id;
+        println!("Attemting to execute {task_id}");
+
+        let context = TaskContext::build(task.clone(), self.app.storage.clone());
+        let taskname = &task.task_name;
+        let Some(task_fn) = self.app.tasks.get(taskname) else {
+            println!("No task named {taskname} is registered.");
+            return;
+        };
+
+        let storage = self.app.storage.clone();
+        match task_fn.call(context).await {
+            Err(FlowControl::InvalidValue(msg)) => println!("Invalid value {msg}"),
+            Err(FlowControl::Failure(msg)) => {
+                println!("Task run failure: {msg}");
+                let retry_at = task.next_retry_at();
+                let res = storage.fail_run(task.run_id, b"", Some(retry_at)).await;
+                if let Err(schedule_err) = res {
+                    println!("Failed to fail run {schedule_err:?}");
+                }
+            }
+            Err(FlowControl::Suspend(wait_for)) => {
+                let wake_at = Utc::now() + wait_for;
+
+                let res = storage.schedule_run(task.run_id, wake_at).await;
+                if let Err(schedule_err) = res {
+                    println!("Failed to schedule run {schedule_err:?}");
+                }
+            }
+            Ok(_) => {
+                println!("Completed task {taskname}");
+                let res = storage.complete_run(task.run_id, b"").await;
+                if let Err(msg) = res {
+                    println!("Failed to complete run {msg:?}");
+                }
+            }
+        }
+    }
+}
