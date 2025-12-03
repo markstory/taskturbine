@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use taskturbine_core::api::Storage;
 use taskturbine_core::app::TaskturbineApp;
 use taskturbine_core::context::{FlowControl, TaskContext};
@@ -8,11 +6,11 @@ use crate::CliError;
 
 // Demo application setup
 pub async fn demo(storage: Storage) -> Result<(), CliError> {
-    let storage = Arc::new(storage);
+    let config = storage.get_config();
 
     // TODO App should likely have a builder to define all the config
     // and then have a .build() or worker() method to create the app/worker.
-    let mut app = TaskturbineApp::new(storage.clone());
+    let mut app = TaskturbineApp::new(config);
     app = app.register_task("hello_world", hello_world);
 
     let worker = app.create_worker("demo-worker-1");
@@ -21,7 +19,7 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
     Ok(())
 }
 
-// Userland code
+// Userland task code
 async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
     println!("Ran 'userland' task function - hello_world");
 

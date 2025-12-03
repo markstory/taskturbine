@@ -49,7 +49,7 @@ impl TaskturbineApp {
 }
 
 
-/// Trait for async functions that return a result.
+/// Trait for async Task functions that return a result.
 ///
 /// The current result is not generic, and requires a FlowControl error
 /// to be used.
