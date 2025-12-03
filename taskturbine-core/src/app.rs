@@ -2,7 +2,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use chrono::Utc;
 
-use crate::{api::Storage, context::{FlowControl, TaskContext}, models::ClaimedTask};
+use crate::{api::Storage, config::Config, context::{FlowControl, TaskContext}, models::ClaimedTask};
 
 /// TaskRouter contains a map of task names -> task handlers
 pub type TaskRouter = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
@@ -15,11 +15,20 @@ pub struct TaskturbineApp {
 }
 
 impl TaskturbineApp {
-    pub fn new(storage: Arc<Storage>) -> Self {
+    /// Create an app instance from a config object.
+    pub fn new(config: Config) -> Self {
+        let storage = Arc::new(Storage::new(config));
         Self {
             storage,
             tasks: HashMap::new()
         }
+    }
+
+    /// Update the storage instance used.
+    pub fn with_storage(&mut self, storage: Storage) -> &mut Self {
+        self.storage = Arc::new(storage);
+
+        self
     }
 
     /// Register a task with a given name.

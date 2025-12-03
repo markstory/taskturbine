@@ -72,6 +72,7 @@ pub struct TaskContext {
 }
 
 impl TaskContext {
+    /// Create a TaskContext from a ClaimedTask and Storage API.
     pub fn build(task: ClaimedTask, storage: Arc<Storage>) -> Self {
         let checkpoints = Checkpoints::new();
 

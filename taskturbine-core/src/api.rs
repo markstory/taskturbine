@@ -84,6 +84,11 @@ impl Storage {
         Self { config, pool }
     }
 
+    /// Get a copy of the current [`Config`]
+    pub fn get_config(&self) -> Config {
+        self.config.clone()
+    }
+
     /// Garbage collect events.
     ///
     /// Delete events that have created_at older than `older_than`.
