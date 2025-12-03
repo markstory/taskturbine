@@ -113,7 +113,7 @@ impl Worker {
     }
 
     /// Execute a task function and record the execution status.
-    pub async fn execute_task(&self, task: &ClaimedTask) {
+    async fn execute_task(&self, task: &ClaimedTask) {
         let task_id = &task.task_id;
         println!("Attemting to execute {task_id}");
 
@@ -151,5 +151,37 @@ impl Worker {
                 }
             }
         }
+    }
+}
+
+pub async fn run_worker(worker: Worker) {
+    while let Ok(_) = worker.run_once().await {
+        // TODO upkeep/garbage collection?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::Config;
+
+    use super::TaskturbineApp;
+
+    fn create_app() -> TaskturbineApp {
+        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
+            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
+        let config = Config {
+            database_url: db_url,
+        };
+        TaskturbineApp::new(config)
+    }
+
+    #[tokio::test]
+    async fn worker_run_once_task_success() {
+        let app = create_app();
+
+    }
+
+    #[tokio::test]
+    async fn worker_run_once_task_failure() {
     }
 }
