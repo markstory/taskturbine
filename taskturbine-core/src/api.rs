@@ -295,12 +295,13 @@ impl Storage {
         let task_id = Uuid::now_v7();
         let res = sqlx::query(
             "INSERT INTO taskturbine.tasks (
-                task_id, namespace, task_name, params, headers,
+                task_id, usecase, namespace, task_name, params, headers,
                 retry_seconds, retry_factor, retry_max_seconds,
                 max_attempts, cancellation_max_age, created_at, state
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11)",
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12)",
         )
         .bind(task_id)
+        .bind(&self.config.usecase)
         .bind(namespace)
         .bind(task_name)
         .bind(params)
@@ -371,14 +372,15 @@ impl Storage {
                 WHERE r.state IN ('pending', 'sleeping')
                 AND t.state IN ('pending', 'sleeping')
                 AND r.available_at <= NOW()
-                LIMIT $1
+                AND t.usecase = $1
+                LIMIT $2
                 FOR UPDATE SKIP LOCKED
             ),
             claim_run AS (
                 UPDATE taskturbine.runs
                 SET state = 'running',
-                    claimed_by = $2,
-                    claim_expires_at = $3,
+                    claimed_by = $3,
+                    claim_expires_at = $4,
                     started_at = NOW(),
                     attempt = attempt + 1
                 WHERE run_id IN (SELECT run_id FROM candidates)
@@ -401,6 +403,7 @@ impl Storage {
             INNER JOIN taskturbine.runs AS r ON cr.run_id = r.run_id
             ORDER BY r.available_at, r.run_id",
         )
+        .bind(&self.config.usecase)
         .bind(qty)
         .bind(worker_id)
         .bind(claim_timeout)
@@ -798,7 +801,8 @@ impl Storage {
         task_id: Uuid,
     ) -> Result<Vec<Checkpoint>, TaskTurbineError> {
         let res: Vec<Checkpoint> = sqlx::query_as(
-            "SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 ORDER by updated_at",
+            "SELECT * FROM taskturbine.checkpoints
+            WHERE task_id = $1 ORDER by updated_at",
         )
         .bind(task_id)
         .fetch_all(&self.pool)
@@ -1002,8 +1006,9 @@ impl Storage {
     ) -> Result<Option<Vec<u8>>, TaskTurbineError> {
         let event_opt = sqlx::query(
             "SELECT payload FROM taskturbine.events
-            WHERE event_name = $1",
+            WHERE usecase = $1 AND event_name = $2",
         )
+        .bind(&self.config.usecase)
         .bind(event_name)
         .fetch_optional(conn)
         .await
@@ -1069,13 +1074,14 @@ impl Storage {
             .map_err(TaskTurbineError::SqlError)?;
 
         let _ = sqlx::query(
-            "INSERT INTO taskturbine.events (event_name, payload, created_at)
-            VALUES ($1, $2, NOW())
-            ON CONFLICT (event_name)
+            "INSERT INTO taskturbine.events (usecase, event_name, payload, created_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (usecase, event_name)
             DO UPDATE 
             SET payload = excluded.payload,
                 created_at = excluded.created_at",
         )
+        .bind(&self.config.usecase)
         .bind(event_name)
         .bind(payload)
         .execute(&mut *atomic)
@@ -1360,6 +1366,7 @@ mod tests {
                 None,
             )
             .await;
+        dbg!(&res);
         assert!(res.is_ok());
         let wait_res = storage.get_wait_by_run_id(spawned.run_id).await;
         assert!(wait_res.is_ok());

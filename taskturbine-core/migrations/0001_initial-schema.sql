@@ -2,6 +2,7 @@ CREATE SCHEMA if not exists taskturbine;
 
 CREATE TABLE taskturbine.tasks (
     task_id uuid primary key,
+    usecase text not null,
     namespace text not null,
     task_name text not null,
     params bytea not null,
@@ -23,6 +24,7 @@ CREATE TABLE taskturbine.tasks (
     -- When the task was completed/failed/cancelled.
     completed_at timestamptz
 );
+CREATE INDEX tasks_usecase_ns ON taskturbine.tasks (usecase, namespace);
 
 CREATE TABLE taskturbine.runs (
     run_id uuid primary key,
@@ -56,9 +58,11 @@ CREATE TABLE taskturbine.checkpoints (
 );
 
 CREATE TABLE taskturbine.events (
-    event_name text primary key,
+    usecase text not null,
+    event_name text not null,
     payload bytea,
-    created_at timestamptz not null default current_timestamp
+    created_at timestamptz not null default current_timestamp,
+    primary key (usecase, event_name)
 );
 
 CREATE TABLE taskturbine.waits (
