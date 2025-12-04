@@ -346,6 +346,7 @@ impl Storage {
     pub async fn claim_task(
         &self,
         worker_id: &str,
+
         claim_timeout: DateTime<Utc>,
         qty: i32,
     ) -> Result<Vec<ClaimedTask>, TaskTurbineError> {
@@ -1132,6 +1133,7 @@ mod tests {
         let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
             .expect("Missing required TASKTURBINE_DATABASE_URL env var");
         let config = Config {
+            usecase: "test".to_string(),
             database_url: db_url,
         };
         let storage = Storage::new(config);

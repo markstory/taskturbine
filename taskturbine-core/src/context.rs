@@ -280,6 +280,7 @@ mod tests {
         let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
             .expect("Missing required TASKTURBINE_DATABASE_URL env var");
         let config = Config {
+            usecase: "test".into(),
             database_url: db_url,
         };
         let storage = Storage::new(config);

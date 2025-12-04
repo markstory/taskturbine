@@ -170,6 +170,7 @@ mod tests {
         let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
             .expect("Missing required TASKTURBINE_DATABASE_URL env var");
         let config = Config {
+            usecase: "test".to_string(),
             database_url: db_url,
         };
         TaskturbineApp::new(config)
@@ -178,7 +179,12 @@ mod tests {
     #[tokio::test]
     async fn worker_run_once_task_success() {
         let app = create_app();
+        let storage = &app.storage;
+        let _ = storage.spawn_task("test", "hello-world", b"", None).await.unwrap();
 
+        let worker = app.create_worker("some-worker-id");
+        let res = worker.run_once().await;
+        assert!(res.is_ok());
     }
 
     #[tokio::test]
