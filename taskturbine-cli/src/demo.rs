@@ -11,7 +11,9 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
     // TODO App should likely have a builder to define all the config
     // and then have a .build() or worker() method to create the app/worker.
     let mut app = TaskturbineApp::new(config);
-    app = app.register_task("hello_world", hello_world);
+    app = app
+        .register_task("hello_world", hello_world)
+        .register_task("sailboat", sailboat);
 
     let worker = app.create_worker("demo-worker-1");
     let _ = worker.run_once().await.map_err(|err| CliError::Message(format!("worker error: {err:?}")))?;
@@ -45,5 +47,11 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
     let step2 = ctx.async_step("step-2-echo", step_two).await?;
     println!("Step 2 result {step2:?}");
 
+    Ok(())
+}
+
+// Userland task code
+async fn sailboat(mut _ctx: TaskContext) -> Result<(), FlowControl> {
+    println!("Ahoy! Setting sail in the sailboat task.");
     Ok(())
 }
