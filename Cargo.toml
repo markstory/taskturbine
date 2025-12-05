@@ -2,9 +2,6 @@
 resolver = "3"
 members = [ "taskturbine-cli","taskturbine-core"]
 
-[alias]
-t = "test -- --test-threads=4"
-
 [workspace.dependencies]
 chrono = "0.4.42"
 figment = "0.10.19"
