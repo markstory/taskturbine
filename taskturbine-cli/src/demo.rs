@@ -6,19 +6,25 @@ use crate::CliError;
 
 // Demo application setup
 pub async fn demo(storage: Storage) -> Result<(), CliError> {
+    // Get the configuration from storage.
+    // In userland code they would define the config, and apply to the App.
     let config = storage.get_config();
 
-    // TODO App should likely have a builder to define all the config
-    // and then have a .build() or worker() method to create the app/worker.
+    // Create an application instance
     let mut app = TaskturbineApp::new(config);
     app = app
         .register_task("hello_world", hello_world)
+        .register_task("explode", explode)
         .register_task("sailboat", sailboat);
 
     let worker = app.create_worker("demo-worker-1");
-    let _ = worker.run_once().await.map_err(|err| CliError::Message(format!("worker error: {err:?}")))?;
 
-    Ok(())
+    loop {
+        let _ = worker
+            .run_once()
+            .await
+            .map_err(|err| CliError::Message(format!("worker error: {err:?}")))?;
+    }
 }
 
 // Userland task code
@@ -54,4 +60,9 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
 async fn sailboat(mut _ctx: TaskContext) -> Result<(), FlowControl> {
     println!("Ahoy! Setting sail in the sailboat task.");
     Ok(())
+}
+
+// Userland task code
+async fn explode(mut _ctx: TaskContext) -> Result<(), FlowControl> {
+    panic!("Oh no!");
 }
