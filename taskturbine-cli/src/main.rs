@@ -50,6 +50,7 @@ async fn main() {
     let config = taskturbine_core::config::Config {
         database_url: db_url,
         usecase: "demo".into(),
+        worker_sleep_secs: 2,
     };
     let storage = Storage::new(config);
     let result = match args.command {

@@ -172,6 +172,7 @@ mod tests {
         let config = Config {
             usecase: "test".to_string(),
             database_url: db_url,
+            worker_sleep_secs: 2,
         };
         TaskturbineApp::new(config)
     }

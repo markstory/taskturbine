@@ -1,3 +1,4 @@
+use tokio::time;
 use taskturbine_core::api::Storage;
 use taskturbine_core::app::TaskturbineApp;
 use taskturbine_core::context::{FlowControl, TaskContext};
@@ -11,7 +12,7 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
     let config = storage.get_config();
 
     // Create an application instance
-    let mut app = TaskturbineApp::new(config);
+    let mut app = TaskturbineApp::new(config.clone());
     app = app
         .register_task("hello_world", hello_world)
         .register_task("explode", explode)
@@ -19,11 +20,18 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
 
     let worker = app.create_worker("demo-worker-1");
 
+    // TODO move this to run_worker function
     loop {
-        let _ = worker
+        let completed = worker
             .run_once()
             .await
             .map_err(|err| CliError::Message(format!("worker error: {err:?}")))?;
+
+        if completed == 0 {
+            let sleep_secs = config.worker_sleep_secs.clone();
+            time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
+            log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
+        }
     }
 }
 

@@ -282,6 +282,7 @@ mod tests {
         let config = Config {
             usecase: "test".into(),
             database_url: db_url,
+            worker_sleep_secs: 2,
         };
         let storage = Storage::new(config);
 
