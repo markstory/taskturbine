@@ -1,9 +1,9 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use tokio::time;
 
-use crate::{api::Storage, config::Config, context::{FlowControl, TaskContext}, models::ClaimedTask};
+use crate::{api::{Storage, TaskTurbineError}, config::Config, context::{FlowControl, TaskContext}, models::ClaimedTask};
 
 /// TaskRouter contains a map of task names -> task handlers
 pub type TaskRouter = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
@@ -76,6 +76,12 @@ pub enum WorkerError {
     Message(String)
 }
 
+impl From<TaskTurbineError> for WorkerError {
+    fn from(err: TaskTurbineError) -> Self {
+        WorkerError::Message(format!("{err:?}"))
+    }
+}
+
 /// Worker instances claim tasks, execute them and update
 /// storage with task results.
 pub struct Worker {
@@ -103,7 +109,7 @@ impl Worker {
         let timeout = Utc::now() + Duration::from_secs(60);
         let res = self.app.storage.claim_task(&self.worker_id, timeout, self.claim_count).await;
         let claimed = if let Err(err) = res {
-            return Err(WorkerError::Message(format!("{err:?}")));
+            return Err(err.into());
         } else {
             res.unwrap()
         };
@@ -113,27 +119,44 @@ impl Worker {
         Ok(claimed.len() as i32)
     }
 
+    /// Runs a cleanup step on storage.
+    ///
+    /// Takes a datetime of what is considered stale and can be purged.
+    pub async fn run_cleanup(&self, older_than: DateTime<Utc>) -> Result<(), WorkerError> {
+        // TODO hardcoded limit here. Could be a parameter.
+        let res = self.app.storage.cleanup_events(older_than, 1000).await;
+        if let Err(err) = res {
+            return Err(err.into());
+        }
+        let res = self.app.storage.cleanup_tasks(older_than, 1000).await;
+        if let Err(err) = res {
+            return Err(err.into());
+        }
+        Ok(())
+    }
+
     /// Execute a task function and record the execution status.
     async fn execute_task(&self, task: &ClaimedTask) {
         let task_id = &task.task_id;
-        println!("Attemting to execute {task_id}");
+        log::debug!("Attemting to execute {task_id}");
 
         let context = TaskContext::build(task.clone(), self.app.storage.clone());
         let taskname = &task.task_name;
         let Some(task_fn) = self.app.tasks.get(taskname) else {
-            println!("No task named {taskname} is registered.");
+            log::warn!("No task named {taskname} is registered.");
             return;
         };
 
         let storage = self.app.storage.clone();
         match task_fn.call(context).await {
-            Err(FlowControl::InvalidValue(msg)) => println!("Invalid value {msg}"),
+            Err(FlowControl::InvalidValue(msg)) => log::warn!("Invalid value {msg}"),
             Err(FlowControl::Failure(msg)) => {
-                println!("Task run failure: {msg}");
+                log::debug!("Task run failure: {msg}");
+
                 let retry_at = task.next_retry_at();
                 let res = storage.fail_run(task.run_id, b"", Some(retry_at)).await;
                 if let Err(schedule_err) = res {
-                    println!("Failed to fail run {schedule_err:?}");
+                    log::error!("Failed to fail run {schedule_err:?}");
                 }
             }
             Err(FlowControl::Suspend(wait_for)) => {
@@ -141,26 +164,40 @@ impl Worker {
 
                 let res = storage.schedule_run(task.run_id, wake_at).await;
                 if let Err(schedule_err) = res {
-                    println!("Failed to schedule run {schedule_err:?}");
+                    log::error!("Failed to schedule run {schedule_err:?}");
                 }
             }
             Ok(_) => {
-                println!("Completed task {taskname}");
+                log::debug!("Completed task {taskname}");
                 let res = storage.complete_run(task.run_id, b"").await;
                 if let Err(msg) = res {
-                    println!("Failed to complete run {msg:?}");
+                    log::error!("Failed to complete run {msg:?}");
                 }
             }
         }
     }
 }
 
+/// Run a a worker in a while loop. 
+/// Consumes the worker and options to start a loop.
 pub async fn run_worker(worker: Worker, sleep_secs: i32) {
     while let Ok(completed) = worker.run_once().await {
         // TODO upkeep/garbage collection?
         if completed == 0 {
             time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
             log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
+        }
+
+        // Add random chance? Probably will need worker config.
+        if true {
+            // TODO Don't hardcode, use options
+            let cleanup = Utc::now() - Duration::from_secs(60 * 60 * 6);
+            match worker.run_cleanup(cleanup).await {
+                Ok(_) => (),
+                Err(err) => {
+                    log::error!("{err:?}");
+                }
+            }
         }
     }
 }
