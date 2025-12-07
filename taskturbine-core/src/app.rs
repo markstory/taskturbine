@@ -98,7 +98,7 @@ impl Worker {
     /// - Execute those tasks.
     ///
     /// Errors from tasks are trapped and reported as task failures.
-    pub async fn run_once(&self) -> Result<(), WorkerError> {
+    pub async fn run_once(&self) -> Result<i32, WorkerError> {
         let timeout = Utc::now() + Duration::from_secs(60);
         let res = self.app.storage.claim_task(&self.worker_id, timeout, self.claim_count).await;
         let claimed = if let Err(err) = res {
@@ -109,7 +109,7 @@ impl Worker {
         for task in claimed.iter() {
             self.execute_task(task).await;
         }
-        Ok(())
+        Ok(claimed.len() as i32)
     }
 
     /// Execute a task function and record the execution status.
