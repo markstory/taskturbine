@@ -1,6 +1,7 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use chrono::{DateTime, Utc};
+use rand::Rng;
 use tokio::time;
 
 use crate::{api::{Storage, TaskTurbineError}, config::Config, context::{FlowControl, TaskContext}, models::ClaimedTask};
@@ -11,6 +12,7 @@ pub type TaskRouter = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + 
 
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
+    config: Config,
     storage: Arc<Storage>,
     tasks: TaskRouter,
 }
@@ -18,8 +20,9 @@ pub struct TaskturbineApp {
 impl TaskturbineApp {
     /// Create an app instance from a config object.
     pub fn new(config: Config) -> Self {
-        let storage = Arc::new(Storage::new(config));
+        let storage = Arc::new(Storage::new(config.clone()));
         Self {
+            config,
             storage,
             tasks: HashMap::new()
         }
@@ -52,8 +55,10 @@ impl TaskturbineApp {
 
 /// Trait for async Task functions that return a result.
 ///
-/// The current result is not generic, and requires a FlowControl error
-/// to be used.
+/// This trait isn't directly implemented by application tasks. Instead this
+/// trait is implictly implemented by wrapping functions registered with [`TaskturbineApp::register_task()`].
+///
+/// The current result is not generic, and requires a FlowControl error to be used.
 pub trait TaskHandler<Ctx> {
     fn call(&self, ctx: Ctx) -> Pin<Box<dyn Future<Output = Result<(), FlowControl>> + Send>>;
 }
@@ -96,6 +101,11 @@ impl Worker {
         Worker {
             app, worker_id, claim_count: 1
         }
+    }
+
+    /// Get a reference to the Config used by this worker.
+    pub fn config(&self) -> &Config {
+        &self.app.config
     }
 
     /// Runs a single loop of the worker
@@ -178,21 +188,23 @@ impl Worker {
     }
 }
 
-/// Run a a worker in a while loop. 
+/// Run a a worker in a while loop.
 /// Consumes the worker and options to start a loop.
-pub async fn run_worker(worker: Worker, sleep_secs: i32) {
+pub async fn run_worker(worker: Worker) {
+    let mut rng = rand::rng();
+
     while let Ok(completed) = worker.run_once().await {
-        // TODO upkeep/garbage collection?
+        let config = worker.config();
         if completed == 0 {
+            let sleep_secs = config.worker_sleep_secs;
             time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
             log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
         }
 
-        // Add random chance? Probably will need worker config.
-        if true {
-            // TODO Don't hardcode, use options
-            let cleanup = Utc::now() - Duration::from_secs(60 * 60 * 6);
-            match worker.run_cleanup(cleanup).await {
+        // Run cleanup periodically. Use rng to sample
+        if config.worker_cleanup_probability < rng.random() {
+            let cleanup_time = Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
+            match worker.run_cleanup(cleanup_time).await {
                 Ok(_) => (),
                 Err(err) => {
                     log::error!("{err:?}");
@@ -215,6 +227,8 @@ mod tests {
             usecase: "test".to_string(),
             database_url: db_url,
             worker_sleep_secs: 2,
+            worker_cleanup_cutoff_secs: 500,
+            worker_cleanup_probability: 0.1,
         };
         TaskturbineApp::new(config)
     }

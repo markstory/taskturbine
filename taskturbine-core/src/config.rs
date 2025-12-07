@@ -11,6 +11,14 @@ pub struct Config {
 
     /// The number of seconds a worker should sleep when no tasks are available.
     pub worker_sleep_secs: i32,
+
+    /// The age of completed tasks and events in seconds
+    /// after now() that are safe to delete.
+    pub worker_cleanup_cutoff_secs: i32,
+
+    /// The probability that a worker will run
+    /// the cleanup operations.
+    pub worker_cleanup_probability: f64,
 }
 
 impl Default for Config {
@@ -19,6 +27,8 @@ impl Default for Config {
             database_url: "".to_string(),
             usecase: "default".to_string(),
             worker_sleep_secs: 2,
+            worker_cleanup_cutoff_secs: 60 * 10,
+            worker_cleanup_probability: 0.1,
         }
     }
 }

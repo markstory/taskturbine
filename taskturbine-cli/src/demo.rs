@@ -18,7 +18,7 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
         .register_task("sailboat", sailboat);
 
     let worker = app.create_worker("demo-worker-1");
-    run_worker(worker, config.worker_sleep_secs).await;
+    run_worker(worker).await;
     Ok(())
 }
 

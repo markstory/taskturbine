@@ -1143,6 +1143,8 @@ mod tests {
             usecase: "test".to_string(),
             database_url: db_url,
             worker_sleep_secs: 2,
+            worker_cleanup_cutoff_secs: 500,
+            worker_cleanup_probability: 0.1,
         };
         let storage = Storage::new(config);
 
