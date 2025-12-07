@@ -30,6 +30,7 @@ pub struct SpawnResult {
 
 /// Options for spawning a task.
 /// Default values are drawn from the TaskRuntime and TaskOptions defaults.
+#[non_exhaustive]
 pub struct TaskOptions {
     /// Map of headers to include with the task activation
     pub headers: HashMap<String, String>,
