@@ -1,6 +1,7 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use chrono::Utc;
+use tokio::time;
 
 use crate::{api::Storage, config::Config, context::{FlowControl, TaskContext}, models::ClaimedTask};
 
@@ -154,9 +155,13 @@ impl Worker {
     }
 }
 
-pub async fn run_worker(worker: Worker) {
-    while let Ok(_) = worker.run_once().await {
+pub async fn run_worker(worker: Worker, sleep_secs: i32) {
+    while let Ok(completed) = worker.run_once().await {
         // TODO upkeep/garbage collection?
+        if completed == 0 {
+            time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
+            log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
+        }
     }
 }
 

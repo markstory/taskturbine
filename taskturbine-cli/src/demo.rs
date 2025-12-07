@@ -1,6 +1,5 @@
-use tokio::time;
 use taskturbine_core::api::Storage;
-use taskturbine_core::app::TaskturbineApp;
+use taskturbine_core::app::{run_worker, TaskturbineApp};
 use taskturbine_core::context::{FlowControl, TaskContext};
 
 use crate::CliError;
@@ -19,20 +18,8 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
         .register_task("sailboat", sailboat);
 
     let worker = app.create_worker("demo-worker-1");
-
-    // TODO move this to run_worker function
-    loop {
-        let completed = worker
-            .run_once()
-            .await
-            .map_err(|err| CliError::Message(format!("worker error: {err:?}")))?;
-
-        if completed == 0 {
-            let sleep_secs = config.worker_sleep_secs.clone();
-            time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
-            log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
-        }
-    }
+    run_worker(worker, config.worker_sleep_secs).await;
+    Ok(())
 }
 
 // Userland task code
