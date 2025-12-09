@@ -17,9 +17,11 @@ enum CliError {
 #[command(version = "1.0")]
 #[command(about = "Command line tools and interface for taskturbine")]
 struct Cli {
+    /// The database url to connect to. eg. postgres://user:pass@localhost/dbname
     #[arg(short, long)]
     database_url: Option<String>,
 
+    /// Enable verbose/debug output
     #[arg(short, long)]
     verbose: bool,
 
