@@ -4,6 +4,7 @@ use taskturbine_core::api::Storage;
 
 mod clear;
 mod demo;
+mod emit_event;
 mod spawn;
 
 #[derive(Debug)]
@@ -28,8 +29,13 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Spawn a new task.
     Spawn(spawn::SpawnArgs),
+    /// Clears all data from storage.
     Clear(clear::ClearArgs),
+    /// Emit an event to storage.
+    EmitEvent(emit_event::EmitEventArgs),
+    /// Run a demo worker
     Demo,
 }
 
@@ -59,6 +65,7 @@ async fn main() {
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::Demo => demo::demo(storage).await,
+        Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
     };
     if result.is_ok() {
         println!("Complete");

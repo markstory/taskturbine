@@ -202,7 +202,7 @@ pub async fn run_worker(worker: Worker) {
         }
 
         // Run cleanup periodically. Use rng to sample
-        if config.worker_cleanup_probability < rng.random() {
+        if config.worker_cleanup_probability > rng.random() {
             let cleanup_time = Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
             match worker.run_cleanup(cleanup_time).await {
                 Ok(_) => (),
@@ -242,9 +242,5 @@ mod tests {
         let worker = app.create_worker("some-worker-id");
         let res = worker.run_once().await;
         assert!(res.is_ok());
-    }
-
-    #[tokio::test]
-    async fn worker_run_once_task_failure() {
     }
 }
