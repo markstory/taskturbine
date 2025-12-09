@@ -48,6 +48,9 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
     let step2 = ctx.async_step("step-2-echo", step_two).await?;
     println!("Step 2 result {step2:?}");
 
+    let event = ctx.await_event("step-3-echo", None).await?;
+    println!("Step 3 event {event:?}");
+
     Ok(())
 }
 
