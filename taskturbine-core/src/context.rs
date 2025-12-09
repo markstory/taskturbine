@@ -18,6 +18,7 @@ pub enum FlowControl {
 /// to wait for events with `await_event`. Events enable you
 /// to synchronize task execution with the completion of work
 /// in other systems. For example, a webhook need to be received.
+#[derive(Debug)]
 pub struct Event {
     pub event_name: String,
     pub payload: Vec<u8>,
