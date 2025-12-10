@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use crate::models::{Checkpoint, ClaimedTask, Task, TaskState};
+use crate::models::{Checkpoint, ClaimedTask, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
 use sqlx::{
     ConnectOptions, PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction,
@@ -24,7 +24,7 @@ pub enum TaskTurbineError {
 /// Result of spawning a task.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpawnResult {
-    pub task_id: Uuid,
+    pub task_id: TaskId,
     pub run_id: Uuid,
 }
 
@@ -180,14 +180,14 @@ impl Storage {
     /// {{{ Testing helpers
     /// Testing Helper: setting run + task to a specific state.
     #[cfg(test)]
-    async fn set_run_state(&self, task_id: Uuid, state: TaskState) -> Result<(), TaskTurbineError> {
+    async fn set_run_state(&self, task_id: TaskId, state: TaskState) -> Result<(), TaskTurbineError> {
         let res = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1
             WHERE task_id = $2",
         )
         .bind(state)
-        .bind(task_id)
+        .bind(task_id.0)
         .execute(&self.pool)
         .await;
         if let Err(e) = res {
@@ -200,7 +200,7 @@ impl Storage {
             WHERE task_id = $2",
         )
         .bind(state)
-        .bind(task_id)
+        .bind(task_id.0)
         .execute(&self.pool)
         .await;
 
@@ -236,9 +236,9 @@ impl Storage {
 
     // Testing helper: get a run
     #[cfg(test)]
-    async fn get_task(&self, task_id: Uuid) -> Result<Option<PgRow>, TaskTurbineError> {
+    async fn get_task(&self, task_id: TaskId) -> Result<Option<PgRow>, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
-            .bind(task_id)
+            .bind(task_id.0)
             .fetch_optional(&self.pool)
             .await
             .map_err(TaskTurbineError::SqlError)?;
@@ -335,7 +335,7 @@ impl Storage {
         }
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
-        Ok(SpawnResult { task_id, run_id })
+        Ok(SpawnResult { task_id: TaskId(task_id), run_id })
     }
 
     /// Claim one or more tasks for processing.
@@ -516,7 +516,7 @@ impl Storage {
     /// Get a task record locked with FOR UPDATE
     async fn get_locked_task(
         &self,
-        task_id: Uuid,
+        task_id: TaskId,
         conn: &mut PgConnection,
     ) -> Result<Task, TaskTurbineError> {
         let row: Task = sqlx::query_as(
@@ -525,10 +525,10 @@ impl Storage {
              WHERE task_id = $1
              FOR UPDATE",
         )
-        .bind(task_id)
+        .bind(task_id.0)
         .fetch_one(&mut *conn)
         .await
-        .map_err(|_| TaskTurbineError::NotFound(task_id))?;
+        .map_err(|_| TaskTurbineError::NotFound(task_id.0))?;
 
         Ok(row)
     }
@@ -645,7 +645,7 @@ impl Storage {
             }
         }
         let mut task = self
-            .get_locked_task(run_row.get("task_id"), &mut *conn)
+            .get_locked_task(TaskId(run_row.get("task_id")), &mut *conn)
             .await?;
         let res = sqlx::query(
             "UPDATE taskturbine.runs
@@ -765,7 +765,7 @@ impl Storage {
         }
         self.suspend_run(
             &mut atomic,
-            &run.get::<Uuid, _>("task_id"),
+            &run.get::<TaskId, _>("task_id"),
             &run_id,
             wake_at,
         )
@@ -779,7 +779,7 @@ impl Storage {
     /// Get the state of a single checkpoint
     pub async fn get_checkpoint(
         &self,
-        task_id: Uuid,
+        task_id: TaskId,
         step_name: &str,
     ) -> Result<Option<Checkpoint>, TaskTurbineError> {
         let res: Option<Checkpoint> = sqlx::query_as(
@@ -799,7 +799,7 @@ impl Storage {
     /// If there are no checkpoints an empty Vec will be returned.
     pub async fn get_checkpoints(
         &self,
-        task_id: Uuid,
+        task_id: TaskId,
     ) -> Result<Vec<Checkpoint>, TaskTurbineError> {
         let res: Vec<Checkpoint> = sqlx::query_as(
             "SELECT * FROM taskturbine.checkpoints
@@ -817,7 +817,7 @@ impl Storage {
     /// The worker can extend its claim on the task each time it creates a checkpoint.
     pub async fn set_checkpoint(
         &self,
-        task_id: Uuid,
+        task_id: TaskId,
         run_id: Uuid,
         step_name: &str,
         state: &[u8],
@@ -853,7 +853,7 @@ impl Storage {
     /// Events must be recorded with [`Storage::emit_event()`]
     pub async fn await_event(
         &self,
-        task_id: Uuid,
+        task_id: TaskId,
         run_id: Uuid,
         step_name: &str,
         event_name: &str,
@@ -876,7 +876,7 @@ impl Storage {
             "SELECT state FROM taskturbine.checkpoints
             WHERE task_id = $1 AND step_name = $2",
         )
-        .bind(task_id)
+        .bind(task_id.0)
         .bind(step_name)
         .fetch_optional(&mut *atomic)
         .await
@@ -940,7 +940,7 @@ impl Storage {
     async fn store_wait(
         &self,
         conn: &mut PgConnection,
-        task_id: &Uuid,
+        task_id: &TaskId,
         run_id: &Uuid,
         step_name: &str,
         event_name: &str,
@@ -957,7 +957,7 @@ impl Storage {
                 timeout_at = EXCLUDED.timeout_at,
                 created_at = EXCLUDED.created_at"
         )
-        .bind(task_id)
+        .bind(task_id.0)
         .bind(run_id)
         .bind(step_name)
         .bind(event_name)
@@ -974,7 +974,7 @@ impl Storage {
     async fn store_checkpoint(
         &self,
         conn: &mut PgConnection,
-        task_id: &Uuid,
+        task_id: &TaskId,
         run_id: &Uuid,
         step_name: &str,
         state: &[u8],
@@ -988,7 +988,7 @@ impl Storage {
                 state = EXCLUDED.state,
                 updated_at = EXCLUDED.updated_at"
         )
-        .bind(task_id)
+        .bind(task_id.0)
         .bind(run_id)
         .bind(step_name)
         .bind(state)
@@ -1028,7 +1028,7 @@ impl Storage {
     async fn suspend_run(
         &self,
         conn: &mut PgConnection,
-        task_id: &Uuid,
+        task_id: &TaskId,
         run_id: &Uuid,
         available_at: DateTime<Utc>,
     ) -> Result<(), TaskTurbineError> {
@@ -1050,7 +1050,7 @@ impl Storage {
 
         let _ = sqlx::query("UPDATE taskturbine.tasks SET state = $1 WHERE task_id = $2")
             .bind(TaskState::Sleeping)
-            .bind(task_id)
+            .bind(task_id.0)
             .execute(&mut *conn)
             .await
             .map_err(TaskTurbineError::SqlError)?;
@@ -1195,7 +1195,7 @@ mod tests {
     #[tokio::test]
     async fn spawn_task_get_task_id() {
         let (_, spawned) = create_task().await.unwrap();
-        assert!(!spawned.task_id.to_string().is_empty());
+        assert!(!spawned.task_id.0.to_string().is_empty());
         assert!(!spawned.run_id.to_string().is_empty());
     }
 
@@ -1381,7 +1381,7 @@ mod tests {
     #[tokio::test]
     async fn await_event_missing_run() {
         let storage = create_storage().await;
-        let task_id = Uuid::now_v7();
+        let task_id = TaskId(Uuid::now_v7());
         let run_id = Uuid::now_v7();
         let res = storage
             .await_event(task_id, run_id, "step_name", "event_name", None)
