@@ -75,6 +75,9 @@ impl Task {
     }
 }
 
+/// Entity structure for a task that has been claimed
+/// by a worker for execution. This is a snapshot of the state
+/// from when the claim was made.
 #[derive(sqlx::FromRow, Clone, Debug, PartialEq)]
 pub struct ClaimedTask {
     pub task_id: TaskId,
