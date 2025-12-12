@@ -473,10 +473,7 @@ impl Storage {
         for run in res.iter() {
             let run_id = run.get::<RunId, _>("run_id");
             let failure_reason = b"{\"reason\":\"claim timeout\"}";
-            // TODO error handling?
-            let _ = self
-                .do_fail_run(&mut atomic, run_id, failure_reason, None)
-                .await;
+            self.do_fail_run(&mut atomic, run_id, failure_reason, None).await?;
         }
 
         Ok(res.len() as i64)
@@ -909,6 +906,7 @@ impl Storage {
             Utc::now() + Duration::from_secs(timeout)
         } else {
             // TODO use config for default timeout
+            // DO this next
             Utc::now() + Duration::from_secs(60 * 10)
         };
         // Record the event wait
