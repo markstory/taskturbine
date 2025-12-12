@@ -36,11 +36,16 @@ impl TaskturbineApp {
     }
 
     /// Register a task with a given name.
+    ///
+    /// Duplicate names will panic at runtime.
     pub fn register_task<T>(mut self, task_name: &str, task_fn: T) -> Self
     where
         T: TaskHandler<TaskContext> + Sync + Send + 'static
     {
         let wrapper = move |ctx| task_fn.call(ctx);
+        if self.tasks.contains_key(task_name) {
+            panic!("Task named {task_name} is already registered");
+        }
         self.tasks.insert(task_name.to_string(), Box::new(wrapper));
 
         self
@@ -231,6 +236,14 @@ mod tests {
             worker_cleanup_probability: 0.1,
         };
         TaskturbineApp::new(config)
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn register_task_panic() {
+        let app = create_app();
+        app.register_task("duplicate-task", |_ctx| async { Ok(()) })
+            .register_task("duplicate-task", |_ctx| async { Ok(()) });
     }
 
     #[tokio::test]

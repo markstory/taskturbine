@@ -164,7 +164,8 @@ impl Storage {
         Ok(res.rows_affected())
     }
 
-    /// Testing helper: Delete all data from the storage tables.
+    /// Delete all data from the storage tables.
+    /// Primarily intended for testing and local development purposes.
     pub async fn clear_storage(&self) -> Result<(), TaskTurbineError> {
         let tables = ["events", "waits", "checkpoints", "runs", "tasks"];
         for table in tables.iter() {
