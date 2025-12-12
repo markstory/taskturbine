@@ -65,8 +65,8 @@ impl From<SpawnArgs> for TaskOptions {
     fn from(val: SpawnArgs) -> Self {
         let mut options = TaskOptions::default();
         if let Some(headers) = val.headers {
-            options.headers = serde_json::from_str::<HashMap<String, String>>(&headers)
-                .unwrap_or_default();
+            options.headers =
+                serde_json::from_str::<HashMap<String, String>>(&headers).unwrap_or_default();
         }
         if let Some(max_attempts) = val.max_attempts {
             options.max_attempts = max_attempts;

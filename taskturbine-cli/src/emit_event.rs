@@ -14,13 +14,15 @@ pub struct EmitEventArgs {
 
 /// Emit an event to the storage system.
 pub async fn emit_event(storage: Storage, args: EmitEventArgs) -> Result<(), CliError> {
-    let res = storage.emit_event(&args.event_name, args.payload.as_bytes()).await;
+    let res = storage
+        .emit_event(&args.event_name, args.payload.as_bytes())
+        .await;
 
     match res {
         Ok(_) => {
             println!("Emit event for {}", args.event_name);
             Ok(())
-        },
+        }
         Err(err) => Err(CliError::Message(format!("Failed to emit event {err:?}"))),
     }
 }

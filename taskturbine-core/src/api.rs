@@ -181,7 +181,11 @@ impl Storage {
     /// {{{ Testing helpers
     /// Testing Helper: setting run + task to a specific state.
     #[cfg(test)]
-    async fn set_run_state(&self, task_id: TaskId, state: TaskState) -> Result<(), TaskTurbineError> {
+    async fn set_run_state(
+        &self,
+        task_id: TaskId,
+        state: TaskState,
+    ) -> Result<(), TaskTurbineError> {
         let res = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1
@@ -336,7 +340,10 @@ impl Storage {
         }
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
-        Ok(SpawnResult { task_id: TaskId(task_id), run_id: RunId(run_id) })
+        Ok(SpawnResult {
+            task_id: TaskId(task_id),
+            run_id: RunId(run_id),
+        })
     }
 
     /// Claim one or more tasks for processing.
@@ -473,7 +480,8 @@ impl Storage {
         for run in res.iter() {
             let run_id = run.get::<RunId, _>("run_id");
             let failure_reason = b"{\"reason\":\"claim timeout\"}";
-            self.do_fail_run(&mut atomic, run_id, failure_reason, None).await?;
+            self.do_fail_run(&mut atomic, run_id, failure_reason, None)
+                .await?;
         }
 
         Ok(res.len() as i64)

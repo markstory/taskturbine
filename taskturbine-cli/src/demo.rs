@@ -1,5 +1,5 @@
 use taskturbine_core::api::Storage;
-use taskturbine_core::app::{run_worker, TaskturbineApp};
+use taskturbine_core::app::{TaskturbineApp, run_worker};
 use taskturbine_core::context::{FlowControl, TaskContext};
 
 use crate::CliError;

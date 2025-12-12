@@ -4,11 +4,15 @@ use chrono::{DateTime, Utc};
 use rand::Rng;
 use tokio::time;
 
-use crate::{api::{Storage, TaskTurbineError}, config::Config, context::{FlowControl, TaskContext}, models::ClaimedTask};
+use crate::{
+    api::{Storage, TaskTurbineError},
+    config::Config,
+    context::{FlowControl, TaskContext},
+    models::ClaimedTask,
+};
 
 /// TaskRouter contains a map of task names -> task handlers
 pub type TaskRouter = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
-
 
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
@@ -24,7 +28,7 @@ impl TaskturbineApp {
         Self {
             config,
             storage,
-            tasks: HashMap::new()
+            tasks: HashMap::new(),
         }
     }
 
@@ -40,7 +44,7 @@ impl TaskturbineApp {
     /// Duplicate names will panic at runtime.
     pub fn register_task<T>(mut self, task_name: &str, task_fn: T) -> Self
     where
-        T: TaskHandler<TaskContext> + Sync + Send + 'static
+        T: TaskHandler<TaskContext> + Sync + Send + 'static,
     {
         let wrapper = move |ctx| task_fn.call(ctx);
         if self.tasks.contains_key(task_name) {
@@ -56,7 +60,6 @@ impl TaskturbineApp {
         Worker::new(self, worker_id.to_string())
     }
 }
-
 
 /// Trait for async Task functions that return a result.
 ///
@@ -76,7 +79,10 @@ where
     F: Fn(TaskContext) -> Ret + Sync + 'static,
     Ret: Future<Output = Result<(), FlowControl>> + Send + 'static,
 {
-    fn call(&self, ctx: TaskContext) -> Pin<Box<dyn Future<Output = Result<(), FlowControl>> + Send>> {
+    fn call(
+        &self,
+        ctx: TaskContext,
+    ) -> Pin<Box<dyn Future<Output = Result<(), FlowControl>> + Send>> {
         Box::pin(self(ctx))
     }
 }
@@ -84,7 +90,7 @@ where
 /// Errors from worker operations.
 #[derive(Debug)]
 pub enum WorkerError {
-    Message(String)
+    Message(String),
 }
 
 /// Convert from storage errors to worker errors.
@@ -106,7 +112,9 @@ impl Worker {
     /// Create a new worker.
     pub fn new(app: TaskturbineApp, worker_id: String) -> Self {
         Worker {
-            app, worker_id, claim_count: 1
+            app,
+            worker_id,
+            claim_count: 1,
         }
     }
 
@@ -124,7 +132,11 @@ impl Worker {
     /// Errors from tasks are trapped and reported as task failures.
     pub async fn run_once(&self) -> Result<i32, WorkerError> {
         let timeout = Utc::now() + Duration::from_secs(60);
-        let res = self.app.storage.claim_task(&self.worker_id, timeout, self.claim_count).await;
+        let res = self
+            .app
+            .storage
+            .claim_task(&self.worker_id, timeout, self.claim_count)
+            .await;
         let claimed = if let Err(err) = res {
             return Err(err.into());
         } else {
@@ -141,11 +153,19 @@ impl Worker {
     /// Takes a datetime of what is considered stale and can be purged.
     pub async fn run_cleanup(&self, older_than: DateTime<Utc>) -> Result<(), WorkerError> {
         let cleanup_limit = self.config().worker_cleanup_limit;
-        let res = self.app.storage.cleanup_events(older_than, cleanup_limit).await;
+        let res = self
+            .app
+            .storage
+            .cleanup_events(older_than, cleanup_limit)
+            .await;
         if let Err(err) = res {
             return Err(err.into());
         }
-        let res = self.app.storage.cleanup_tasks(older_than, cleanup_limit).await;
+        let res = self
+            .app
+            .storage
+            .cleanup_tasks(older_than, cleanup_limit)
+            .await;
         if let Err(err) = res {
             return Err(err.into());
         }
@@ -210,7 +230,8 @@ pub async fn run_worker(worker: Worker) {
 
         // Run cleanup periodically. Use rng to sample
         if config.worker_cleanup_probability > rng.random() {
-            let cleanup_time = Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
+            let cleanup_time =
+                Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
             match worker.run_cleanup(cleanup_time).await {
                 Ok(_) => (),
                 Err(err) => {
@@ -253,7 +274,10 @@ mod tests {
     async fn worker_run_once_task_success() {
         let app = create_app();
         let storage = &app.storage;
-        let _ = storage.spawn_task("test", "hello-world", b"", None).await.unwrap();
+        let _ = storage
+            .spawn_task("test", "hello-world", b"", None)
+            .await
+            .unwrap();
 
         let worker = app.create_worker("some-worker-id");
         let res = worker.run_once().await;

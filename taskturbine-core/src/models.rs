@@ -1,5 +1,8 @@
 use chrono::{DateTime, Utc};
-use std::{fmt::{Display, Formatter}, time::Duration};
+use std::{
+    fmt::{Display, Formatter},
+    time::Duration,
+};
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, sqlx::Type)]
