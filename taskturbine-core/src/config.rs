@@ -12,6 +12,10 @@ pub struct Config {
     /// The number of seconds a worker should sleep when no tasks are available.
     pub worker_sleep_secs: i32,
 
+    /// The maximum number of completed tasks and events
+    /// a worker will delete in a single cleanup operation.
+    pub worker_cleanup_limit: i32,
+
     /// The age of completed tasks and events in seconds
     /// after now() that are safe to delete.
     pub worker_cleanup_cutoff_secs: i32,
@@ -29,6 +33,7 @@ impl Default for Config {
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 60 * 10,
             worker_cleanup_probability: 0.1,
+            worker_cleanup_limit: 1000,
         }
     }
 }

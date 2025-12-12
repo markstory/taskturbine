@@ -286,6 +286,7 @@ mod tests {
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 500,
             worker_cleanup_probability: 0.1,
+            worker_cleanup_limit: 1000,
         };
         let storage = Storage::new(config);
 

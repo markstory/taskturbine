@@ -68,9 +68,9 @@ pub trait TaskHandler<Ctx> {
     fn call(&self, ctx: Ctx) -> Pin<Box<dyn Future<Output = Result<(), FlowControl>> + Send>>;
 }
 
-// Implement the TaskHandler trait for Fn(TaskContext) -> Ret
-// Trait bounds narrow down to async functions that return a narrow result
-// type.
+/// Implement the TaskHandler trait for Fn(TaskContext) -> Ret
+/// Trait bounds narrow down to async functions that return a narrow result
+/// type.
 impl<F: Sync + 'static, Ret> TaskHandler<TaskContext> for F
 where
     F: Fn(TaskContext) -> Ret + Sync + 'static,
@@ -81,11 +81,13 @@ where
     }
 }
 
+/// Errors from worker operations.
 #[derive(Debug)]
 pub enum WorkerError {
     Message(String)
 }
 
+/// Convert from storage errors to worker errors.
 impl From<TaskTurbineError> for WorkerError {
     fn from(err: TaskTurbineError) -> Self {
         WorkerError::Message(format!("{err:?}"))
@@ -138,12 +140,12 @@ impl Worker {
     ///
     /// Takes a datetime of what is considered stale and can be purged.
     pub async fn run_cleanup(&self, older_than: DateTime<Utc>) -> Result<(), WorkerError> {
-        // TODO hardcoded limit here. Could be a parameter.
-        let res = self.app.storage.cleanup_events(older_than, 1000).await;
+        let cleanup_limit = self.config().worker_cleanup_limit;
+        let res = self.app.storage.cleanup_events(older_than, cleanup_limit).await;
         if let Err(err) = res {
             return Err(err.into());
         }
-        let res = self.app.storage.cleanup_tasks(older_than, 1000).await;
+        let res = self.app.storage.cleanup_tasks(older_than, cleanup_limit).await;
         if let Err(err) = res {
             return Err(err.into());
         }
@@ -234,6 +236,7 @@ mod tests {
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 500,
             worker_cleanup_probability: 0.1,
+            worker_cleanup_limit: 1000,
         };
         TaskturbineApp::new(config)
     }
