@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use crate::models::{Checkpoint, ClaimedTask, Task, TaskId, TaskState};
+use crate::models::{Checkpoint, ClaimedTask, RunId, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
 use sqlx::{
     ConnectOptions, PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction,
@@ -25,7 +25,7 @@ pub enum TaskTurbineError {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpawnResult {
     pub task_id: TaskId,
-    pub run_id: Uuid,
+    pub run_id: RunId,
 }
 
 /// Options for spawning a task.
@@ -212,7 +212,7 @@ impl Storage {
 
     /// Testing helper: reading task runs
     #[cfg(test)]
-    async fn get_run(&self, run_id: Uuid) -> Result<PgRow, TaskTurbineError> {
+    async fn get_run(&self, run_id: RunId) -> Result<PgRow, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.runs WHERE run_id = $1")
             .bind(run_id)
             .fetch_one(&self.pool)
@@ -224,7 +224,7 @@ impl Storage {
 
     // Testing helper: get waits for a run
     #[cfg(test)]
-    async fn get_wait_by_run_id(&self, run_id: Uuid) -> Result<Option<PgRow>, TaskTurbineError> {
+    async fn get_wait_by_run_id(&self, run_id: RunId) -> Result<Option<PgRow>, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.waits WHERE run_id = $1")
             .bind(run_id)
             .fetch_optional(&self.pool)
@@ -335,7 +335,7 @@ impl Storage {
         }
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
-        Ok(SpawnResult { task_id: TaskId(task_id), run_id })
+        Ok(SpawnResult { task_id: TaskId(task_id), run_id: RunId(run_id) })
     }
 
     /// Claim one or more tasks for processing.
@@ -348,7 +348,6 @@ impl Storage {
     pub async fn claim_task(
         &self,
         worker_id: &str,
-
         claim_timeout: DateTime<Utc>,
         qty: i32,
     ) -> Result<Vec<ClaimedTask>, TaskTurbineError> {
@@ -420,7 +419,7 @@ impl Storage {
     pub async fn extend_claim(
         &self,
         worker_id: &str,
-        run_id: Uuid,
+        run_id: RunId,
         claim_timeout: DateTime<Utc>,
     ) -> Result<(), TaskTurbineError> {
         let now = Utc::now();
@@ -445,7 +444,7 @@ impl Storage {
         .map_err(TaskTurbineError::SqlError)?;
 
         if res.rows_affected() == 0 {
-            return Err(TaskTurbineError::NotRunning(run_id));
+            return Err(TaskTurbineError::NotRunning(run_id.0));
         }
 
         Ok(())
@@ -471,7 +470,7 @@ impl Storage {
 
         // fail all the candidates.
         for run in res.iter() {
-            let run_id = run.get::<Uuid, _>("run_id");
+            let run_id = run.get::<RunId, _>("run_id");
             let failure_reason = b"{\"reason\":\"claim timeout\"}";
             // TODO error handling?
             let _ = self
@@ -497,7 +496,7 @@ impl Storage {
     async fn get_locked_run_state(
         &self,
         conn: &mut PgConnection,
-        run_id: Uuid,
+        run_id: RunId,
     ) -> Result<PgRow, TaskTurbineError> {
         let res =
             sqlx::query("SELECT task_id, state FROM taskturbine.runs WHERE run_id = $1 FOR UPDATE")
@@ -506,7 +505,7 @@ impl Storage {
                 .await;
 
         if let Err(_) = res {
-            return Err(TaskTurbineError::NotFound(run_id));
+            return Err(TaskTurbineError::NotFound(run_id.0));
         }
 
         let row = res.unwrap();
@@ -537,7 +536,7 @@ impl Storage {
     /// When a run is completed, the task is also considered complete.
     pub async fn complete_run(
         &self,
-        run_id: Uuid,
+        run_id: RunId,
         run_result: &[u8],
     ) -> Result<(), TaskTurbineError> {
         let mut atomic = self
@@ -552,7 +551,7 @@ impl Storage {
         if state != TaskState::Running {
             // Need to be running to complete.
             atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
-            return Err(TaskTurbineError::NotRunning(run_id));
+            return Err(TaskTurbineError::NotRunning(run_id.0));
         }
         let res = sqlx::query(
             "UPDATE taskturbine.runs as run
@@ -593,7 +592,7 @@ impl Storage {
     /// as the run is complete or cancelled.
     async fn clear_waits(
         &self,
-        run_id: Uuid,
+        run_id: RunId,
         conn: &mut PgConnection,
     ) -> Result<(), TaskTurbineError> {
         let _ = sqlx::query("DELETE FROM taskturbine.waits WHERE run_id = $1")
@@ -610,7 +609,7 @@ impl Storage {
     /// based on the task's retry_ attributes.
     pub async fn fail_run(
         &self,
-        run_id: Uuid,
+        run_id: RunId,
         reason: &[u8],
         retry_at: Option<DateTime<Utc>>,
     ) -> Result<(), TaskTurbineError> {
@@ -631,7 +630,7 @@ impl Storage {
     async fn do_fail_run(
         &self,
         conn: &mut PgConnection,
-        run_id: Uuid,
+        run_id: RunId,
         reason: &[u8],
         retry_at: Option<DateTime<Utc>>,
     ) -> Result<(), TaskTurbineError> {
@@ -641,7 +640,7 @@ impl Storage {
             TaskState::Running | TaskState::Sleeping => {}
             _ => {
                 // If the run is not active/sleeping it cannot be failed.
-                return Err(TaskTurbineError::NotRunning(run_id));
+                return Err(TaskTurbineError::NotRunning(run_id.0));
             }
         }
         let mut task = self
@@ -747,7 +746,7 @@ impl Storage {
     /// Runs can go to sleep for reasons like waiting for an event.
     pub async fn schedule_run(
         &self,
-        run_id: Uuid,
+        run_id: RunId,
         wake_at: DateTime<Utc>,
     ) -> Result<(), TaskTurbineError> {
         let mut atomic = self
@@ -759,9 +758,9 @@ impl Storage {
         let run = self
             .get_locked_run_state(&mut atomic, run_id)
             .await
-            .map_err(|_| TaskTurbineError::NotFound(run_id))?;
+            .map_err(|_| TaskTurbineError::NotFound(run_id.0))?;
         if run.get::<TaskState, _>("state") != TaskState::Running {
-            return Err(TaskTurbineError::NotRunning(run_id));
+            return Err(TaskTurbineError::NotRunning(run_id.0));
         }
         self.suspend_run(
             &mut atomic,
@@ -818,7 +817,7 @@ impl Storage {
     pub async fn set_checkpoint(
         &self,
         task_id: TaskId,
-        run_id: Uuid,
+        run_id: RunId,
         step_name: &str,
         state: &[u8],
         extend_claim: Option<Duration>,
@@ -854,7 +853,7 @@ impl Storage {
     pub async fn await_event(
         &self,
         task_id: TaskId,
-        run_id: Uuid,
+        run_id: RunId,
         step_name: &str,
         event_name: &str,
         timeout: Option<u64>,
@@ -868,7 +867,7 @@ impl Storage {
         // Ensure the task & run exist and are running.
         let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
         if run_row.get::<TaskState, _>("state") != TaskState::Running {
-            return Err(TaskTurbineError::NotRunning(run_id));
+            return Err(TaskTurbineError::NotRunning(run_id.0));
         }
 
         // Fetch the checkpoint if it exists
@@ -941,7 +940,7 @@ impl Storage {
         &self,
         conn: &mut PgConnection,
         task_id: &TaskId,
-        run_id: &Uuid,
+        run_id: &RunId,
         step_name: &str,
         event_name: &str,
         timeout: DateTime<Utc>,
@@ -975,7 +974,7 @@ impl Storage {
         &self,
         conn: &mut PgConnection,
         task_id: &TaskId,
-        run_id: &Uuid,
+        run_id: &RunId,
         step_name: &str,
         state: &[u8],
     ) -> Result<(), TaskTurbineError> {
@@ -1029,7 +1028,7 @@ impl Storage {
         &self,
         conn: &mut PgConnection,
         task_id: &TaskId,
-        run_id: &Uuid,
+        run_id: &RunId,
         available_at: DateTime<Utc>,
     ) -> Result<(), TaskTurbineError> {
         // TODO combine these queries with a CTE
@@ -1269,7 +1268,7 @@ mod tests {
     #[tokio::test]
     async fn fail_run_missing() {
         let storage = create_storage().await;
-        let id = Uuid::now_v7();
+        let id = RunId(Uuid::now_v7());
         let res = storage.fail_run(id, b"", None).await;
         assert!(res.is_err());
         let err = res.err().unwrap();
@@ -1382,7 +1381,7 @@ mod tests {
     async fn await_event_missing_run() {
         let storage = create_storage().await;
         let task_id = TaskId(Uuid::now_v7());
-        let run_id = Uuid::now_v7();
+        let run_id = RunId(Uuid::now_v7());
         let res = storage
             .await_event(task_id, run_id, "step_name", "event_name", None)
             .await;

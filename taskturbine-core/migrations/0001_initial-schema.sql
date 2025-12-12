@@ -9,7 +9,7 @@ CREATE TABLE taskturbine.tasks (
     headers bytea,
     -- Each retry increments enqueue_at = enqueue_at + (retry_seconds * retry_factor * attempts)
     retry_seconds integer,
-    retry_factor float,
+    retry_factor real,
     retry_max_seconds integer,
     -- Incremented on each claim
     attempts integer not null default 0,
