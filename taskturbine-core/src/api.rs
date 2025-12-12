@@ -262,7 +262,7 @@ impl Storage {
 
         Ok(res)
     }
-    /// }}}
+    // }}}
 
     // Run migrations to create or update the database schema.
     // Will create a taskturbine schema and add all tables inside that schema.
@@ -510,7 +510,7 @@ impl Storage {
                 .fetch_one(&mut *conn)
                 .await;
 
-        if let Err(_) = res {
+        if res.is_err() {
             return Err(TaskTurbineError::NotFound(run_id.0));
         }
 
