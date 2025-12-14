@@ -11,14 +11,14 @@ use crate::{
     models::ClaimedTask,
 };
 
-/// TaskRouter contains a map of task names -> task handlers
-pub type TaskRouter = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
+/// TaskRegistry contains a map of task names -> task handlers
+pub type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
 
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
     config: Config,
     storage: Arc<Storage>,
-    tasks: TaskRouter,
+    tasks: TaskRegistry,
 }
 
 impl TaskturbineApp {
