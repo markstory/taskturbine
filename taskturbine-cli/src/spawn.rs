@@ -5,7 +5,7 @@ use clap::Args;
 use crate::CliError;
 use taskturbine_core::api::{Storage, TaskOptions};
 
-#[derive(Args, Debug)]
+#[derive(Args, Clone, Debug)]
 pub struct SpawnArgs {
     #[arg(
         short,
@@ -23,6 +23,12 @@ pub struct SpawnArgs {
         help = "A JSON encoded parameter set. Use `args` to provide a list of arguments."
     )]
     params: Option<String>,
+
+    #[arg(
+        long,
+        help = "How many copies of the task you want."
+    )]
+    repeat: Option<i32>,
 
     #[arg(
         long,
@@ -92,18 +98,26 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
     println!("Spawning task in namespace={namespace} for task={taskname}");
 
     let params = args.params.clone().unwrap_or("{\"args\":[]}".to_string());
-    let res = storage
-        .spawn_task(&namespace, &taskname, params.as_ref(), Some(args.into()))
-        .await;
-
-    match res {
-        Ok(spawned) => {
-            let run_id = spawned.run_id;
-            let task_id = spawned.task_id;
-            println!("Spawned task_id={task_id} run_id={run_id}");
-
-            Ok(())
-        }
-        Err(err) => Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
+    let mut results = vec![];
+    let repeat = args.repeat;
+    let options: TaskOptions = args.into();
+    for _ in 1..repeat.unwrap_or(1) {
+        let res = storage
+            .spawn_task(&namespace, &taskname, params.as_ref(), Some(options.clone()))
+            .await;
+        results.push(res);
     }
+
+    for item in results.iter() {
+        match item {
+            Ok(spawned) => {
+                let run_id = spawned.run_id;
+                let task_id = spawned.task_id;
+                println!("Spawned task_id={task_id} run_id={run_id}");
+            }
+            Err(err) =>  return Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
+        }
+    }
+
+    Ok(())
 }
