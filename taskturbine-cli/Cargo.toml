@@ -10,3 +10,4 @@ taskturbine-core = { path = "../taskturbine-core" }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+simple_logger = "5.1.0"
