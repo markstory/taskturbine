@@ -1,8 +1,7 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
-use async_channel::{Receiver, Sender};
+use async_channel::{Receiver, Sender, TrySendError};
 use chrono::{DateTime, Utc};
-use futures::future::join_all;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::{
@@ -115,10 +114,11 @@ pub struct Worker {
 impl Worker {
     /// Create a new worker.
     pub fn new(app: TaskturbineApp, worker_id: String) -> Self {
+        let claim_count = app.config.worker_concurrency;
         Worker {
             app,
             worker_id,
-            claim_count: 1,
+            claim_count,
         }
     }
 
@@ -275,17 +275,39 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
 
     loop {
         let timeout = Utc::now() + Duration::from_secs(60);
-
         tokio::select! {
-            Ok(claimed) = worker.claim_tasks(timeout) => {
-                log::debug!("Fetched {} tasks", claimed.len());
-                for task in claimed.iter() {
-                    let _ = work_send.send(task.clone()).await;
-                }
+            Ok(mut claimed) = worker.claim_tasks(timeout) => {
+                log::debug!("Claimed {} tasks", claimed.len());
                 if claimed.is_empty() {
                     let sleep_secs = config.worker_sleep_secs;
                     time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
-                    log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
+                    log::debug!("No tasks claimed, worker sleeping for {sleep_secs} seconds");
+                }
+
+                while !claimed.is_empty() {
+                    let task_opt = claimed.last();
+                    // We got to the end.
+                    if task_opt.is_none() {
+                        break;
+                    }
+                    let task = task_opt.unwrap();
+
+                    match work_send.try_send(task.clone()) {
+                        Ok(_) => {
+                            // Task was sent, it can be popped now.
+                            claimed.pop();
+                        },
+                        Err(TrySendError::Full(_)) => {
+                            // Backpressure as all executors are busy.
+                            // If we blocking send the worker won't shutdown.
+                            log::debug!("work_send was full, sleeping and re-attempting.");
+                            time::sleep(time::Duration::from_secs(config.worker_sleep_secs as u64)).await;
+                        },
+                        Err(TrySendError::Closed(_)) => {
+                            log::warn!("Channel is closed, shutting down claim_tasks");
+                            return;
+                        }
+                    }
                 }
             }
             _ = guard.wait() => {
@@ -306,6 +328,7 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
             }
             _ = guard.wait() => {
                 log::debug!("Shutting down process_task");
+                work_channel.close();
                 break;
             }
         }
