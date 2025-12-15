@@ -280,14 +280,13 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                 log::debug!("Claimed {} tasks", claimed.len());
                 if claimed.is_empty() {
                     let sleep_secs = config.worker_sleep_secs;
-                    time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
                     log::debug!("No tasks claimed, worker sleeping for {sleep_secs} seconds");
+                    time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
                 }
-
                 while !claimed.is_empty() {
                     let task_opt = claimed.last();
-                    // We got to the end.
                     if task_opt.is_none() {
+                        // We got to the end, break this while loop
                         break;
                     }
                     let task = task_opt.unwrap();
@@ -300,7 +299,7 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                         Err(TrySendError::Full(_)) => {
                             // Backpressure as all executors are busy.
                             // If we blocking send the worker won't shutdown.
-                            log::debug!("work_send was full, sleeping and re-attempting.");
+                            log::debug!("work_send was full; sleeping and re-attempting.");
                             time::sleep(time::Duration::from_secs(config.worker_sleep_secs as u64)).await;
                         },
                         Err(TrySendError::Closed(_)) => {
