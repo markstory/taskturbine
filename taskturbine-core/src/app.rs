@@ -217,7 +217,8 @@ impl Worker {
 pub async fn run_worker(worker: Worker) {
     let arc_worker = Arc::new(worker);
     let config = arc_worker.config();
-    let (send, recv) = async_channel::bounded::<ClaimedTask>((config.worker_concurrency * 2) as usize);
+    let (send, recv) =
+        async_channel::bounded::<ClaimedTask>((config.worker_concurrency * 2) as usize);
 
     log::debug!("Spawning {} executors", config.worker_concurrency);
     let mut task_set = JoinSet::new();
@@ -240,9 +241,9 @@ pub async fn run_worker(worker: Worker) {
 async fn run_cleanup(worker: Arc<Worker>) {
     log::debug!("Spawing cleanup");
     let config = worker.config();
-    let mut timer = time::interval(
-        Duration::from_secs(config.worker_cleanup_interval_secs as u64)
-    );
+    let mut timer = time::interval(Duration::from_secs(
+        config.worker_cleanup_interval_secs as u64,
+    ));
     timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     let guard = elegant_departure::get_shutdown_guard();
 
@@ -333,7 +334,6 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
