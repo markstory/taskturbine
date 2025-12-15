@@ -80,7 +80,11 @@ impl Storage {
             .expect("Failed to create database connection pool");
         let options: Result<PgConnectOptions, _> = config.database_url.parse();
         if let Ok(mut opts) = options {
-            opts = opts.log_statements(log::LevelFilter::Debug);
+            if config.database_log_queries {
+                opts = opts.log_statements(log::LevelFilter::Debug);
+            } else {
+                opts = opts.disable_statement_logging();
+            }
             pool.set_connect_options(opts);
         }
         Self { config, pool }
@@ -1149,6 +1153,7 @@ mod tests {
         let config = Config {
             usecase: "test".to_string(),
             database_url: db_url,
+            database_log_queries: false,
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 500,
             worker_cleanup_probability: 0.1,

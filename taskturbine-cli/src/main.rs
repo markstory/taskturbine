@@ -57,6 +57,7 @@ async fn main() {
     };
     let config = taskturbine_core::config::Config {
         database_url: db_url,
+        database_log_queries: false,
         usecase: "demo".into(),
         worker_sleep_secs: 2,
         worker_cleanup_cutoff_secs: 500,

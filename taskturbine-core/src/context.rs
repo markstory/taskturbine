@@ -283,6 +283,7 @@ mod tests {
         let config = Config {
             usecase: "test".into(),
             database_url: db_url,
+            database_log_queries: false,
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 500,
             worker_cleanup_probability: 0.1,

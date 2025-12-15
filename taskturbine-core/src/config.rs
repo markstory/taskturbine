@@ -4,6 +4,9 @@ pub struct Config {
     /// Example: postgresql://app:password@localhost/taskturbine
     pub database_url: String,
 
+    /// Enable database logging at DEBUG level
+    pub database_log_queries: bool,
+
     /// The application or client that is connecting.
     /// Workers are bound to a specific usecase and can conditionally
     /// consume from one or more namespaces (aka. queues/topics/channels)
@@ -29,6 +32,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             database_url: "".to_string(),
+            database_log_queries: false,
             usecase: "default".to_string(),
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 60 * 10,

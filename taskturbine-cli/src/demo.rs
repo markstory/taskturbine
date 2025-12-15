@@ -1,3 +1,4 @@
+use simple_logger::SimpleLogger;
 use taskturbine_core::api::Storage;
 use taskturbine_core::app::{TaskturbineApp, run_worker};
 use taskturbine_core::context::{FlowControl, TaskContext};
@@ -9,6 +10,9 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
     // Get the configuration from storage.
     // In userland code they would define the config, and apply to the App.
     let config = storage.get_config();
+
+    // Setup basic logger
+    SimpleLogger::new().init().unwrap();
 
     // Create an application instance
     let mut app = TaskturbineApp::new(config.clone());
