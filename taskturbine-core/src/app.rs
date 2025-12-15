@@ -3,8 +3,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 use async_channel::Receiver;
 use chrono::{DateTime, Utc};
 use futures::future::join_all;
-use rand::Rng;
-use tokio::{task::JoinSet, time};
+use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::{
     api::{Storage, TaskTurbineError},
@@ -216,57 +215,98 @@ impl Worker {
 /// Run a a worker in a while loop.
 /// Consumes the worker and runs indefinitely until the process is killed.
 pub async fn run_worker(worker: Worker) {
-    let mut rng = rand::rng();
     let arc_worker = Arc::new(worker);
     let config = arc_worker.config();
-
-    let mut task_set = JoinSet::new();
     let (send, recv) = async_channel::bounded::<ClaimedTask>((config.worker_concurrency * 2) as usize);
 
     log::debug!("Spawning {} executors", config.worker_concurrency);
+    let mut task_set = JoinSet::new();
     for _ in 0..config.worker_concurrency {
         task_set.spawn(process_task(arc_worker.clone(), recv.clone()));
     }
 
-    loop {
-        let timeout = Utc::now() + Duration::from_secs(60);
-        let claimed = match arc_worker.claim_tasks(timeout).await {
-            Ok(claimed) => claimed,
-            Err(err) => {
-                log::error!("Failed to claim tasks {:?}", err);
-                vec![]
-            }
-        };
-        log::debug!("Fetched {} tasks", claimed.len());
+    tokio::spawn({
+        log::debug!("Spawing cleanup");
+        let cleanup_worker = arc_worker.clone();
+        let cleanup_config = config.clone();
+        let mut timer = time::interval(
+            Duration::from_secs(cleanup_config.worker_cleanup_interval_secs as u64)
+        );
+        timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+        let guard = elegant_departure::get_shutdown_guard();
 
-        for task in claimed.iter() {
-            let _ = send.send(task.clone()).await;
-        }
-        if claimed.is_empty() {
-            let sleep_secs = config.worker_sleep_secs;
-            time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
-            log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
-        }
-
-        // TODO run in a separate task/thread.
-        // Run cleanup periodically. Use rng to sample
-        if config.worker_cleanup_probability > rng.random() {
-            let cleanup_time =
-                Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
-            match arc_worker.run_cleanup(cleanup_time).await {
-                Ok(_) => (),
-                Err(err) => {
-                    log::error!("{err:?}");
+        async move {
+            loop {
+                tokio::select! {
+                    _ = timer.tick() => {
+                        log::debug!("Running cleanup operations.");
+                        let cleanup_time = Utc::now() - Duration::from_secs(cleanup_config.worker_cleanup_cutoff_secs as u64);
+                        match cleanup_worker.run_cleanup(cleanup_time).await {
+                            Ok(_) => (),
+                            Err(err) => {
+                                log::error!("{err:?}");
+                            }
+                        }
+                    }
+                    _ = guard.wait() => {
+                        log::debug!("Shutting down cleanup");
+                        break;
+                    }
                 }
             }
         }
-    }
+    });
+
+    tokio::spawn({
+        log::debug!("Spawning task claimer");
+        let fetch_worker = arc_worker.clone();
+        let fetch_config = config.clone();
+        let guard = elegant_departure::get_shutdown_guard();
+
+        async move {
+            loop {
+                let timeout = Utc::now() + Duration::from_secs(60);
+
+                tokio::select! {
+                    Ok(claimed) = fetch_worker.claim_tasks(timeout) => {
+                        log::debug!("Fetched {} tasks", claimed.len());
+                        for task in claimed.iter() {
+                            let _ = send.send(task.clone()).await;
+                        }
+                        if claimed.is_empty() {
+                            let sleep_secs = fetch_config.worker_sleep_secs;
+                            time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
+                            log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
+                        }
+                    }
+                    _ = guard.wait() => {
+                        log::debug!("Shutting down claim_tasks");
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    elegant_departure::tokio::depart()
+        .on_termination()
+        .on_signal(SignalKind::quit())
+        .await
 }
 
 /// Read from the inbound worker channel and execute tasks.
 async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) {
-    while let Ok(task) = work_channel.recv().await {
-        worker.execute_task(task).await;
+    let guard = elegant_departure::get_shutdown_guard();
+    loop {
+        tokio::select! {
+            Ok(task) = work_channel.recv() => {
+                worker.execute_task(task).await;
+            }
+            _ = guard.wait() => {
+                log::debug!("Shutting down process_task");
+                break;
+            }
+        }
     }
 }
 
@@ -287,7 +327,7 @@ mod tests {
             worker_concurrency: 3,
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 500,
-            worker_cleanup_probability: 0.1,
+            worker_cleanup_interval_secs: 30,
             worker_cleanup_limit: 1000,
         };
         TaskturbineApp::new(config)

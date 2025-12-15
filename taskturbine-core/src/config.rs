@@ -27,9 +27,8 @@ pub struct Config {
     /// after now() that are safe to delete.
     pub worker_cleanup_cutoff_secs: i32,
 
-    /// The probability that a worker will run
-    /// the cleanup operations.
-    pub worker_cleanup_probability: f64,
+    /// The minimum number of seconds between each cleanup operation.
+    pub worker_cleanup_interval_secs: i32,
 }
 
 impl Default for Config {
@@ -40,8 +39,8 @@ impl Default for Config {
             usecase: "default".to_string(),
             worker_concurrency: 3,
             worker_sleep_secs: 2,
+            worker_cleanup_interval_secs: 30,
             worker_cleanup_cutoff_secs: 60 * 10,
-            worker_cleanup_probability: 0.1,
             worker_cleanup_limit: 1000,
         }
     }
