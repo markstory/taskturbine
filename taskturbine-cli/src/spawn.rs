@@ -24,10 +24,7 @@ pub struct SpawnArgs {
     )]
     params: Option<String>,
 
-    #[arg(
-        long,
-        help = "How many copies of the task you want."
-    )]
+    #[arg(long, help = "How many copies of the task you want.")]
     repeat: Option<i32>,
 
     #[arg(
@@ -103,7 +100,12 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
     let options: TaskOptions = args.into();
     for _ in 1..repeat.unwrap_or(1) {
         let res = storage
-            .spawn_task(&namespace, &taskname, params.as_ref(), Some(options.clone()))
+            .spawn_task(
+                &namespace,
+                &taskname,
+                params.as_ref(),
+                Some(options.clone()),
+            )
             .await;
         results.push(res);
     }
@@ -115,7 +117,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
                 let task_id = spawned.task_id;
                 println!("Spawned task_id={task_id} run_id={run_id}");
             }
-            Err(err) =>  return Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
+            Err(err) => return Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
         }
     }
 

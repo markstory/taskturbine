@@ -128,7 +128,10 @@ impl Worker {
 
     /// Claim a batch of tasks from storage. The size of the batch
     /// is determined by [`Worker::claim_count`]
-    pub async fn claim_tasks(&self, timeout: DateTime<Utc>) -> Result<Vec<ClaimedTask>, WorkerError> {
+    pub async fn claim_tasks(
+        &self,
+        timeout: DateTime<Utc>,
+    ) -> Result<Vec<ClaimedTask>, WorkerError> {
         let res = self
             .app
             .storage
@@ -237,13 +240,14 @@ pub async fn run_worker(worker: Worker) {
 }
 
 /// Run a batch of tasks from a worker concurrently.
-/// This will claim a batch of tasks from the worker, 
+/// This will claim a batch of tasks from the worker,
 /// spawn [`Worker::execute_task`] in parallel and wait for the results.
 async fn run_batch(worker: Arc<Worker>) -> Result<i32, WorkerError> {
     let timeout = Utc::now() + Duration::from_secs(60);
     let claimed = worker.claim_tasks(timeout).await?;
 
-    let executions: Vec<_> = claimed.into_iter()
+    let executions: Vec<_> = claimed
+        .into_iter()
         .map(|task| worker.execute_task(task))
         .collect();
 
