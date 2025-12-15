@@ -137,11 +137,11 @@ impl Worker {
             .storage
             .claim_task(&self.worker_id, timeout, self.claim_count)
             .await;
-        return if let Err(err) = res {
-            return Err(err.into());
+        if let Err(err) = res {
+            Err(err.into())
         } else {
             Ok(res.unwrap())
-        };
+        }
     }
 
     /// Runs a cleanup step on storage.
