@@ -75,6 +75,7 @@ pub trait TaskHandler<Ctx> {
 /// Implement the TaskHandler trait for Fn(TaskContext) -> Ret
 /// Trait bounds narrow down to async functions that return a narrow result
 /// type.
+/// TODO: Consider replacing `()` with `Bytes` so that tasks can return values.
 impl<F: Sync + 'static, Ret> TaskHandler<TaskContext> for F
 where
     F: Fn(TaskContext) -> Ret + Sync + 'static,
@@ -218,6 +219,12 @@ pub async fn run_worker(worker: Worker) {
     let arc_worker = Arc::new(worker);
     let config = arc_worker.config();
 
+    // While this runs batches in parallel, the because this loop could
+    // hit a cleanup operation, there could be gaps between batch fetches
+    // where the workers are doing nothing. This should be improved to 
+    // use a bounded async_channel and fetch batches *up to* the config
+    // value. The worker will need a 'max concurrent task' value.
+    // The aim is to always have that many futures running at a time.
     while let Ok(completed) = run_batch(arc_worker.clone()).await {
         if completed == 0 {
             let sleep_secs = config.worker_sleep_secs;
