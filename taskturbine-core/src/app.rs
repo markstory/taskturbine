@@ -1,6 +1,7 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use chrono::{DateTime, Utc};
+use futures::future::join_all;
 use rand::Rng;
 use tokio::time;
 
@@ -105,6 +106,8 @@ impl From<TaskTurbineError> for WorkerError {
 pub struct Worker {
     app: TaskturbineApp,
     worker_id: String,
+    /// The number of tasks this worker should claim on each iteration
+    /// of the run loop.
     claim_count: i32,
 }
 
@@ -123,29 +126,19 @@ impl Worker {
         &self.app.config
     }
 
-    /// Runs a single loop of the worker
-    ///
-    /// High level flow is:
-    /// - Claim some tasks
-    /// - Execute those tasks.
-    ///
-    /// Errors from tasks are trapped and reported as task failures.
-    pub async fn run_once(&self) -> Result<i32, WorkerError> {
-        let timeout = Utc::now() + Duration::from_secs(60);
+    /// Claim a batch of tasks from storage. The size of the batch
+    /// is determined by [`Worker::claim_count`]
+    pub async fn claim_tasks(&self, timeout: DateTime<Utc>) -> Result<Vec<ClaimedTask>, WorkerError> {
         let res = self
             .app
             .storage
             .claim_task(&self.worker_id, timeout, self.claim_count)
             .await;
-        let claimed = if let Err(err) = res {
+        return if let Err(err) = res {
             return Err(err.into());
         } else {
-            res.unwrap()
+            Ok(res.unwrap())
         };
-        for task in claimed.iter() {
-            self.execute_task(task).await;
-        }
-        Ok(claimed.len() as i32)
     }
 
     /// Runs a cleanup step on storage.
@@ -173,7 +166,7 @@ impl Worker {
     }
 
     /// Execute a task function and record the execution status.
-    async fn execute_task(&self, task: &ClaimedTask) {
+    async fn execute_task(&self, task: ClaimedTask) {
         let task_id = &task.task_id;
         log::debug!("Attemting to execute {task_id}");
 
@@ -216,12 +209,13 @@ impl Worker {
 }
 
 /// Run a a worker in a while loop.
-/// Consumes the worker and options to start a loop.
+/// Consumes the worker and runs indefinitely until the process is killed.
 pub async fn run_worker(worker: Worker) {
     let mut rng = rand::rng();
+    let arc_worker = Arc::new(worker);
+    let config = arc_worker.config();
 
-    while let Ok(completed) = worker.run_once().await {
-        let config = worker.config();
+    while let Ok(completed) = run_batch(arc_worker.clone()).await {
         if completed == 0 {
             let sleep_secs = config.worker_sleep_secs;
             time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
@@ -232,7 +226,7 @@ pub async fn run_worker(worker: Worker) {
         if config.worker_cleanup_probability > rng.random() {
             let cleanup_time =
                 Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
-            match worker.run_cleanup(cleanup_time).await {
+            match arc_worker.run_cleanup(cleanup_time).await {
                 Ok(_) => (),
                 Err(err) => {
                     log::error!("{err:?}");
@@ -242,11 +236,30 @@ pub async fn run_worker(worker: Worker) {
     }
 }
 
+/// Run a batch of tasks from a worker concurrently.
+/// This will claim a batch of tasks from the worker, 
+/// spawn [`Worker::execute_task`] in parallel and wait for the results.
+async fn run_batch(worker: Arc<Worker>) -> Result<i32, WorkerError> {
+    let timeout = Utc::now() + Duration::from_secs(60);
+    let claimed = worker.claim_tasks(timeout).await?;
+
+    let executions: Vec<_> = claimed.into_iter()
+        .map(|task| worker.execute_task(task))
+        .collect();
+
+    let completed = executions.len();
+    let _ = join_all(executions).await;
+
+    Ok(completed as i32)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crate::config::Config;
 
-    use super::TaskturbineApp;
+    use super::{TaskturbineApp, run_batch};
 
     fn create_app() -> TaskturbineApp {
         let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
@@ -254,6 +267,7 @@ mod tests {
         let config = Config {
             usecase: "test".to_string(),
             database_url: db_url,
+            database_log_queries: false,
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 500,
             worker_cleanup_probability: 0.1,
@@ -279,8 +293,8 @@ mod tests {
             .await
             .unwrap();
 
-        let worker = app.create_worker("some-worker-id");
-        let res = worker.run_once().await;
+        let worker = Arc::new(app.create_worker("some-worker-id"));
+        let res = run_batch(worker).await;
         assert!(res.is_ok());
     }
 }
