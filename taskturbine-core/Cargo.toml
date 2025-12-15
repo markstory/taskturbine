@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 async-channel = "2.5.0"
 chrono = { workspace = true }
+elegant-departure = { version = "0.3.2", features = ["tokio"] }
 figment = { workspace = true }
 futures = "0.3.31"
 log = { workspace = true }
