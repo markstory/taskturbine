@@ -12,6 +12,10 @@ pub struct Config {
     /// consume from one or more namespaces (aka. queues/topics/channels)
     pub usecase: String,
 
+    /// The number of task execution slots to start.
+    /// More slots will enable more tasks to run concurrently.
+    pub worker_concurrency: i32,
+
     /// The number of seconds a worker should sleep when no tasks are available.
     pub worker_sleep_secs: i32,
 
@@ -34,6 +38,7 @@ impl Default for Config {
             database_url: "".to_string(),
             database_log_queries: false,
             usecase: "default".to_string(),
+            worker_concurrency: 3,
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 60 * 10,
             worker_cleanup_probability: 0.1,

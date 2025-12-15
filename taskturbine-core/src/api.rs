@@ -1154,6 +1154,7 @@ mod tests {
             usecase: "test".to_string(),
             database_url: db_url,
             database_log_queries: false,
+            worker_concurrency: 3,
             worker_sleep_secs: 2,
             worker_cleanup_cutoff_secs: 500,
             worker_cleanup_probability: 0.1,
