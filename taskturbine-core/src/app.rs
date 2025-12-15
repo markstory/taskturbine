@@ -1,6 +1,6 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
-use async_channel::Receiver;
+use async_channel::{Receiver, Sender};
 use chrono::{DateTime, Utc};
 use futures::future::join_all;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
@@ -225,73 +225,75 @@ pub async fn run_worker(worker: Worker) {
         task_set.spawn(process_task(arc_worker.clone(), recv.clone()));
     }
 
-    tokio::spawn({
-        log::debug!("Spawing cleanup");
-        let cleanup_worker = arc_worker.clone();
-        let cleanup_config = config.clone();
-        let mut timer = time::interval(
-            Duration::from_secs(cleanup_config.worker_cleanup_interval_secs as u64)
-        );
-        timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-        let guard = elegant_departure::get_shutdown_guard();
-
-        async move {
-            loop {
-                tokio::select! {
-                    _ = timer.tick() => {
-                        log::debug!("Running cleanup operations.");
-                        let cleanup_time = Utc::now() - Duration::from_secs(cleanup_config.worker_cleanup_cutoff_secs as u64);
-                        match cleanup_worker.run_cleanup(cleanup_time).await {
-                            Ok(_) => (),
-                            Err(err) => {
-                                log::error!("{err:?}");
-                            }
-                        }
-                    }
-                    _ = guard.wait() => {
-                        log::debug!("Shutting down cleanup");
-                        break;
-                    }
-                }
-            }
-        }
-    });
-
-    tokio::spawn({
-        log::debug!("Spawning task claimer");
-        let fetch_worker = arc_worker.clone();
-        let fetch_config = config.clone();
-        let guard = elegant_departure::get_shutdown_guard();
-
-        async move {
-            loop {
-                let timeout = Utc::now() + Duration::from_secs(60);
-
-                tokio::select! {
-                    Ok(claimed) = fetch_worker.claim_tasks(timeout) => {
-                        log::debug!("Fetched {} tasks", claimed.len());
-                        for task in claimed.iter() {
-                            let _ = send.send(task.clone()).await;
-                        }
-                        if claimed.is_empty() {
-                            let sleep_secs = fetch_config.worker_sleep_secs;
-                            time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
-                            log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
-                        }
-                    }
-                    _ = guard.wait() => {
-                        log::debug!("Shutting down claim_tasks");
-                        break;
-                    }
-                }
-            }
-        }
-    });
+    tokio::spawn(run_cleanup(arc_worker.clone()));
+    tokio::spawn(claim_tasks(arc_worker.clone(), send.clone()));
 
     elegant_departure::tokio::depart()
         .on_termination()
         .on_signal(SignalKind::quit())
         .await
+}
+
+/// Run cleanup operations periodically.
+/// Every `config.worker_cleanup_interval` a cleanup operation will run
+/// which deletes completed tasks and expired events from the database.
+async fn run_cleanup(worker: Arc<Worker>) {
+    log::debug!("Spawing cleanup");
+    let config = worker.config();
+    let mut timer = time::interval(
+        Duration::from_secs(config.worker_cleanup_interval_secs as u64)
+    );
+    timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+    let guard = elegant_departure::get_shutdown_guard();
+
+    loop {
+        tokio::select! {
+            _ = timer.tick() => {
+                log::debug!("Running cleanup operations.");
+                let cleanup_time = Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
+                match worker.run_cleanup(cleanup_time).await {
+                    Ok(_) => (),
+                    Err(err) => {
+                        log::error!("{err:?}");
+                    }
+                }
+            }
+            _ = guard.wait() => {
+                log::debug!("Shutting down cleanup");
+                break;
+            }
+        }
+    }
+}
+
+/// Claim tasks and append them to the `work_send` channel.
+/// If no tasks could be claimed, the claimer will sleep for `config.worker_sleep_secs`.
+async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
+    log::debug!("Spawning claim_tasks");
+    let config = worker.config();
+    let guard = elegant_departure::get_shutdown_guard();
+
+    loop {
+        let timeout = Utc::now() + Duration::from_secs(60);
+
+        tokio::select! {
+            Ok(claimed) = worker.claim_tasks(timeout) => {
+                log::debug!("Fetched {} tasks", claimed.len());
+                for task in claimed.iter() {
+                    let _ = work_send.send(task.clone()).await;
+                }
+                if claimed.is_empty() {
+                    let sleep_secs = config.worker_sleep_secs;
+                    time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
+                    log::debug!("No tasks completed, worker sleeping for {sleep_secs} seconds");
+                }
+            }
+            _ = guard.wait() => {
+                log::debug!("Shutting down claim_tasks");
+                break;
+            }
+        }
+    }
 }
 
 /// Read from the inbound worker channel and execute tasks.
