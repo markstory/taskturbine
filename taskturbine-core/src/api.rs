@@ -1163,12 +1163,7 @@ mod tests {
         let config = Config {
             usecase: "test".to_string(),
             database_url: db_url,
-            database_log_queries: false,
-            worker_concurrency: 3,
-            worker_sleep_secs: 2,
-            worker_cleanup_interval_secs: 30,
-            worker_cleanup_cutoff_secs: 500,
-            worker_cleanup_limit: 1000,
+            ..Config::default()
         };
         let storage = Storage::new(config);
 

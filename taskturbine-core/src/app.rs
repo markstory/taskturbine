@@ -12,22 +12,29 @@ use crate::{
 };
 
 /// TaskRegistry contains a map of task names -> task handlers
-pub type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
+type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
+
+type ChannelRegistry = HashMap<String, String>;
 
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
     config: Config,
     storage: Arc<Storage>,
     tasks: TaskRegistry,
+    channels: ChannelRegistry,
 }
 
 impl TaskturbineApp {
     /// Create an app instance from a config object.
     pub fn new(config: Config) -> Self {
         let storage = Arc::new(Storage::new(config.clone()));
+        let mut channels = HashMap::new();
+        channels.insert(config.default_channel.clone(), config.default_channel.clone());
+
         Self {
             config,
             storage,
+            channels,
             tasks: HashMap::new(),
         }
     }
@@ -40,14 +47,38 @@ impl TaskturbineApp {
     }
 
     /// Define a channel that tasks can be consumed on.
-    pub fn channel(&mut self, channel: &str) {
-        // TODO
+    ///
+    /// Channels allow you to have dedicated workers for specific
+    /// workloads in your application. For example, you may want to
+    /// have separate worker deployments for high-volume tasks, or
+    /// latency sensitive workloads.
+    ///
+    /// You can spawn tasks onto specific channels using [`TaskturbineApp::channel()`]
+    pub fn add_channel(mut self, channel: &str) -> Self {
+        self.channels.insert(channel.into(), channel.into());
+
+        self
+    }
+
+    /// Check if a channel is defined.
+    pub fn has_channel(&self, channel: &str) -> bool {
+        self.channels.contains_key(channel)
+    }
+
+    /// Get a Channel that can be used to spawn tasks.
+    ///
+    /// Will panic if an undeclared channel is used.
+    pub fn channel<'a>(&'a self, name: &'a str) -> Channel<'a> {
+        if !self.has_channel(name) {
+            panic!("Unknown channel {}", name);
+        }
+        Channel::new(name, self)
     }
 
     /// Register a task with a given name.
     ///
-    /// Once a task is registered, it can be spawned into a named channel
-    /// via [`TaskturbineApp::channel()`]
+    /// Once a task is registered, it can be spawned into any channel
+    /// that is defined in the App. See [`TaskturbineApp::channel()`]
     ///
     /// Duplicate task names will panic at runtime.
     pub fn register_task<T>(mut self, task_name: &str, task_fn: T) -> Self
@@ -63,17 +94,21 @@ impl TaskturbineApp {
         self
     }
 
+    /// Check if a task with a given name has been registered.
+    pub fn has_task(&self, task_name: &str) -> bool {
+        self.tasks.contains_key(task_name)
+    }
+
     /// Create a worker by consuming the app.
     pub fn create_worker(self, worker_id: &str) -> Worker {
         Worker::new(self, worker_id.to_string())
     }
 
-    /// Spawn a new task and initialize the first run.
+    /// Spawn a task on the default channel and initialize the first run.
     ///
     /// An error is returned if the task name is not registered.
     pub async fn spawn_task(
         &self,
-        channel: &str,
         task_name: &str,
         params: &[u8],
         options: Option<TaskOptions>,
@@ -85,7 +120,7 @@ impl TaskturbineApp {
             )));
         }
         self.storage
-            .spawn_task(channel, task_name, params, options)
+            .spawn_task(&self.config.default_channel, task_name, params, options)
             .await
     }
 }
@@ -116,6 +151,42 @@ where
         Box::pin(self(ctx))
     }
 }
+
+
+/// Channel wrapper
+/// Gives a more ergonomic path to working with channels
+/// as required.
+pub struct Channel<'a> {
+    name: &'a str,
+    app: &'a TaskturbineApp,
+}
+
+impl<'a> Channel<'a> {
+    pub fn new(name: &'a str, app: &'a TaskturbineApp) -> Self {
+        Self {
+            name, app,
+        }
+    }
+
+    /// Spawn a task into this channel.
+    ///
+    /// See [`TaskturbineApp::spawn_task()`].
+    pub async fn spawn_task(
+        &self,
+        task_name: &str,
+        params: &[u8],
+        options: Option<TaskOptions>,
+    ) -> Result<SpawnResult, TaskTurbineError> {
+        if !self.app.has_task(task_name) {
+            return Err(TaskTurbineError::ValidationError(format!(
+                "No task named {task_name} is registered."
+            )));
+        }
+        self.app.storage.spawn_task(self.name, task_name, params, options).await
+    }
+}
+
+
 
 /// Errors from worker operations.
 #[derive(Debug)]
@@ -370,44 +441,67 @@ mod tests {
 
     use super::TaskturbineApp;
 
-    fn create_app() -> TaskturbineApp {
+    async fn create_app() -> TaskturbineApp {
         let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
             .expect("Missing required TASKTURBINE_DATABASE_URL env var");
         let config = Config {
             usecase: "test".to_string(),
             database_url: db_url,
+            default_channel: "channel-one".into(),
             ..Config::default()
         };
-        TaskturbineApp::new(config)
+        let app = TaskturbineApp::new(config);
+        app.storage.update_schema().await.unwrap();
+
+        app
     }
 
     #[tokio::test]
     #[should_panic]
     async fn register_task_panic() {
-        let app = create_app();
-        app.register_task("duplicate-task", |_ctx| async { Ok(()) })
+        create_app()
+            .await
+            .register_task("duplicate-task", |_ctx| async { Ok(()) })
             .register_task("duplicate-task", |_ctx| async { Ok(()) });
     }
 
     #[tokio::test]
-    async fn create_channel() {
-        let mut app = create_app();
-        let ns = app.channel("important");
+    async fn add_channel_has_channel() {
+        let app = create_app()
+            .await
+            .add_channel("reports");
+
+        assert!(app.has_channel("reports"), "Should have defined channel");
+        assert!(app.has_channel("channel-one"), "Should have default channel");
+        assert!(!app.has_channel("undefined"), "Should not have unregistered channel");
+    }
+
+    #[tokio::test]
+    async fn add_channel_and_spawn() {
+        let app = create_app()
+            .await
+            .add_channel("reports")
+            .register_task("hello-world", |_ctx| async { Ok(()) });
+
+        let res = app.channel("reports").spawn_task("hello-world", b"", None).await;
+        assert!(res.is_ok());
     }
 
     #[tokio::test]
     async fn spawn_task_known() {
-        let app = create_app().register_task("first-task", |_ctx| async { Ok(()) });
+        let app = create_app()
+            .await
+            .register_task("first-task", |_ctx| async { Ok(()) });
 
-        let res = app.spawn_task("default", "first-task", b"", None).await;
+        let res = app.spawn_task("first-task", b"", None).await;
         assert!(res.is_ok());
     }
 
     #[tokio::test]
     async fn spawn_task_not_known() {
-        let app = create_app();
+        let app = create_app().await;
 
-        let res = app.spawn_task("default", "first-task", b"", None).await;
+        let res = app.spawn_task("first-task", b"", None).await;
         assert!(res.is_err());
         let err = res.err().unwrap();
         assert!(matches!(err, TaskTurbineError::ValidationError(_)));
