@@ -140,7 +140,6 @@ pub struct SpawnResult {
     pub run_id: RunId,
 }
 
-
 /// Entity structure for a task checkpoint
 #[derive(sqlx::FromRow, Debug, PartialEq)]
 pub struct Checkpoint {

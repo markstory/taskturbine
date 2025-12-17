@@ -5,10 +5,10 @@ use chrono::{DateTime, Utc};
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::{
-    api::{Storage, TaskTurbineError},
+    api::{Storage, TaskOptions, TaskTurbineError},
     config::Config,
     context::{FlowControl, TaskContext},
-    models::ClaimedTask,
+    models::{ClaimedTask, SpawnResult},
 };
 
 /// TaskRegistry contains a map of task names -> task handlers
@@ -46,6 +46,8 @@ impl TaskturbineApp {
     where
         T: TaskHandler<TaskContext> + Sync + Send + 'static,
     {
+        // TODO add namespace support? Do tasks exist in only one namespace,
+        // or is the namespace defined by schedule site?
         let wrapper = move |ctx| task_fn.call(ctx);
         if self.tasks.contains_key(task_name) {
             panic!("Task named {task_name} is already registered");
@@ -58,6 +60,26 @@ impl TaskturbineApp {
     /// Create a worker by consuming the app.
     pub fn create_worker(self, worker_id: &str) -> Worker {
         Worker::new(self, worker_id.to_string())
+    }
+
+    /// Spawn a new task and initialize the first run.
+    ///
+    /// An error is returned if the task name is not registered.
+    pub async fn spawn_task(
+        &self,
+        namespace: &str,
+        task_name: &str,
+        params: &[u8],
+        options: Option<TaskOptions>,
+    ) -> Result<SpawnResult, TaskTurbineError> {
+        if !self.tasks.contains_key(task_name) {
+            return Err(TaskTurbineError::ValidationError(format!(
+                "No task named {task_name} is registered."
+            )));
+        }
+        self.storage
+            .spawn_task(namespace, task_name, params, options)
+            .await
     }
 }
 
@@ -337,7 +359,7 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 
 #[cfg(test)]
 mod tests {
-    use crate::config::Config;
+    use crate::{api::TaskTurbineError, config::Config};
 
     use super::TaskturbineApp;
 
@@ -363,5 +385,23 @@ mod tests {
         let app = create_app();
         app.register_task("duplicate-task", |_ctx| async { Ok(()) })
             .register_task("duplicate-task", |_ctx| async { Ok(()) });
+    }
+
+    #[tokio::test]
+    async fn spawn_task_known() {
+        let app = create_app().register_task("first-task", |_ctx| async { Ok(()) });
+
+        let res = app.spawn_task("default", "first-task", b"", None).await;
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn spawn_task_not_known() {
+        let app = create_app();
+
+        let res = app.spawn_task("default", "first-task", b"", None).await;
+        assert!(res.is_err());
+        let err = res.err().unwrap();
+        assert!(matches!(err, TaskTurbineError::ValidationError(_)));
     }
 }

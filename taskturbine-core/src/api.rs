@@ -26,7 +26,7 @@ pub enum TaskTurbineError {
     /// this operation can succeed, the task must be claimed by a worker.
     NotRunning(Uuid),
     /// Validation errors from input parameters. The &str contains an error message.
-    ValidationError(&'static str),
+    ValidationError(String),
 }
 
 /// Options for spawning a task.
@@ -69,6 +69,11 @@ impl Default for TaskOptions {
 }
 
 /// A structure for interacting with the storage layer of TaskTurbine
+///
+/// This struct provides the basic storage manipulation functions for
+/// tasks, runs, events, waits, and checkpoints. This layer is not aware
+/// of what task names, or namespaces exist and validation of those identifiers
+/// is the responsibility of the caller.
 pub struct Storage {
     config: Config,
     pool: PgPool,
@@ -295,7 +300,7 @@ impl Storage {
 
         if options.retry_factor < 1.0 {
             return Err(TaskTurbineError::ValidationError(
-                "retry_factor must be >= 1.0",
+                "retry_factor must be >= 1.0".into(),
             ));
         }
 
@@ -367,13 +372,13 @@ impl Storage {
     ) -> Result<Vec<ClaimedTask>, TaskTurbineError> {
         if qty <= 0 {
             return Err(TaskTurbineError::ValidationError(
-                "qty must be greater than zero",
+                "qty must be greater than zero".into(),
             ));
         }
         let now = Utc::now();
         if claim_timeout < now {
             return Err(TaskTurbineError::ValidationError(
-                "claim_timeout must be in the future",
+                "claim_timeout must be in the future".into(),
             ));
         }
 
@@ -439,7 +444,7 @@ impl Storage {
         let now = Utc::now();
         if claim_timeout < now {
             return Err(TaskTurbineError::ValidationError(
-                "claim_timeout must be in the future",
+                "claim_timeout must be in the future".into(),
             ));
         }
 
