@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use taskturbine_core::api::Storage;
+use taskturbine_core::config::Config;
 
 mod clear;
 mod demo;
@@ -55,15 +56,12 @@ async fn main() {
             }
         },
     };
-    let config = taskturbine_core::config::Config {
+    let config = Config {
         database_url: db_url,
         database_log_queries: false,
         usecase: "demo".into(),
         worker_concurrency: 3,
-        worker_sleep_secs: 2,
-        worker_cleanup_cutoff_secs: 500,
-        worker_cleanup_interval_secs: 30,
-        worker_cleanup_limit: 1000,
+        ..Config::default()
     };
     let storage = Storage::new(config);
     let result = match args.command {

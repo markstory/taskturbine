@@ -15,6 +15,9 @@ pub struct Config {
     /// consume from one or more channel (aka. queue/topic)
     pub usecase: String,
 
+    /// The default channel that tasks are spawned into.
+    pub default_channel: String,
+
     /// The number of task execution slots to start.
     /// More slots will enable more tasks to run concurrently.
     pub worker_concurrency: i32,
@@ -40,6 +43,7 @@ impl Default for Config {
             database_url: "".to_string(),
             database_log_queries: false,
             usecase: "default".to_string(),
+            default_channel: "default".to_string(),
             worker_concurrency: 3,
             worker_sleep_secs: 2,
             worker_cleanup_interval_secs: 30,
