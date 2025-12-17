@@ -12,7 +12,7 @@ pub struct Config {
 
     /// The application or client that is connecting.
     /// Workers are bound to a specific usecase and can conditionally
-    /// consume from one or more namespaces (aka. queues/topics/channels)
+    /// consume from one or more channel (aka. queue/topic)
     pub usecase: String,
 
     /// The number of task execution slots to start.

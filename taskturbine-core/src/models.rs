@@ -54,8 +54,8 @@ impl Display for RunId {
 pub struct Task {
     /// The task id of the spawned task.
     pub task_id: TaskId,
-    /// The namespace the task belongs to.
-    pub namespace: String,
+    /// The channel the task belongs to.
+    pub channel: String,
     /// The name of the task that was claimed.
     pub task_name: String,
     /// The parameters of the task in bytes.

@@ -72,7 +72,7 @@ impl Default for TaskOptions {
 ///
 /// This struct provides the basic storage manipulation functions for
 /// tasks, runs, events, waits, and checkpoints. This layer is not aware
-/// of what task names, or namespaces exist and validation of those identifiers
+/// of what task names, or channels exist and validation of those identifiers
 /// is the responsibility of the caller.
 pub struct Storage {
     config: Config,
@@ -283,13 +283,13 @@ impl Storage {
 
     /// Spawn a task and initialize a run.
     ///
-    /// Tasks belong to a namespace. Namespaces allow you to split up your task
+    /// Tasks belong to a channel. Channels allow you to split up your task
     /// workload into different worker pools. This is ideal for spliting up orthoganal
     /// workloads, or to handling various priorities and throughput on the same
     /// taskturbine database.
     pub async fn spawn_task(
         &self,
-        namespace: &str,
+        channel: &str,
         task_name: &str,
         params: &[u8],
         options: Option<TaskOptions>,
@@ -312,14 +312,14 @@ impl Storage {
         let task_id = Uuid::now_v7();
         let res = sqlx::query(
             "INSERT INTO taskturbine.tasks (
-                task_id, usecase, namespace, task_name, params, headers,
+                task_id, usecase, channel, task_name, params, headers,
                 retry_seconds, retry_factor, retry_max_seconds,
                 max_attempts, cancellation_max_age, created_at, state
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12)",
         )
         .bind(task_id)
         .bind(&self.config.usecase)
-        .bind(namespace)
+        .bind(channel)
         .bind(task_name)
         .bind(params)
         .bind(header_json)
@@ -1180,12 +1180,12 @@ mod tests {
 
     async fn create_task() -> Result<(Storage, SpawnResult), TaskTurbineError> {
         let storage = create_storage().await;
-        let namespace = "demo";
+        let channel = "demo";
         let task_name = "say_hello";
         let payload = b"{\"key\": \"value\"}";
 
         let result = storage
-            .spawn_task(namespace, task_name, payload, None)
+            .spawn_task(channel, task_name, payload, None)
             .await;
         assert!(result.is_ok(), "Failed to spawn task {:?}", result.err());
         let spawned = result.unwrap();
@@ -1196,13 +1196,13 @@ mod tests {
     #[tokio::test]
     async fn spawn_task_invalid_retry_factor() {
         let storage = create_storage().await;
-        let namespace = "demo";
+        let channel = "demo";
         let task_name = "say_hello";
         let payload = b"{\"key\": \"value\"}";
 
         let result = storage
             .spawn_task(
-                namespace,
+                channel,
                 task_name,
                 payload,
                 Some(TaskOptions {

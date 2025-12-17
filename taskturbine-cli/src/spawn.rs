@@ -11,9 +11,9 @@ pub struct SpawnArgs {
         short,
         long,
         default_value = "default",
-        help = "The namespace to spawn a task into."
+        help = "The channel to spawn a task into."
     )]
-    namespace: String,
+    channel: String,
 
     #[arg(short, long, help = "The name of the task to execute.")]
     taskname: String,
@@ -91,8 +91,8 @@ impl From<SpawnArgs> for TaskOptions {
 /// Spawn a task based on the command like parameters.
 pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliError> {
     let taskname = args.taskname.clone();
-    let namespace = args.namespace.clone();
-    println!("Spawning task in namespace={namespace} for task={taskname}");
+    let channel = args.channel.clone();
+    println!("Spawning task in channel={channel} for task={taskname}");
 
     let params = args.params.clone().unwrap_or("{\"args\":[]}".to_string());
     let mut results = vec![];
@@ -101,7 +101,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
     for _ in 1..repeat.unwrap_or(1) {
         let res = storage
             .spawn_task(
-                &namespace,
+                &channel,
                 &taskname,
                 params.as_ref(),
                 Some(options.clone()),

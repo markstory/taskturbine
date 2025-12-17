@@ -39,15 +39,21 @@ impl TaskturbineApp {
         self
     }
 
+    /// Define a channel that tasks can be consumed on.
+    pub fn channel(&mut self, channel: &str) {
+        // TODO
+    }
+
     /// Register a task with a given name.
     ///
-    /// Duplicate names will panic at runtime.
+    /// Once a task is registered, it can be spawned into a named channel
+    /// via [`TaskturbineApp::channel()`]
+    ///
+    /// Duplicate task names will panic at runtime.
     pub fn register_task<T>(mut self, task_name: &str, task_fn: T) -> Self
     where
         T: TaskHandler<TaskContext> + Sync + Send + 'static,
     {
-        // TODO add namespace support? Do tasks exist in only one namespace,
-        // or is the namespace defined by schedule site?
         let wrapper = move |ctx| task_fn.call(ctx);
         if self.tasks.contains_key(task_name) {
             panic!("Task named {task_name} is already registered");
@@ -67,18 +73,19 @@ impl TaskturbineApp {
     /// An error is returned if the task name is not registered.
     pub async fn spawn_task(
         &self,
-        namespace: &str,
+        channel: &str,
         task_name: &str,
         params: &[u8],
         options: Option<TaskOptions>,
     ) -> Result<SpawnResult, TaskTurbineError> {
+        // TODO update this to use the default channel.
         if !self.tasks.contains_key(task_name) {
             return Err(TaskTurbineError::ValidationError(format!(
                 "No task named {task_name} is registered."
             )));
         }
         self.storage
-            .spawn_task(namespace, task_name, params, options)
+            .spawn_task(channel, task_name, params, options)
             .await
     }
 }
@@ -385,6 +392,12 @@ mod tests {
         let app = create_app();
         app.register_task("duplicate-task", |_ctx| async { Ok(()) })
             .register_task("duplicate-task", |_ctx| async { Ok(()) });
+    }
+
+    #[tokio::test]
+    async fn create_channel() {
+        let mut app = create_app();
+        let ns = app.channel("important");
     }
 
     #[tokio::test]

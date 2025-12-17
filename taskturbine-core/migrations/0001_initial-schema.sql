@@ -3,7 +3,7 @@ CREATE SCHEMA if not exists taskturbine;
 CREATE TABLE taskturbine.tasks (
     task_id uuid primary key,
     usecase text not null,
-    namespace text not null,
+    channel text not null,
     task_name text not null,
     params bytea not null,
     headers bytea,
@@ -24,7 +24,7 @@ CREATE TABLE taskturbine.tasks (
     -- When the task was completed/failed/cancelled.
     completed_at timestamptz
 );
-CREATE INDEX tasks_usecase_ns ON taskturbine.tasks (usecase, namespace);
+CREATE INDEX tasks_usecase_channel ON taskturbine.tasks (usecase, channel);
 
 CREATE TABLE taskturbine.runs (
     run_id uuid primary key,
