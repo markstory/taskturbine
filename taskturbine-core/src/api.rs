@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use crate::models::{Checkpoint, ClaimedTask, RunId, Task, TaskId, TaskState};
+use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
 use sqlx::{
     ConnectOptions, PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction,
@@ -27,16 +27,6 @@ pub enum TaskTurbineError {
     NotRunning(Uuid),
     /// Validation errors from input parameters. The &str contains an error message.
     ValidationError(&'static str),
-}
-
-/// Result of spawning a task.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SpawnResult {
-    /// The task id of the spawned task.
-    pub task_id: TaskId,
-    // The run id of the initial run spawned for the task.
-    // The run will begin as pending.
-    pub run_id: RunId,
 }
 
 /// Options for spawning a task.

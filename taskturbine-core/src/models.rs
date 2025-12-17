@@ -1,3 +1,4 @@
+/// Common datastructures and models for taskturbine.
 use chrono::{DateTime, Utc};
 use std::{
     fmt::{Display, Formatter},
@@ -51,20 +52,35 @@ impl Display for RunId {
 /// Entity structure for a task
 #[derive(sqlx::FromRow, Debug, PartialEq)]
 pub struct Task {
+    /// The task id of the spawned task.
     pub task_id: TaskId,
+    /// The namespace the task belongs to.
     pub namespace: String,
+    /// The name of the task that was claimed.
     pub task_name: String,
+    /// The parameters of the task in bytes.
     pub params: Vec<u8>,
+    /// The headers of the task in bytes. Will generally contain JSON encoded metadata.
     pub headers: Vec<u8>,
+    /// The number of seconds betwen retries.
     pub retry_seconds: i32,
+    /// The factor to multiple retries by attempt count.
     pub retry_factor: f32,
+    /// The maximum number of seconds to wait between retries.
     pub retry_max_seconds: i32,
+    /// The current attempt count.
     pub attempts: i32,
+    /// The maximum number of attempts allowed.
     pub max_attempts: i32,
+    /// The timestamp the task was completed at if applicable.
     pub completed_at: Option<DateTime<Utc>>,
+    /// The maximum age in seconds before the task should be cancelled.
     pub cancellation_max_age: i32,
+    /// The timestamp the task was created at.
     pub created_at: DateTime<Utc>,
+    /// The current state of the task.
     pub state: TaskState,
+    /// The run id of the last attempt if applicable.
     pub last_attempt_run: Option<RunId>,
 }
 
@@ -83,14 +99,23 @@ impl Task {
 /// from when the claim was made.
 #[derive(sqlx::FromRow, Clone, Debug, PartialEq)]
 pub struct ClaimedTask {
+    /// The task id of the spawned task.
     pub task_id: TaskId,
+    /// The run id of the spawned run.
     pub run_id: RunId,
+    /// The name of the task that was claimed.
     pub task_name: String,
+    /// The parameters of the task in bytes.
     pub params: Vec<u8>,
+    /// The number of seconds betwen retries.
     pub retry_seconds: i32,
+    /// The factor to multiple retries by attempt count.
     pub retry_factor: f32,
+    /// The maximum number of seconds to wait between retries.
     pub retry_max_seconds: i32,
+    /// The current attempt count.
     pub attempt: i32,
+    /// The maximum number of attempts allowed.
     pub max_attempts: i32,
 }
 
@@ -105,12 +130,30 @@ impl ClaimedTask {
     }
 }
 
+/// Result of spawning a task.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SpawnResult {
+    /// The task id of the spawned task.
+    pub task_id: TaskId,
+    /// The run id of the initial run spawned for the task.
+    /// The run will begin as pending.
+    pub run_id: RunId,
+}
+
+
 /// Entity structure for a task checkpoint
 #[derive(sqlx::FromRow, Debug, PartialEq)]
 pub struct Checkpoint {
+    /// The task id of the spawned task.
     pub task_id: TaskId,
+    /// The step name of the checkpoint. Step names are made
+    /// unique per task to handle duplicate step names.
     pub step_name: String,
+    /// The payload/state of the checkpoint in bytes.
+    /// Applications are responsible for serializing/deserializing
     pub state: Vec<u8>,
+    /// The run that created this checkpoint.
     pub owner_run_id: RunId,
+    /// The timestamp the checkpoint was created or updated.
     pub updated_at: DateTime<Utc>,
 }
