@@ -165,3 +165,16 @@ pub struct Checkpoint {
     /// The timestamp the checkpoint was created or updated.
     pub updated_at: DateTime<Utc>,
 }
+
+/// An Event payload
+///
+/// Events are captured with `emit_event` and tasks can register
+/// to wait for events with `await_event`. Events enable you
+/// to synchronize task execution with the completion of work
+/// in other systems. For example, a webhook need to be received.
+#[derive(Debug)]
+pub struct Event {
+    pub event_name: String,
+    pub payload: Vec<u8>,
+}
+

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use crate::{models::ClaimedTask, storage::Storage};
+use crate::{models::{ClaimedTask, Event}, storage::Storage};
 
 /// Used as signaling 'errors' to the worker runtime
 /// from userland operations. For example, when a task
@@ -10,18 +10,6 @@ pub enum FlowControl {
     InvalidValue(String),
     Failure(String),
     Suspend(Duration),
-}
-
-/// An Event payload
-///
-/// Events are captured with `emit_event` and tasks can register
-/// to wait for events with `await_event`. Events enable you
-/// to synchronize task execution with the completion of work
-/// in other systems. For example, a webhook need to be received.
-#[derive(Debug)]
-pub struct Event {
-    pub event_name: String,
-    pub payload: Vec<u8>,
 }
 
 /// Provides in memory storage of steps -> checkpoint names
