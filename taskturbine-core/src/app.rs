@@ -100,6 +100,9 @@ impl TaskturbineApp {
     }
 
     /// Create a worker by consuming the app.
+    ///
+    /// A worker will only claim tasks in `channels` if channels is not-empty.
+    /// If `channels` is empty, tasks in all channels will be processed.
     pub fn create_worker(self, worker_id: &str, channels: Vec<String>) -> Worker {
         Worker::new(self, worker_id.to_string(), channels)
     }
