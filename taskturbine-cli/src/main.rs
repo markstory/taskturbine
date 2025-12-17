@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
-use taskturbine_core::api::Storage;
 use taskturbine_core::config::Config;
+use taskturbine_core::storage::Storage;
 
 mod clear;
 mod demo;

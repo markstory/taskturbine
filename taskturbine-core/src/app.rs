@@ -5,10 +5,10 @@ use chrono::{DateTime, Utc};
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::{
-    api::{Storage, TaskOptions, TaskTurbineError},
     config::Config,
     context::{FlowControl, TaskContext},
     models::{ClaimedTask, SpawnResult},
+    storage::{Storage, TaskOptions, TaskTurbineError},
 };
 
 /// TaskRegistry contains a map of task names -> task handlers
@@ -205,12 +205,14 @@ impl From<TaskTurbineError> for WorkerError {
 /// storage with task results.
 pub struct Worker {
     app: TaskturbineApp,
-    worker_id: String,
-    /// The number of tasks this worker should claim on each iteration
-    /// of the run loop.
-    claim_count: i32,
     /// The channels this worker is consuming from.
     channels: Vec<String>,
+    /// The ID of this worker. It is helpful to give each worker a different ID
+    /// so you can track down why tasks are abandoned.
+    pub worker_id: String,
+    /// The number of tasks this worker should claim on each iteration
+    /// of the run loop.
+    pub claim_count: i32,
 }
 
 impl Worker {
@@ -441,7 +443,7 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 
 #[cfg(test)]
 mod tests {
-    use crate::{api::TaskTurbineError, config::Config};
+    use crate::{storage::TaskTurbineError, config::Config};
 
     use super::TaskturbineApp;
 

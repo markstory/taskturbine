@@ -4,10 +4,9 @@ use crate::config::Config;
 use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
 use sqlx::{
-    ConnectOptions, PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction,
+    ConnectOptions, PgConnection, PgPool, QueryBuilder, Row,
     migrate::MigrateError,
     postgres::{PgConnectOptions, PgRow},
-    query::Query,
 };
 use std::time::Duration;
 use uuid::Uuid;

@@ -1,7 +1,7 @@
 use clap::Args;
 
 use crate::CliError;
-use taskturbine_core::api::Storage;
+use taskturbine_core::storage::Storage;
 
 #[derive(Args, Debug)]
 pub struct ClearArgs {

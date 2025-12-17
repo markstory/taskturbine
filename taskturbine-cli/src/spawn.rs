@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use clap::Args;
 
 use crate::CliError;
-use taskturbine_core::api::{Storage, TaskOptions};
+use taskturbine_core::storage::{Storage, TaskOptions};
 
 #[derive(Args, Clone, Debug)]
 pub struct SpawnArgs {

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use crate::{api::Storage, models::ClaimedTask};
+use crate::{storage::Storage, models::ClaimedTask};
 
 /// Used as signaling 'errors' to the worker runtime
 /// from userland operations. For example, when a task
@@ -72,6 +72,7 @@ pub struct TaskContext {
     checkpoints: Checkpoints,
 }
 
+// TODO add spawn_task() so that it is easy to make more tasks within a task execution context.
 impl TaskContext {
     /// Create a TaskContext from a ClaimedTask and Storage API.
     pub fn build(task: ClaimedTask, storage: Arc<Storage>) -> Self {
@@ -271,7 +272,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{api::TaskTurbineError, config::Config};
+    use crate::{storage::TaskTurbineError, config::Config};
 
     enum TestError {
         GenericError,
