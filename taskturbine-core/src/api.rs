@@ -12,24 +12,35 @@ use sqlx::{
 use std::time::Duration;
 use uuid::Uuid;
 
+/// Error types raised by the storage layer of taskturbine.
 #[derive(Debug)]
 pub enum TaskTurbineError {
+    /// Encoding or decoding related errors.
     EncodeError(serde_json::Error),
+    /// SQL operational errors.
     SqlError(sqlx::Error),
+    /// The task or run was not found. You'll get the missing ID back. What kind of ID
+    /// depends on what you're doing.
     NotFound(Uuid),
+    /// The operation is not valid as the task is not currently running. Before
+    /// this operation can succeed, the task must be claimed by a worker.
     NotRunning(Uuid),
+    /// Validation errors from input parameters. The &str contains an error message.
     ValidationError(&'static str),
 }
 
 /// Result of spawning a task.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpawnResult {
+    /// The task id of the spawned task.
     pub task_id: TaskId,
+    // The run id of the initial run spawned for the task.
+    // The run will begin as pending.
     pub run_id: RunId,
 }
 
 /// Options for spawning a task.
-/// Default values are drawn from the TaskRuntime and TaskOptions defaults.
+/// Default values are drawn from the TaskOptions defaults.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct TaskOptions {
@@ -1135,9 +1146,13 @@ impl Storage {
     }
 }
 
+/// A result payload from `await_event`
 #[derive(Debug, Clone)]
 pub struct AwaitResult {
+    /// The event payload that was awaited upon.
+    /// Application logic is responsible for decoding bytes.
     pub payload: Vec<u8>,
+    /// Whether or not the runtime should suspend as we're still waiting for the event.
     pub should_suspend: bool,
 }
 
