@@ -87,7 +87,7 @@ impl TaskContext {
         format!("{name}{suffix}")
     }
 
-    /// Define a new async step with a name
+    /// Define a new async step with a name.
     /// When steps complete, they create checkpoints of the
     /// step results which enables re-runs of the task to durably
     /// resume from their last checkpoint.
@@ -138,7 +138,7 @@ impl TaskContext {
         Err(FlowControl::Failure("Task execution failed".to_string()))
     }
 
-    /// Define a new synchronous step with a name
+    /// Define a new synchronous step with a name.
     /// When steps complete, they create checkpoints of the
     /// step results which enables re-runs of the task to durably
     /// resume from their last checkpoint.
