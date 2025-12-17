@@ -14,20 +14,19 @@ use crate::{
 /// TaskRegistry contains a map of task names -> task handlers
 type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
 
-type ChannelRegistry = HashSet<String>;
-
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
     config: Config,
     storage: Arc<Storage>,
     tasks: TaskRegistry,
-    channels: ChannelRegistry,
+    channels: HashSet<String>,
 }
 
 impl TaskturbineApp {
     /// Create an app instance from a config object.
     pub fn new(config: Config) -> Self {
         let storage = Arc::new(Storage::new(config.clone()));
+
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
 

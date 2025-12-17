@@ -16,6 +16,8 @@ pub struct Config {
     pub usecase: String,
 
     /// The default channel that tasks are spawned into.
+    /// This channel will automatically be registered into the application
+    /// using a config instance.
     pub default_channel: String,
 
     /// The number of task execution slots to start.
