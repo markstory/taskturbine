@@ -6,14 +6,21 @@ use std::{
 };
 use uuid::Uuid;
 
+/// The states that a task/run can be in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 pub enum TaskState {
+    /// The task is ready for execution, and waiting for a worker to claim it.
     Pending,
+    /// The task has been claimed by a worker.
     Running,
+    /// The task isn't waiting for a future time to elapse, or event to happen.
     Sleeping,
+    /// The task has been executed successfully.
     Completed,
+    /// The task was not executed successfully.
     Failed,
+    /// The task was not cancelled due to max age.
     Cancelled,
 }
 
