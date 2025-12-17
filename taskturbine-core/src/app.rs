@@ -1,4 +1,9 @@
-use std::{collections::{HashMap, HashSet}, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
+};
 
 use async_channel::{Receiver, Sender, TrySendError};
 use chrono::{DateTime, Utc};
@@ -69,7 +74,7 @@ impl TaskturbineApp {
     /// Will panic if an undeclared channel is used.
     pub fn channel<'a>(&'a self, name: &'a str) -> Channel<'a> {
         if !self.has_channel(name) {
-            panic!("Unknown channel {}", name);
+            panic!("Unknown channel {name}");
         }
         Channel::new(name, self)
     }
@@ -153,7 +158,6 @@ where
     }
 }
 
-
 /// Channel wrapper
 /// Gives a more ergonomic path to working with channels
 /// as required.
@@ -164,9 +168,7 @@ pub struct Channel<'a> {
 
 impl<'a> Channel<'a> {
     pub fn new(name: &'a str, app: &'a TaskturbineApp) -> Self {
-        Self {
-            name, app,
-        }
+        Self { name, app }
     }
 
     /// Spawn a task into this channel.
@@ -183,10 +185,12 @@ impl<'a> Channel<'a> {
                 "No task named {task_name} is registered."
             )));
         }
-        self.app.storage.spawn_task(self.name, task_name, params, options).await
+        self.app
+            .storage
+            .spawn_task(self.name, task_name, params, options)
+            .await
     }
 }
-
 
 /// Errors from worker operations.
 #[derive(Debug)]
@@ -443,7 +447,7 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 
 #[cfg(test)]
 mod tests {
-    use crate::{storage::TaskTurbineError, config::Config};
+    use crate::{config::Config, storage::TaskTurbineError};
 
     use super::TaskturbineApp;
 
@@ -473,13 +477,17 @@ mod tests {
 
     #[tokio::test]
     async fn add_channel_has_channel() {
-        let app = create_app()
-            .await
-            .add_channel("reports");
+        let app = create_app().await.add_channel("reports");
 
         assert!(app.has_channel("reports"), "Should have defined channel");
-        assert!(app.has_channel("channel-one"), "Should have default channel");
-        assert!(!app.has_channel("undefined"), "Should not have unregistered channel");
+        assert!(
+            app.has_channel("channel-one"),
+            "Should have default channel"
+        );
+        assert!(
+            !app.has_channel("undefined"),
+            "Should not have unregistered channel"
+        );
     }
 
     #[tokio::test]
@@ -489,16 +497,17 @@ mod tests {
             .add_channel("reports")
             .register_task("hello-world", |_ctx| async { Ok(()) });
 
-        let res = app.channel("reports").spawn_task("hello-world", b"", None).await;
+        let res = app
+            .channel("reports")
+            .spawn_task("hello-world", b"", None)
+            .await;
         assert!(res.is_ok());
     }
 
     #[tokio::test]
     #[should_panic]
     async fn channel_panic_on_undefined() {
-        create_app()
-            .await
-            .channel("duplicate-task");
+        create_app().await.channel("duplicate-task");
     }
 
     #[tokio::test]

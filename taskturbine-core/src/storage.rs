@@ -394,7 +394,7 @@ impl Storage {
                 WHERE r.state IN ('pending', 'sleeping')
                 AND t.state IN ('pending', 'sleeping')
                 AND r.available_at <= NOW()
-                AND t.usecase = "
+                AND t.usecase = ",
         );
         builder.push_bind(&self.config.usecase);
 
@@ -409,18 +409,21 @@ impl Storage {
         let claimed: Vec<ClaimedTask> = builder
             .push(" LIMIT ")
             .push_bind(qty)
-            .push("
+            .push(
+                "
                 FOR UPDATE SKIP LOCKED
             ),
             claim_run AS (
                 UPDATE taskturbine.runs
                 SET state = 'running',
                     claimed_by = 
-            ")
+            ",
+            )
             .push_bind(worker_id)
             .push(", claim_expires_at = ")
             .push_bind(claim_timeout)
-            .push(", started_at = NOW(),
+            .push(
+                ", started_at = NOW(),
                     attempt = attempt + 1
                 WHERE run_id IN (SELECT run_id FROM candidates)
                 RETURNING run_id, task_id, attempt
@@ -442,11 +445,11 @@ impl Storage {
             INNER JOIN taskturbine.tasks AS t ON cr.task_id = t.task_id
             INNER JOIN taskturbine.runs AS r ON cr.run_id = r.run_id
             ORDER BY r.available_at, r.run_id",
-        )
-        .build_query_as()
-        .fetch_all(&self.pool)
-        .await
-        .map_err(TaskTurbineError::SqlError)?;
+            )
+            .build_query_as()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(claimed)
     }
@@ -1197,9 +1200,7 @@ mod tests {
         let task_name = "say_hello";
         let payload = b"{\"key\": \"value\"}";
 
-        let result = storage
-            .spawn_task(channel, task_name, payload, None)
-            .await;
+        let result = storage.spawn_task(channel, task_name, payload, None).await;
         assert!(result.is_ok(), "Failed to spawn task {:?}", result.err());
         let spawned = result.unwrap();
 
@@ -1770,7 +1771,9 @@ mod tests {
     async fn claim_task_zero_qty() {
         let storage = create_storage().await;
         let timeout = Utc::now() + Duration::from_secs(60 * 5);
-        let res = storage.claim_task(vec!["default"], "worker-1", timeout, 0).await;
+        let res = storage
+            .claim_task(vec!["default"], "worker-1", timeout, 0)
+            .await;
         assert!(res.is_err());
         assert!(matches!(
             res.err().unwrap(),
@@ -1782,7 +1785,9 @@ mod tests {
     async fn claim_task_past_expiration() {
         let storage = create_storage().await;
         let timeout = Utc::now() - Duration::from_secs(1);
-        let res = storage.claim_task(vec!["default"], "worker-1", timeout, 0).await;
+        let res = storage
+            .claim_task(vec!["default"], "worker-1", timeout, 0)
+            .await;
         assert!(res.is_err());
         assert!(matches!(
             res.err().unwrap(),
@@ -1818,10 +1823,16 @@ mod tests {
         let _ = storage.clear_storage().await;
         let timeout = Utc::now() + Duration::from_secs(30);
 
-        let _ = storage.spawn_task("in-scope", "hello-world", b"", None).await;
-        let _ = storage.spawn_task("out-scope", "hello-world", b"", None).await;
+        let _ = storage
+            .spawn_task("in-scope", "hello-world", b"", None)
+            .await;
+        let _ = storage
+            .spawn_task("out-scope", "hello-world", b"", None)
+            .await;
 
-        let res = storage.claim_task(vec!["in-scope"], "worker-1", timeout, 5).await;
+        let res = storage
+            .claim_task(vec!["in-scope"], "worker-1", timeout, 5)
+            .await;
 
         assert!(res.is_ok());
         let claimed = res.unwrap();

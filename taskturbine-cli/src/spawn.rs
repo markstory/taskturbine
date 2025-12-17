@@ -91,7 +91,10 @@ impl From<SpawnArgs> for TaskOptions {
 pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliError> {
     let taskname = args.taskname.clone();
 
-    let channel_name = args.channel.clone().unwrap_or(storage.get_config().default_channel);
+    let channel_name = args
+        .channel
+        .clone()
+        .unwrap_or(storage.get_config().default_channel);
     println!("Spawning task in channel={channel_name} for task={taskname}");
 
     let params = args.params.clone().unwrap_or("{\"args\":[]}".to_string());

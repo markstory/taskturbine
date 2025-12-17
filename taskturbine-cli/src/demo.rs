@@ -23,7 +23,10 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
         .register_task("explode", explode)
         .register_task("sailboat", sailboat);
 
-    let worker = app.create_worker("demo-worker-1", vec!["default".to_string(), "reports".to_string()]);
+    let worker = app.create_worker(
+        "demo-worker-1",
+        vec!["default".to_string(), "reports".to_string()],
+    );
     run_worker(worker).await;
     Ok(())
 }

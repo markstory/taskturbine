@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use crate::{storage::Storage, models::ClaimedTask};
+use crate::{models::ClaimedTask, storage::Storage};
 
 /// Used as signaling 'errors' to the worker runtime
 /// from userland operations. For example, when a task
@@ -272,7 +272,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{storage::TaskTurbineError, config::Config};
+    use crate::{config::Config, storage::TaskTurbineError};
 
     enum TestError {
         GenericError,
