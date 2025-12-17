@@ -17,11 +17,13 @@ pub async fn demo(storage: Storage) -> Result<(), CliError> {
     // Create an application instance
     let mut app = TaskturbineApp::new(config.clone());
     app = app
+        .add_channel("ingest")
+        .add_channel("reports")
         .register_task("hello_world", hello_world)
         .register_task("explode", explode)
         .register_task("sailboat", sailboat);
 
-    let worker = app.create_worker("demo-worker-1");
+    let worker = app.create_worker("demo-worker-1", vec!["default".to_string(), "reports".to_string()]);
     run_worker(worker).await;
     Ok(())
 }

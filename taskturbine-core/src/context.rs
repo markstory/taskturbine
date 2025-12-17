@@ -298,7 +298,7 @@ mod tests {
 
         let claim_until = Utc::now() + Duration::from_secs(60);
         let claimed = storage
-            .claim_task("worker-1", claim_until, 1)
+            .claim_task(vec![], "worker-1", claim_until, 1)
             .await
             .unwrap();
         let claim = &claimed[0];

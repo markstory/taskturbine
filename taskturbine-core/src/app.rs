@@ -1,4 +1,4 @@
-use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::{HashMap, HashSet}, pin::Pin, sync::Arc, time::Duration};
 
 use async_channel::{Receiver, Sender, TrySendError};
 use chrono::{DateTime, Utc};
@@ -14,7 +14,7 @@ use crate::{
 /// TaskRegistry contains a map of task names -> task handlers
 type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
 
-type ChannelRegistry = HashMap<String, String>;
+type ChannelRegistry = HashSet<String>;
 
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
@@ -28,8 +28,8 @@ impl TaskturbineApp {
     /// Create an app instance from a config object.
     pub fn new(config: Config) -> Self {
         let storage = Arc::new(Storage::new(config.clone()));
-        let mut channels = HashMap::new();
-        channels.insert(config.default_channel.clone(), config.default_channel.clone());
+        let mut channels = HashSet::new();
+        channels.insert(config.default_channel.clone());
 
         Self {
             config,
@@ -55,14 +55,14 @@ impl TaskturbineApp {
     ///
     /// You can spawn tasks onto specific channels using [`TaskturbineApp::channel()`]
     pub fn add_channel(mut self, channel: &str) -> Self {
-        self.channels.insert(channel.into(), channel.into());
+        self.channels.insert(channel.into());
 
         self
     }
 
     /// Check if a channel is defined.
     pub fn has_channel(&self, channel: &str) -> bool {
-        self.channels.contains_key(channel)
+        self.channels.contains(channel)
     }
 
     /// Get a Channel that can be used to spawn tasks.
@@ -100,8 +100,8 @@ impl TaskturbineApp {
     }
 
     /// Create a worker by consuming the app.
-    pub fn create_worker(self, worker_id: &str) -> Worker {
-        Worker::new(self, worker_id.to_string())
+    pub fn create_worker(self, worker_id: &str, channels: Vec<String>) -> Worker {
+        Worker::new(self, worker_id.to_string(), channels)
     }
 
     /// Spawn a task on the default channel and initialize the first run.
@@ -113,7 +113,6 @@ impl TaskturbineApp {
         params: &[u8],
         options: Option<TaskOptions>,
     ) -> Result<SpawnResult, TaskTurbineError> {
-        // TODO update this to use the default channel.
         if !self.tasks.contains_key(task_name) {
             return Err(TaskTurbineError::ValidationError(format!(
                 "No task named {task_name} is registered."
@@ -187,7 +186,6 @@ impl<'a> Channel<'a> {
 }
 
 
-
 /// Errors from worker operations.
 #[derive(Debug)]
 pub enum WorkerError {
@@ -209,16 +207,19 @@ pub struct Worker {
     /// The number of tasks this worker should claim on each iteration
     /// of the run loop.
     claim_count: i32,
+    /// The channels this worker is consuming from.
+    channels: Vec<String>,
 }
 
 impl Worker {
     /// Create a new worker.
-    pub fn new(app: TaskturbineApp, worker_id: String) -> Self {
+    pub fn new(app: TaskturbineApp, worker_id: String, channels: Vec<String>) -> Self {
         let claim_count = app.config.worker_concurrency;
         Worker {
             app,
             worker_id,
             claim_count,
+            channels,
         }
     }
 
@@ -233,10 +234,11 @@ impl Worker {
         &self,
         timeout: DateTime<Utc>,
     ) -> Result<Vec<ClaimedTask>, WorkerError> {
+        let channels = self.channels.iter().map(|i| i.as_ref()).collect();
         let res = self
             .app
             .storage
-            .claim_task(&self.worker_id, timeout, self.claim_count)
+            .claim_task(channels, &self.worker_id, timeout, self.claim_count)
             .await;
         if let Err(err) = res {
             Err(err.into())

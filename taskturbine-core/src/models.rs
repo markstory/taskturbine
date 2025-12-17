@@ -110,6 +110,8 @@ pub struct ClaimedTask {
     pub task_id: TaskId,
     /// The run id of the spawned run.
     pub run_id: RunId,
+    /// The channel name the task was spawned in.
+    pub channel: String,
     /// The name of the task that was claimed.
     pub task_name: String,
     /// The parameters of the task in bytes.
