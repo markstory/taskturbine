@@ -488,6 +488,14 @@ mod tests {
     }
 
     #[tokio::test]
+    #[should_panic]
+    async fn channel_panic_on_undefined() {
+        create_app()
+            .await
+            .channel("duplicate-task");
+    }
+
+    #[tokio::test]
     async fn spawn_task_known() {
         let app = create_app()
             .await
