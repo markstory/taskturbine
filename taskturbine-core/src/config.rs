@@ -1,3 +1,6 @@
+/// Configuration options for TaskTurbine workers and clients.
+///
+/// TODO make this easier to load from environment variables or a config file.
 #[derive(Debug, Clone)]
 pub struct Config {
     /// The URI of the database your are connecting to.
