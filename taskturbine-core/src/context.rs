@@ -54,8 +54,8 @@ pub type StepData = Vec<u8>;
 /// Execution context for a task.
 /// Passed to task functions by the Worker runtime.
 ///
-/// Context contains the Step interface, as well as the await_event()
-/// interface method.
+/// Context instances let you define task steps, interact with events,
+/// and spawn new tasks.
 pub struct TaskContext {
     task: ClaimedTask,
     app: Arc<TaskturbineApp>,

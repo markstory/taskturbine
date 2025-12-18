@@ -19,7 +19,13 @@ use crate::{
 /// TaskRegistry contains a map of task names -> task handlers
 type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
 
-/// The container for a collection of Tasks
+/// The entrypoint and container for a Task application
+///
+/// Application instances are created from [`Config`]. Tasks and channels
+/// are defined on the Application, and then you can create a [`Worker`]
+/// that can execute tasks and perform cleanup operations.
+///
+/// Tasks can be scheduled using [`TaskturbineApp::spawn_task()`] or [`TaskturbineApp::channel()`]
 pub struct TaskturbineApp {
     pub(crate) config: Config,
     pub(crate) storage: Storage,
