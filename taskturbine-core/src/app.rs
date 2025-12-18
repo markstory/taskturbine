@@ -260,22 +260,33 @@ impl Worker {
     /// Takes a datetime of what is considered stale and can be purged.
     pub async fn run_cleanup(&self, older_than: DateTime<Utc>) -> Result<(), WorkerError> {
         let cleanup_limit = self.config().worker_cleanup_limit;
-        let res = self
+        let _ = self
             .app
             .storage
             .cleanup_events(older_than, cleanup_limit)
-            .await;
-        if let Err(err) = res {
-            return Err(err.into());
-        }
-        let res = self
+            .await
+            .map_err(|e| WorkerError::Message(format!("{:?}", e)))?;
+
+        let _ = self
             .app
             .storage
             .cleanup_tasks(older_than, cleanup_limit)
-            .await;
-        if let Err(err) = res {
-            return Err(err.into());
-        }
+            .await
+            .map_err(|e| WorkerError::Message(format!("{:?}", e)))?;
+
+        let _ = self
+            .app
+            .storage
+            .handle_expired_claims()
+            .await
+            .map_err(|e| WorkerError::Message(format!("{:?}", e)))?;
+
+        let _ = self
+            .app
+            .storage
+            .handle_cancellation_max_age()
+            .await
+            .map_err(|e| WorkerError::Message(format!("{:?}", e)))?;
         Ok(())
     }
 

@@ -499,6 +499,8 @@ impl Storage {
     }
 
     /// Release claims on tasks where the claim_timeout_at has passed.
+    ///
+    /// Should be run periodically by workers
     pub async fn handle_expired_claims(&self) -> Result<i64, TaskTurbineError> {
         let mut atomic = self
             .pool
@@ -528,8 +530,8 @@ impl Storage {
     }
 
     /// Update all tasks that are past their cancellation_max_age
-    /// This is part of the garbage collection that taskturbine needs to keep database
-    /// sizes reasonable.
+    ///
+    /// Should be run periodically by workers.
     pub async fn handle_cancellation_max_age(&self) -> Result<u64, TaskTurbineError> {
         let mut atomic = self
             .pool
