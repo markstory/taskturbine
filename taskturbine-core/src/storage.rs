@@ -10,8 +10,6 @@ use sqlx::{
 };
 use std::time::Duration;
 use uuid::Uuid;
-use sqlx::Pool;
-use sqlx::Postgres;
 
 /// Error types raised by the storage layer of taskturbine.
 #[derive(Debug)]
