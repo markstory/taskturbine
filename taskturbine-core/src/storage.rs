@@ -10,6 +10,8 @@ use sqlx::{
 };
 use std::time::Duration;
 use uuid::Uuid;
+use sqlx::Pool;
+use sqlx::Postgres;
 
 /// Error types raised by the storage layer of taskturbine.
 #[derive(Debug)]
@@ -249,7 +251,7 @@ impl Storage {
         Ok(res)
     }
 
-    // Testing helper: get a run
+    // Testing helper: get a task
     #[cfg(test)]
     async fn get_task(&self, task_id: TaskId) -> Result<Option<PgRow>, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
@@ -259,6 +261,12 @@ impl Storage {
             .map_err(TaskTurbineError::SqlError)?;
 
         Ok(res)
+    }
+
+    // Testing helper: Sometimes we need to mutate data directly.
+    #[cfg(test)]
+    fn get_connection<'a>(&'a self) -> &'a Pool<Postgres> {
+        &self.pool
     }
 
     // Testing helper: get an event
@@ -522,15 +530,16 @@ impl Storage {
     /// Update all tasks that are past their cancellation_max_age
     /// This is part of the garbage collection that taskturbine needs to keep database
     /// sizes reasonable.
-    pub async fn handle_cancellation_max_age(&self) -> Result<(), TaskTurbineError> {
+    pub async fn handle_cancellation_max_age(&self) -> Result<u64, TaskTurbineError> {
         let mut atomic = self
             .pool
             .begin()
             .await
             .map_err(TaskTurbineError::SqlError)?;
-        // Find all rows that are sleeping or pending and have been around for more than their
-        // cancellation_max_age
-        let _ = sqlx::query(
+
+        // Find all rows that are sleeping or pending and have been around for 
+        // more than their cancellation_max_age
+        let res = sqlx::query(
             "WITH candidates AS (
                 SELECT r.run_id, r.task_id
                 FROM taskturbine.runs AS r
@@ -542,16 +551,24 @@ impl Storage {
                     (t.first_started_at IS NULL AND NOW() - t.created_at > t.cancellation_max_age * INTERVAL '1 SECOND')
                 )
             ),
+            updated_runs AS (
+                UPDATE taskturbine.runs
+                SET state = 'cancelled',
+                    completed_at = NOW()
+                WHERE run_id IN (SELECT run_id FROM candidates)
+            )
             UPDATE taskturbine.tasks
             SET state = 'cancelled',
-            completed_at = NOW()
+                completed_at = NOW()
             WHERE task_id IN (SELECT task_id FROM candidates)"
         )
         .execute(&mut *atomic)
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
-        Ok(())
+        atomic.commit().await.unwrap();
+
+        Ok(res.rows_affected())
     }
 
     /// Get a run state in FOR UPDATE mode
@@ -1208,6 +1225,7 @@ mod tests {
         let config = Config {
             usecase: "test".to_string(),
             database_url: db_url,
+            database_log_queries: true,
             ..Config::default()
         };
         let storage = Storage::new(config);
@@ -1901,6 +1919,91 @@ mod tests {
         let res = storage.handle_expired_claims().await;
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn handle_cancellation_max_age() {
+        let storage = create_storage().await;
+
+        let options = TaskOptions {
+            cancellation_max_age: 10,
+            ..TaskOptions::default()
+        };
+        let the_past = Utc::now() - Duration::from_secs(30);
+
+        let spawn = storage
+            .spawn_task("test", "cancellation-test", b"", Some(options))
+            .await
+            .unwrap();
+
+        // Coerce into a first_started_at + pending state.
+        let conn = storage.get_connection();
+        sqlx::query(
+            "UPDATE taskturbine.tasks
+            SET first_started_at = $1, state = $2
+            WHERE task_id = $3",
+        )
+        .bind(the_past)
+        .bind("pending")
+        .bind(spawn.task_id.0)
+        .execute(conn)
+        .await
+        .unwrap();
+
+        let res = storage.handle_cancellation_max_age().await;
+        assert!(res.is_ok());
+        let updated = res.unwrap();
+        assert_eq!(updated, 1);
+
+        let task = storage.get_task(spawn.task_id).await.unwrap().unwrap();
+        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
+        assert!(task.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+
+        let run = storage.get_run(spawn.run_id).await.unwrap();
+        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
+        assert!(run.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+    }
+
+    #[tokio::test]
+    async fn handle_cancellation_max_age_not_started() {
+        let storage = create_storage().await;
+
+        let options = TaskOptions {
+            cancellation_max_age: 10,
+            ..TaskOptions::default()
+        };
+        let the_past = Utc::now() - Duration::from_secs(30);
+
+        let spawn = storage
+            .spawn_task("test", "cancellation-test-not-started", b"", Some(options))
+            .await
+            .unwrap();
+
+        // Coerce into a first_started_at + pending state.
+        let conn = storage.get_connection();
+        sqlx::query(
+            "UPDATE taskturbine.tasks
+            SET created_at = $1
+            WHERE task_id = $2",
+        )
+        .bind(the_past)
+        .bind(spawn.task_id.0)
+        .execute(conn)
+        .await
+        .unwrap();
+
+        let res = storage.handle_cancellation_max_age().await;
+        assert!(res.is_ok());
+        let updated = res.unwrap();
+        assert_eq!(updated, 1);
+
+        let task = storage.get_task(spawn.task_id).await.unwrap().unwrap();
+        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
+        assert!(task.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+
+        let run = storage.get_run(spawn.run_id).await.unwrap();
+        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
+        assert!(run.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
     }
 
     #[tokio::test]
