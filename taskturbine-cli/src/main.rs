@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use taskturbine_core::config::Config;
 use taskturbine_core::storage::Storage;
 
+mod cleanup;
 mod clear;
 mod demo;
 mod emit_event;
@@ -38,6 +39,8 @@ enum Commands {
     Clear(clear::ClearArgs),
     /// Emit an event to storage.
     EmitEvent(emit_event::EmitEventArgs),
+    /// Run a cleanup worker
+    Cleanup,
     /// Run a demo worker
     Demo,
 }
@@ -67,6 +70,7 @@ async fn main() {
     let result = match args.command {
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
+        Commands::Cleanup => cleanup::cleanup(storage).await,
         Commands::Demo => demo::demo(storage).await,
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
     };

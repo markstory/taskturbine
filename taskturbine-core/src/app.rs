@@ -394,7 +394,9 @@ async fn run_cleanup(worker: Arc<Worker>) {
                 log::debug!("Running cleanup operations.");
                 let cleanup_time = Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
                 match worker.run_cleanup(cleanup_time).await {
-                    Ok(_) => (),
+                    Ok(_) => {
+                        log::info!("Cleanup operations complete");
+                    },
                     Err(err) => {
                         log::error!("{err:?}");
                     }

@@ -520,7 +520,7 @@ impl Storage {
         for run in res.iter() {
             let run_id = run.get::<RunId, _>("run_id");
             let failure_reason = b"{\"reason\":\"claim timeout\"}";
-            self.do_fail_run(&mut atomic, run_id, failure_reason, None)
+            self.do_fail_run(&mut atomic, run_id, failure_reason, None, false)
                 .await?;
         }
 
@@ -698,7 +698,7 @@ impl Storage {
             .await
             .map_err(TaskTurbineError::SqlError)?;
         let res = self
-            .do_fail_run(&mut atomic, run_id, reason, retry_at)
+            .do_fail_run(&mut atomic, run_id, reason, retry_at, true)
             .await;
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
@@ -712,16 +712,20 @@ impl Storage {
         run_id: RunId,
         reason: &[u8],
         retry_at: Option<DateTime<Utc>>,
+        validate_running: bool,
     ) -> Result<(), TaskTurbineError> {
         let run_row = self.get_locked_run_state(&mut *conn, run_id).await?;
-        let state: TaskState = run_row.get("state");
-        match state {
-            TaskState::Running | TaskState::Sleeping => {}
-            _ => {
-                // If the run is not active/sleeping it cannot be failed.
-                return Err(TaskTurbineError::NotRunning(run_id.0));
+        if validate_running {
+            let state: TaskState = run_row.get("state");
+            match state {
+                TaskState::Running | TaskState::Sleeping => {}
+                _ => {
+                    // If the run is not active/sleeping it cannot be failed.
+                    return Err(TaskTurbineError::NotRunning(run_id.0));
+                }
             }
         }
+
         let mut task = self
             .get_locked_task(TaskId(run_row.get("task_id")), &mut *conn)
             .await?;
