@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
-    models::{ClaimedTask, Event},
-    storage::Storage,
+    app::{Channel, TaskturbineApp}, models::{ClaimedTask, Event, SpawnResult}, storage::{TaskOptions, TaskTurbineError}
 };
 
 /// Used as signaling 'errors' to the worker runtime
@@ -59,20 +58,17 @@ pub type StepData = Vec<u8>;
 /// interface method.
 pub struct TaskContext {
     task: ClaimedTask,
-    storage: Arc<Storage>,
+    app: Arc<TaskturbineApp>,
     checkpoints: Checkpoints,
 }
 
-// TODO add spawn_task() so that it is easy to make more tasks within a task execution context.
 impl TaskContext {
-    /// Create a TaskContext from a ClaimedTask and Storage API.
-    pub fn build(task: ClaimedTask, storage: Arc<Storage>) -> Self {
-        let checkpoints = Checkpoints::new();
-
+    /// Create a TaskContext from a ClaimedTask and Application.
+    pub fn build(task: ClaimedTask, app: Arc<TaskturbineApp>) -> Self {
         Self {
             task,
-            storage,
-            checkpoints,
+            app,
+            checkpoints: Checkpoints::new(),
         }
     }
 
@@ -106,6 +102,7 @@ impl TaskContext {
         // See if the step has a completed checkpoint
         let checkpoint_name = self.checkpoint_name(name);
         let res = self
+            .app
             .storage
             .get_checkpoint(self.task.task_id, &checkpoint_name)
             .await;
@@ -121,6 +118,7 @@ impl TaskContext {
         let res = step_fn().await;
         if let Ok(state) = res {
             let res = self
+                .app
                 .storage
                 .set_checkpoint(
                     self.task.task_id,
@@ -159,7 +157,7 @@ impl TaskContext {
     /// that can be recorded as events. Events can have a Payload of bytes.
     /// How those bytes are encoded is an application concern.
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
-        let res = self.storage.emit_event(event_name, payload).await;
+        let res = self.app.storage.emit_event(event_name, payload).await;
 
         if let Err(err) = res {
             return Err(FlowControl::Failure(format!(
@@ -179,11 +177,12 @@ impl TaskContext {
         timeout: Option<Duration>,
     ) -> Result<Event, FlowControl> {
         let wait_for = timeout.unwrap_or_else(|| {
-            Duration::from_secs(self.storage.get_config().await_event_default_timeout_secs as u64)
+            Duration::from_secs(self.app.config.await_event_default_timeout_secs as u64)
         });
         let step_name = format!("$awaitEvent:{event_name}");
 
         let res = self
+            .app
             .storage
             .await_event(
                 self.task.task_id,
@@ -222,6 +221,7 @@ impl TaskContext {
         // Look for an existing checkpoint, return if it exists.
         let checkpoint_name = self.checkpoint_name(step_name);
         let res = self
+            .app
             .storage
             .get_checkpoint(self.task.task_id, &checkpoint_name)
             .await;
@@ -239,6 +239,7 @@ impl TaskContext {
         // Create a checkpoint, and schedule a run in the future.
         let payload = step_name;
         let res = self
+            .app
             .storage
             .set_checkpoint(
                 self.task.task_id,
@@ -256,6 +257,26 @@ impl TaskContext {
 
         Err(FlowControl::Suspend(duration))
     }
+
+    /// Spawn a task on the default channel and initialize the first run.
+    ///
+    /// An error is returned if the task name is not registered.
+    pub async fn spawn_task(
+        &self,
+        task_name: &str,
+        params: &[u8],
+        options: Option<TaskOptions>,
+    ) -> Result<SpawnResult, TaskTurbineError> {
+        self.app.spawn_task(task_name, params, options).await
+    }
+
+    /// Get a [`taskturbine_core::app::Channel`] wrapper to spawn tasks
+    /// on non-default channels.
+    ///
+    /// An error is returned if the task name is not registered.
+    pub fn channel<'a>(&'a self, name: &'a str) -> Channel<'a> {
+        self.app.channel(name)
+    }
 }
 
 #[cfg(test)]
@@ -264,13 +285,13 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{config::Config, storage::TaskTurbineError};
+    use crate::{app::TaskturbineApp, config::Config, storage::{Storage, TaskTurbineError}};
 
     enum TestError {
         GenericError,
     }
 
-    async fn create_storage() -> Storage {
+    async fn create_app() -> TaskturbineApp {
         let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
             .expect("Missing required TASKTURBINE_DATABASE_URL env var");
         let config = Config {
@@ -278,12 +299,10 @@ mod tests {
             database_url: db_url,
             ..Config::default()
         };
-        let storage = Storage::new(config);
+        let app = TaskturbineApp::new(config);
+        app.storage.update_schema().await.unwrap();
 
-        // Ensure migrations have been applied
-        storage.update_schema().await.unwrap();
-
-        storage
+        app
     }
 
     async fn claim_task(storage: &Storage, task_name: &str) -> ClaimedTask {
@@ -299,16 +318,22 @@ mod tests {
         claim.clone()
     }
 
+    async fn hello_world(mut _ctx: TaskContext) -> Result<(), FlowControl> {
+        println!("hello world");
+        Ok(())
+    }
+
     #[tokio::test]
     async fn step_reads_existing_checkpoint() {
-        let storage = Arc::new(create_storage().await);
-        let claim = claim_task(&storage, "hello-world").await;
-        let res = storage
+        let app = create_app().await;
+        let claim = claim_task(&app.storage, "hello-world").await;
+        let res = app.storage
             .set_checkpoint(claim.task_id, claim.run_id, "first-step", b"hi", None)
             .await;
         assert!(res.is_ok(), "checkpoint should save");
 
-        let mut context = TaskContext::build(claim.clone(), storage);
+        let arc_app = Arc::new(app);
+        let mut context = TaskContext::build(claim.clone(), arc_app);
         let res = context
             .step::<_, TaskTurbineError>("first-step", || Ok(b"should not run".to_vec()))
             .await
@@ -319,9 +344,10 @@ mod tests {
 
     #[tokio::test]
     async fn step_stores_checkpoint_on_success() {
-        let storage = Arc::new(create_storage().await);
-        let claim = claim_task(&storage, "hello-world").await;
-        let mut context = TaskContext::build(claim.clone(), storage.clone());
+        let app = create_app().await;
+        let arc_app = Arc::new(app);
+        let claim = claim_task(&arc_app.storage, "hello-world").await;
+        let mut context = TaskContext::build(claim.clone(), arc_app.clone());
 
         let res = context
             .step::<_, TaskTurbineError>("first-step", || Ok(b"checkpoint value".to_vec()))
@@ -329,7 +355,7 @@ mod tests {
             .unwrap();
         assert_eq!(res, b"checkpoint value".to_vec());
 
-        let stored = storage.get_checkpoint(claim.task_id, "first-step").await;
+        let stored = arc_app.storage.get_checkpoint(claim.task_id, "first-step").await;
         let Ok(Some(value)) = stored else {
             panic!("Should read stored checkpoint");
         };
@@ -338,9 +364,10 @@ mod tests {
 
     #[tokio::test]
     async fn step_no_store_checkpoint_on_failure() {
-        let storage = Arc::new(create_storage().await);
-        let claim = claim_task(&storage, "hello-world").await;
-        let mut context = TaskContext::build(claim.clone(), storage.clone());
+        let app = create_app().await;
+        let arc_app = Arc::new(app);
+        let claim = claim_task(&arc_app.storage, "hello-world").await;
+        let mut context = TaskContext::build(claim.clone(), arc_app.clone());
 
         let res = context
             .step("first-step", || Err(TestError::GenericError))
@@ -354,7 +381,7 @@ mod tests {
             "Should get a flow control error"
         );
 
-        let stored = storage.get_checkpoint(claim.task_id, "first-step").await;
+        let stored = arc_app.storage.get_checkpoint(claim.task_id, "first-step").await;
         assert!(
             stored.unwrap().is_none(),
             "Should not have stored checkpoint"
@@ -363,9 +390,9 @@ mod tests {
 
     #[tokio::test]
     async fn emit_event_saves_event() {
-        let storage = Arc::new(create_storage().await);
-        let claim = claim_task(&storage, "hello-world").await;
-        let context = TaskContext::build(claim.clone(), storage.clone());
+        let app = Arc::new(create_app().await);
+        let claim = claim_task(&app.storage, "hello-world").await;
+        let context = TaskContext::build(claim.clone(), app);
 
         let uuid = Uuid::now_v7();
         let event_id = format!("event-{uuid}");
@@ -375,9 +402,9 @@ mod tests {
 
     #[tokio::test]
     async fn await_event_saves_wait() {
-        let storage = Arc::new(create_storage().await);
-        let claim = claim_task(&storage, "hello-world").await;
-        let context = TaskContext::build(claim.clone(), storage.clone());
+        let app = Arc::new(create_app().await);
+        let claim = claim_task(&app.storage, "hello-world").await;
+        let context = TaskContext::build(claim.clone(), app);
 
         let wait_key = format!("await-{}", Uuid::now_v7());
         let res = context
@@ -392,9 +419,9 @@ mod tests {
 
     #[tokio::test]
     async fn await_event_returns_waited_event() {
-        let storage = Arc::new(create_storage().await);
-        let claim = claim_task(&storage, "hello-world").await;
-        let context = TaskContext::build(claim.clone(), storage.clone());
+        let app = Arc::new(create_app().await);
+        let claim = claim_task(&app.storage, "hello-world").await;
+        let context = TaskContext::build(claim.clone(), app.clone());
 
         let wait_key = format!("await-{}", Uuid::now_v7());
         let res = context
@@ -412,9 +439,9 @@ mod tests {
 
     #[tokio::test]
     async fn sleep_for_suspends() {
-        let storage = Arc::new(create_storage().await);
-        let claim = claim_task(&storage, "hello-world").await;
-        let mut context = TaskContext::build(claim.clone(), storage.clone());
+        let app = Arc::new(create_app().await);
+        let claim = claim_task(&app.storage, "hello-world").await;
+        let mut context = TaskContext::build(claim.clone(), app.clone());
 
         let res = context
             .sleep_for("sleeptime", Duration::from_secs(60))
@@ -423,11 +450,36 @@ mod tests {
         let err = res.err().unwrap();
         assert!(matches!(err, FlowControl::Suspend(v) if v == Duration::from_secs(60)));
 
-        let res = storage.get_checkpoint(claim.task_id, "sleeptime").await;
+        let res = app.storage.get_checkpoint(claim.task_id, "sleeptime").await;
         assert!(res.is_ok());
         let Ok(Some(checkpoint)) = res else {
             panic!("Could not find checkpoint");
         };
         assert_eq!(b"sleeptime".to_vec(), checkpoint.state);
+    }
+
+    #[tokio::test]
+    async fn spawn_task_error_on_missing_task() {
+        let app = Arc::new(create_app().await);
+        let claim = claim_task(&app.storage, "hello-world").await;
+        let context = TaskContext::build(claim.clone(), app.clone());
+
+        let res = context.spawn_task("favorite-food", b"payload data", None).await;
+        assert!(res.is_err(), "Should not be able to spawn undefined task");
+        assert!(matches!(res.err().unwrap(), TaskTurbineError::ValidationError(_)))
+    }
+
+    #[tokio::test]
+    async fn spawn_task_success() {
+        let app = create_app()
+            .await
+            .register_task("hello-world", hello_world);
+        let arc_app = Arc::new(app);
+
+        let claim = claim_task(&arc_app.storage, "hello-world").await;
+        let context = TaskContext::build(claim.clone(), arc_app.clone());
+
+        let res = context.spawn_task("hello-world", b"payload data", None).await;
+        assert!(res.is_ok());
     }
 }

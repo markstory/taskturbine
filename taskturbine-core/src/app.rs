@@ -21,8 +21,8 @@ type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sy
 
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
-    config: Config,
-    storage: Arc<Storage>,
+    pub(crate) config: Config,
+    pub(crate) storage: Arc<Storage>,
     tasks: TaskRegistry,
     channels: HashSet<String>,
 }
@@ -108,7 +108,8 @@ impl TaskturbineApp {
     /// A worker will only claim tasks in `channels` if channels is not-empty.
     /// If `channels` is empty, tasks in all channels will be processed.
     pub fn create_worker(self, worker_id: &str, channels: Vec<String>) -> Worker {
-        Worker::new(self, worker_id.to_string(), channels)
+        let arc_self = Arc::new(self);
+        Worker::new(arc_self, worker_id.to_string(), channels)
     }
 
     /// Spawn a task on the default channel and initialize the first run.
@@ -208,12 +209,16 @@ impl From<TaskTurbineError> for WorkerError {
 /// Worker instances claim tasks, execute them and update
 /// storage with task results.
 pub struct Worker {
-    app: TaskturbineApp,
+    /// The application instance this worker is for.
+    app: Arc<TaskturbineApp>,
+
     /// The channels this worker is consuming from.
     channels: Vec<String>,
+
     /// The ID of this worker. It is helpful to give each worker a different ID
     /// so you can track down why tasks are abandoned.
     pub worker_id: String,
+
     /// The number of tasks this worker should claim on each iteration
     /// of the run loop.
     pub claim_count: i32,
@@ -221,7 +226,7 @@ pub struct Worker {
 
 impl Worker {
     /// Create a new worker.
-    pub fn new(app: TaskturbineApp, worker_id: String, channels: Vec<String>) -> Self {
+    pub fn new(app: Arc<TaskturbineApp>, worker_id: String, channels: Vec<String>) -> Self {
         let claim_count = app.config.worker_concurrency;
         Worker {
             app,
@@ -295,7 +300,7 @@ impl Worker {
         let task_id = &task.task_id;
         log::debug!("Attempting to execute {task_id}");
 
-        let context = TaskContext::build(task.clone(), self.app.storage.clone());
+        let context = TaskContext::build(task.clone(), self.app.clone());
         let taskname = &task.task_name;
         let Some(task_fn) = self.app.tasks.get(taskname) else {
             log::warn!("No task named {taskname} is registered.");
