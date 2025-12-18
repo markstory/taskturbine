@@ -265,28 +265,28 @@ impl Worker {
             .storage
             .cleanup_events(older_than, cleanup_limit)
             .await
-            .map_err(|e| WorkerError::Message(format!("{:?}", e)))?;
+            .map_err(|e| WorkerError::Message(format!("{e:?}")))?;
 
         let _ = self
             .app
             .storage
             .cleanup_tasks(older_than, cleanup_limit)
             .await
-            .map_err(|e| WorkerError::Message(format!("{:?}", e)))?;
+            .map_err(|e| WorkerError::Message(format!("{e:?}")))?;
 
         let _ = self
             .app
             .storage
             .handle_expired_claims()
             .await
-            .map_err(|e| WorkerError::Message(format!("{:?}", e)))?;
+            .map_err(|e| WorkerError::Message(format!("{e:?}")))?;
 
         let _ = self
             .app
             .storage
             .handle_cancellation_max_age()
             .await
-            .map_err(|e| WorkerError::Message(format!("{:?}", e)))?;
+            .map_err(|e| WorkerError::Message(format!("{e:?}")))?;
         Ok(())
     }
 

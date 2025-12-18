@@ -1,7 +1,7 @@
 use crate::CliError;
 use simple_logger::SimpleLogger;
+use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
 use taskturbine_core::storage::Storage;
-use taskturbine_core::app::{run_cleanup_worker, TaskturbineApp};
 
 pub async fn cleanup(storage: Storage) -> Result<(), CliError> {
     // Get the configuration from storage.

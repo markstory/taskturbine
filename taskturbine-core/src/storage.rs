@@ -266,8 +266,7 @@ impl Storage {
 
     // Testing helper: Sometimes we need to mutate data directly.
     #[cfg(test)]
-    fn get_connection<'a>(&'a self) -> &'a Pool<Postgres> {
-
+    fn get_connection(&self) -> &Pool<Postgres> {
         &self.pool
     }
 
@@ -541,7 +540,7 @@ impl Storage {
             .await
             .map_err(TaskTurbineError::SqlError)?;
 
-        // Find all rows that are sleeping or pending and have been around for 
+        // Find all rows that are sleeping or pending and have been around for
         // more than their cancellation_max_age
         let res = sqlx::query(
             "WITH candidates AS (
@@ -994,9 +993,7 @@ impl Storage {
         let timeout_ts = if let Some(timeout) = timeout {
             Utc::now() + Duration::from_secs(timeout)
         } else {
-            Utc::now() + Duration::from_secs(
-                self.config.await_event_default_timeout_secs as u64
-            )
+            Utc::now() + Duration::from_secs(self.config.await_event_default_timeout_secs as u64)
         };
         // Record the event wait
         self.store_wait(
@@ -1961,11 +1958,17 @@ mod tests {
 
         let task = storage.get_task(spawn.task_id).await.unwrap().unwrap();
         assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(task.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+        assert!(
+            task.get::<Option<DateTime<Utc>>, _>("completed_at")
+                .is_some()
+        );
 
         let run = storage.get_run(spawn.run_id).await.unwrap();
         assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(run.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+        assert!(
+            run.get::<Option<DateTime<Utc>>, _>("completed_at")
+                .is_some()
+        );
     }
 
     #[tokio::test]
@@ -2003,11 +2006,17 @@ mod tests {
 
         let task = storage.get_task(spawn.task_id).await.unwrap().unwrap();
         assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(task.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+        assert!(
+            task.get::<Option<DateTime<Utc>>, _>("completed_at")
+                .is_some()
+        );
 
         let run = storage.get_run(spawn.run_id).await.unwrap();
         assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(run.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+        assert!(
+            run.get::<Option<DateTime<Utc>>, _>("completed_at")
+                .is_some()
+        );
     }
 
     #[tokio::test]
