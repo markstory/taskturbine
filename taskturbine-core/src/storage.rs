@@ -519,14 +519,38 @@ impl Storage {
         Ok(res.len() as i64)
     }
 
+    /// Update all tasks that are past their cancellation_max_age
+    /// This is part of the garbage collection that taskturbine needs to keep database
+    /// sizes reasonable.
     pub async fn handle_cancellation_max_age(&self) -> Result<(), TaskTurbineError> {
-        // TODO Build this method, and an upkeep style wrapper.
-        // Find all rows that are
-        // (t.first_started_at IS NULL OR (
-        //  $1 - t.first_started_at < t.cancellation_max_age * INTERVAL '1 SECOND')
-        // )
-        // These rows have been sleeping or executing for cancellation_max_age
-        // seconds and should be cancelled.
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+        // Find all rows that are sleeping or pending and have been around for more than their
+        // cancellation_max_age
+        let _ = sqlx::query(
+            "WITH candidates AS (
+                SELECT r.run_id, r.task_id
+                FROM taskturbine.runs AS r
+                INNER JOIN taskturbine.tasks AS t ON r.task_id = t.task_id
+                WHERE t.state IN ('pending', 'sleeping')
+                AND (
+                    (t.first_started_at IS NOT NULL AND NOW() - t.first_started_at > t.cancellation_max_age * INTERVAL '1 SECOND')
+                    OR
+                    (t.first_started_at IS NULL AND NOW() - t.created_at > t.cancellation_max_age * INTERVAL '1 SECOND')
+                )
+            ),
+            UPDATE taskturbine.tasks
+            SET state = 'cancelled',
+            completed_at = NOW()
+            WHERE task_id IN (SELECT task_id FROM candidates)"
+        )
+        .execute(&mut *atomic)
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
+
         Ok(())
     }
 
