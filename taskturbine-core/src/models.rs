@@ -177,4 +177,3 @@ pub struct Event {
     pub event_name: String,
     pub payload: Vec<u8>,
 }
-

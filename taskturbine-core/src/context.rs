@@ -1,6 +1,9 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use crate::{models::{ClaimedTask, Event}, storage::Storage};
+use crate::{
+    models::{ClaimedTask, Event},
+    storage::Storage,
+};
 
 /// Used as signaling 'errors' to the worker runtime
 /// from userland operations. For example, when a task
@@ -175,8 +178,9 @@ impl TaskContext {
         event_name: &str,
         timeout: Option<Duration>,
     ) -> Result<Event, FlowControl> {
-        // TODO Use config?
-        let wait_for = timeout.unwrap_or_else(|| Duration::from_secs(60));
+        let wait_for = timeout.unwrap_or_else(|| {
+            Duration::from_secs(self.storage.get_config().await_event_default_timeout_secs as u64)
+        });
         let step_name = format!("$awaitEvent:{event_name}");
 
         let res = self
