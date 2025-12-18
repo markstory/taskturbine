@@ -333,7 +333,7 @@ impl Worker {
     }
 }
 
-/// Run a a worker in a while loop.
+/// Run a worker in a while loop.
 /// Consumes the worker and runs indefinitely until the process is killed.
 pub async fn run_worker(worker: Worker) {
     let arc_worker = Arc::new(worker);
@@ -348,7 +348,27 @@ pub async fn run_worker(worker: Worker) {
     }
 
     tokio::spawn(run_cleanup(arc_worker.clone()));
-    tokio::spawn(claim_tasks(arc_worker.clone(), send.clone()));
+    if config.worker_cleanup_inline {
+        tokio::spawn(claim_tasks(arc_worker.clone(), send.clone()));
+    }
+
+    elegant_departure::tokio::depart()
+        .on_termination()
+        .on_signal(SignalKind::quit())
+        .await
+}
+
+/// Run a cleanup worker in a while loop.
+///
+/// In multi-worker deployments, it can be more efficient to run the cleanup
+/// operations as a dedicated worker/process instead of having each worker
+/// periodically running cleanup operations.
+///
+/// Consumes the worker and runs indefinitely until the process is killed.
+pub async fn run_cleanup_worker(worker: Worker) {
+    let arc_worker = Arc::new(worker);
+
+    tokio::spawn(run_cleanup(arc_worker.clone()));
 
     elegant_departure::tokio::depart()
         .on_termination()

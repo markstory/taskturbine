@@ -38,6 +38,11 @@ pub struct Config {
     /// The minimum number of seconds between each cleanup operation.
     pub worker_cleanup_interval_secs: i32,
 
+    /// Whether or not workers should run cleanup operations inline.
+    /// Set to false if you are going to run cleanup workers separately.
+    pub worker_cleanup_inline: bool,
+
+    /// The default number of seconds that events are waited on for.
     pub await_event_default_timeout_secs: i32,
 }
 
@@ -50,6 +55,7 @@ impl Default for Config {
             default_channel: "default".to_string(),
             worker_concurrency: 3,
             worker_sleep_secs: 2,
+            worker_cleanup_inline: true,
             worker_cleanup_interval_secs: 30,
             worker_cleanup_cutoff_secs: 60 * 10,
             worker_cleanup_limit: 1000,
