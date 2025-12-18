@@ -1,4 +1,3 @@
-#[expect(unused_imports)]
 pub mod app;
 pub mod config;
 pub mod context;
