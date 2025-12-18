@@ -59,6 +59,10 @@ async fn main() {
             }
         },
     };
+
+    // TODO it would be nice if taskturbine could provide command line tools
+    // that consume a userland application. As spawn_task and worker commands
+    // could be provided by the framework then.
     let config = Config {
         database_url: db_url,
         database_log_queries: false,
