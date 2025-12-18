@@ -22,7 +22,7 @@ type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sy
 /// The container for a collection of Tasks
 pub struct TaskturbineApp {
     pub(crate) config: Config,
-    pub(crate) storage: Arc<Storage>,
+    pub(crate) storage: Storage,
     tasks: TaskRegistry,
     channels: HashSet<String>,
 }
@@ -30,7 +30,7 @@ pub struct TaskturbineApp {
 impl TaskturbineApp {
     /// Create an app instance from a config object.
     pub fn new(config: Config) -> Self {
-        let storage = Arc::new(Storage::new(config.clone()));
+        let storage = Storage::new(config.clone());
 
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
@@ -45,7 +45,7 @@ impl TaskturbineApp {
 
     /// Update the storage instance used.
     pub fn with_storage(&mut self, storage: Storage) -> &mut Self {
-        self.storage = Arc::new(storage);
+        self.storage = storage;
 
         self
     }
@@ -307,14 +307,14 @@ impl Worker {
             return;
         };
 
-        let storage = self.app.storage.clone();
+        let storage = &self.app.storage;
         match task_fn.call(context).await {
             Err(FlowControl::InvalidValue(msg)) => log::warn!("Invalid value {msg}"),
             Err(FlowControl::Failure(msg)) => {
                 log::debug!("Task run failure: {msg}");
 
                 let retry_at = task.next_retry_at();
-                let res = storage.fail_run(task.run_id, b"", Some(retry_at)).await;
+                let res = self.app.storage.fail_run(task.run_id, b"", Some(retry_at)).await;
                 if let Err(schedule_err) = res {
                     log::error!("Failed to fail run {schedule_err:?}");
                 }
