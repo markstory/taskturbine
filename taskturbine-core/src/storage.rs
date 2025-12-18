@@ -11,6 +11,9 @@ use sqlx::{
 use std::time::Duration;
 use uuid::Uuid;
 
+#[cfg(test)]
+use sqlx::{Pool, Postgres};
+
 /// Error types raised by the storage layer of taskturbine.
 #[derive(Debug)]
 pub enum TaskTurbineError {
@@ -264,6 +267,7 @@ impl Storage {
     // Testing helper: Sometimes we need to mutate data directly.
     #[cfg(test)]
     fn get_connection<'a>(&'a self) -> &'a Pool<Postgres> {
+
         &self.pool
     }
 
@@ -990,9 +994,9 @@ impl Storage {
         let timeout_ts = if let Some(timeout) = timeout {
             Utc::now() + Duration::from_secs(timeout)
         } else {
-            // TODO use config for default timeout
-            // DO this next
-            Utc::now() + Duration::from_secs(60 * 10)
+            Utc::now() + Duration::from_secs(
+                self.config.await_event_default_timeout_secs as u64
+            )
         };
         // Record the event wait
         self.store_wait(
@@ -1115,28 +1119,24 @@ impl Storage {
         run_id: &RunId,
         available_at: DateTime<Utc>,
     ) -> Result<(), TaskTurbineError> {
-        // TODO combine these queries with a CTE
         let _ = sqlx::query(
-            "UPDATE taskturbine.runs
-            SET state = $1,
-                claimed_by = NULL,
-                claim_expires_at = NULL,
-                available_at = $2
-            WHERE run_id = $3",
+            "WITH update_runs AS (
+                UPDATE taskturbine.runs
+                SET state = $1,
+                    claimed_by = NULL,
+                    claim_expires_at = NULL,
+                    available_at = $2
+                WHERE run_id = $3
+            )
+            UPDATE taskturbine.tasks SET state = $1 WHERE task_id = $4",
         )
         .bind(TaskState::Sleeping)
         .bind(available_at)
         .bind(run_id)
+        .bind(task_id)
         .execute(&mut *conn)
         .await
         .map_err(TaskTurbineError::SqlError)?;
-
-        let _ = sqlx::query("UPDATE taskturbine.tasks SET state = $1 WHERE task_id = $2")
-            .bind(TaskState::Sleeping)
-            .bind(task_id.0)
-            .execute(&mut *conn)
-            .await
-            .map_err(TaskTurbineError::SqlError)?;
 
         Ok(())
     }
