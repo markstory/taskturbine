@@ -14,7 +14,7 @@ path = "src/worker.rs"
 [dependencies]
 axum = "0.8.7"
 log.workspace = true
-minijinja = { version = "2.14.0", features = ["builtins"] }
+minijinja = { version = "2.14.0", features = ["builtins", "loader"] }
 serde = "1.0.228"
 serde_json.workspace = true
 simple_logger = "5.1.0"
