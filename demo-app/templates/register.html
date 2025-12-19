@@ -1,5 +1,17 @@
 {% extends "layout.html" %}
 
 {% block body %}
-register html goes here {{ name }}
+<form method="post">
+  <div>
+    <label for="name">Name</label>
+    <input name="name" id="name" type="text" />
+  </div>
+  <div>
+    <label for="email">Email</label>
+    <input name="email" id="email" type="email" />
+  </div>
+  <div>
+    <button type="submit">Submit</button>
+  </div>
+</form>
 {% endblock %}
