@@ -1,0 +1,21 @@
+[package]
+name = "demo-app"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[[bin]]
+name = "worker"
+path = "src/worker.rs"
+
+[dependencies]
+axum = "0.8.7"
+log.workspace = true
+serde = "1.0.228"
+serde_json.workspace = true
+simple_logger = "5.1.0"
+taskturbine-core = { path = "../taskturbine-core" }
+tokio.workspace = true

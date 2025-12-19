@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [ "taskturbine-cli","taskturbine-core"]
+members = [ "demo-app", "taskturbine-cli","taskturbine-core"]
 
 [workspace.dependencies]
 chrono = "0.4.42"
