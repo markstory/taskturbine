@@ -1,23 +1,30 @@
-use axum::{extract::State, routing::{get, post}, Form, Router};
+use axum::{extract::State, response::Html, routing::{get, post}, Form, Router};
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use tasks::make_task_app;
 use taskturbine_core::app::TaskturbineApp;
 use std::sync::Arc;
+use minijinja::{Environment, context};
 
 mod tasks;
 
-struct AppState {
+struct AppState<'a> {
     tasks: TaskturbineApp,
+    templates: Environment<'a>,
 }
 
 #[tokio::main]
 async fn main() {
     SimpleLogger::new().init().unwrap();
 
-    let task_app = make_task_app();
+    let mut env = Environment::new();
+    env.add_template("register", "register html goes here {{ name }}").unwrap();
+    env.add_template("process-register", "{{ name }}. Your registration is processing.").unwrap();
 
-    let state = Arc::new(AppState { tasks: task_app });
+    let state = Arc::new(AppState { 
+        tasks: make_task_app(),
+        templates: env,
+    });
 
     let app = Router::new()
         .route("/", get(home))
@@ -37,20 +44,27 @@ async fn home() -> &'static str {
 
 #[derive(Deserialize, Serialize)]
 struct Signup {
+    name: String,
     email: String,
 }
 
-async fn register() -> &'static str {
-    "Register for our site"
+async fn register<'a>(State(state): State<Arc<AppState<'a>>>) -> Html<String> {
+    let tmpl = state.templates.get_template("register").unwrap();
+    let html = tmpl.render(context!(name => "test")).unwrap();
+
+    Html(html)
 }
 
-async fn process_register(
-    State(state): State<Arc<AppState>>,
+async fn process_register<'a>(
+    State(state): State<Arc<AppState<'a>>>,
     Form(sign_up): Form<Signup>,
-) -> &'static str {
+) -> Html<String> {
     // create a json payload for the task and queue a task
     let params = serde_json::to_string(&sign_up).unwrap();
     state.tasks.spawn_task("register-user", params.as_bytes(), None).await.unwrap();
 
-    "all done"
+    let tmpl = state.templates.get_template("register").unwrap();
+    let html = tmpl.render(context!(name => "test")).unwrap();
+
+    Html(html)
 }

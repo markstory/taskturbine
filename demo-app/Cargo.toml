@@ -5,7 +5,7 @@ edition = "2024"
 
 [[bin]]
 name = "server"
-path = "src/main.rs"
+path = "src/server.rs"
 
 [[bin]]
 name = "worker"
@@ -14,6 +14,7 @@ path = "src/worker.rs"
 [dependencies]
 axum = "0.8.7"
 log.workspace = true
+minijinja = { version = "2.14.0", features = ["builtins"] }
 serde = "1.0.228"
 serde_json.workspace = true
 simple_logger = "5.1.0"
