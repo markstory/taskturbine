@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use crate::config::Config;
 use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
+use sqlx::migrate::Migrator;
+use sqlx::postgres::PgPoolOptions;
 use sqlx::{
     ConnectOptions, PgConnection, PgPool, QueryBuilder, Row,
     migrate::MigrateError,
@@ -86,6 +89,7 @@ impl Storage {
     pub fn new(config: Config) -> Self {
         let pool = PgPool::connect_lazy(&config.database_url)
             .expect("Failed to create database connection pool");
+
         let options: Result<PgConnectOptions, _> = config.database_url.parse();
         if let Ok(mut opts) = options {
             if config.database_log_queries {
@@ -286,7 +290,13 @@ impl Storage {
     // Run migrations to create or update the database schema.
     // Will create a taskturbine schema and add all tables inside that schema.
     pub async fn update_schema(&self) -> Result<(), MigrateError> {
-        sqlx::migrate!("./migrations").run(&self.pool).await
+        // TODO Currently taskturbine cannot co-exist in a database
+        // that is using sqlx for migrations as well. Both taskturbine and the
+        // application will want to use `_sqlx_migrations` table and conflict.
+        // 0.9.0 of sqlx will expose new APIs for changing the migration name,
+        // but there doesn't appear to be a timeline for it.
+        sqlx::migrate!("./migrations").run(&self.pool).await?;
+        Ok(())
     }
 
     /// Spawn a task and initialize a run.
