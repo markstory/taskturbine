@@ -2,6 +2,12 @@
 
 {% block body %}
 <form method="post">
+  <p>Enter a name and email and submit to start a simulated registration flow.
+    The HTTP endpoint stores the parameters as a task activation and a worker
+    can durably process the task asynchronously and save state along the way.
+
+    In this demo the worker won't send an email, but it will log the email verification token
+    and you'll need to visit the link to complete the registration process.
   <div>
     <label for="name">Name</label>
     <input name="name" id="name" type="text" />
