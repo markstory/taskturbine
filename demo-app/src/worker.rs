@@ -1,6 +1,7 @@
 use simple_logger::SimpleLogger;
 use taskturbine_core::app::run_worker;
 
+mod db;
 mod tasks;
 
 use tasks::make_task_app;

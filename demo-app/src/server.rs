@@ -1,14 +1,18 @@
 use axum::{extract::State, response::Html, routing::{get, post}, Form, Router};
+use db::create_db;
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
+use sqlx::{Pool, Postgres};
 use tasks::make_task_app;
 use taskturbine_core::app::TaskturbineApp;
 use std::sync::Arc;
 use minijinja::{Environment, context, path_loader};
 
+mod db;
 mod tasks;
 
 struct AppState<'a> {
+    db: Pool<Postgres>,
     tasks: TaskturbineApp,
     templates: Environment<'a>,
 }
@@ -27,6 +31,7 @@ async fn main() {
     SimpleLogger::new().init().unwrap();
 
     let state = Arc::new(AppState { 
+        db: create_db().await,
         tasks: make_task_app(),
         templates: create_template_env(),
     });
@@ -43,8 +48,11 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn home() -> &'static str {
-    "Welcome home"
+async fn home<'a>(State(state): State<Arc<AppState<'a>>>) -> Html<String> {
+    let tmpl = state.templates.get_template("home.html").unwrap();
+    let html = tmpl.render(context!()).unwrap();
+
+    Html(html)
 }
 
 #[derive(Deserialize, Serialize)]
