@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
-    app::{Channel, TaskturbineApp}, models::{ClaimedTask, Event, SpawnResult}, storage::{TaskOptions, TaskTurbineError}
+    app::{Channel, TaskturbineApp}, models::{ClaimedTask, Event, RunId, SpawnResult, TaskId}, storage::{TaskOptions, TaskTurbineError}
 };
 
 /// Used as signaling 'errors' to the worker runtime
@@ -84,6 +84,16 @@ impl TaskContext {
         };
 
         format!("{name}{suffix}")
+    }
+
+    /// Get the task_id that is currently being run.
+    pub fn task_id(&self) -> TaskId {
+        self.task.task_id
+    }
+
+    /// Get the run_id that is currently being run.
+    pub fn run_id(&self) -> RunId {
+        self.task.run_id
     }
 
     /// Define a new async step with a name.
