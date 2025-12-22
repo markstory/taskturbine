@@ -113,7 +113,7 @@ impl TaskContext {
     ) -> Result<StepData, FlowControl>
     where
         Fut: Future<Output = Result<StepData, E>>,
-        F: FnOnce() -> Fut,
+        F: FnOnce(TaskContext) -> Fut,
     {
         // See if the step has a completed checkpoint
         let checkpoint_name = self.checkpoint_name(name);
@@ -131,7 +131,9 @@ impl TaskContext {
         if let Some(checkpoint) = checkpoint_opt {
             return Ok(checkpoint.state);
         }
-        let res = step_fn().await;
+        // Create a disposable context to avoid &mut reference and lifetime hell.
+        let context = Self::build(self.task.clone(), self.app.clone());
+        let res = step_fn(context).await;
         if let Ok(state) = res {
             let res = self
                 .app
@@ -161,9 +163,9 @@ impl TaskContext {
     /// resume from their last checkpoint.
     pub async fn step<F, E>(&mut self, name: &str, step_fn: F) -> Result<StepData, FlowControl>
     where
-        F: FnOnce() -> Result<StepData, E>,
+        F: FnOnce(TaskContext) -> Result<StepData, E>,
     {
-        let async_step_fn = async || step_fn();
+        let async_step_fn = async |ctx: TaskContext| step_fn(ctx);
 
         self.async_step(name, async_step_fn).await
     }
@@ -351,7 +353,7 @@ mod tests {
         let arc_app = Arc::new(app);
         let mut context = TaskContext::build(claim.clone(), arc_app);
         let res = context
-            .step::<_, TaskTurbineError>("first-step", || Ok(b"should not run".to_vec()))
+            .step::<_, TaskTurbineError>("first-step", |_ctx| Ok(b"should not run".to_vec()))
             .await
             .unwrap();
 
@@ -366,7 +368,7 @@ mod tests {
         let mut context = TaskContext::build(claim.clone(), arc_app.clone());
 
         let res = context
-            .step::<_, TaskTurbineError>("first-step", || Ok(b"checkpoint value".to_vec()))
+            .step::<_, TaskTurbineError>("first-step", |_ctx| Ok(b"checkpoint value".to_vec()))
             .await
             .unwrap();
         assert_eq!(res, b"checkpoint value".to_vec());
@@ -386,7 +388,7 @@ mod tests {
         let mut context = TaskContext::build(claim.clone(), arc_app.clone());
 
         let res = context
-            .step("first-step", || Err(TestError::GenericError))
+            .step("first-step", |_ctx| Err(TestError::GenericError))
             .await;
 
         let Err(err) = res else {

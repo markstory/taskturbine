@@ -39,7 +39,7 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
     // println!("Sleep completed");
 
     // Run synchronous steps
-    fn step_one() -> Result<Vec<u8>, CliError> {
+    fn step_one(_ctx: TaskContext) -> Result<Vec<u8>, CliError> {
         println!("Ran step_one");
         Ok(b"a result value".to_vec())
     }
@@ -47,7 +47,7 @@ async fn hello_world(mut ctx: TaskContext) -> Result<(), FlowControl> {
     println!("Step 1 result {step1:?}");
 
     // Run asynchronous steps
-    async fn step_two() -> Result<Vec<u8>, CliError> {
+    async fn step_two(_ctx: TaskContext) -> Result<Vec<u8>, CliError> {
         // println!("Ran step_two - fails");
         // Err(CliError::Message("step two failed".to_string()))
 
