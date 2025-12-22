@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use taskturbine_core::{app::TaskturbineApp, context::{FlowControl, TaskContext}, config::Config};
 
 use crate::db::create_db;
@@ -31,10 +32,9 @@ pub fn make_task_app() -> TaskturbineApp {
 }
 
 #[derive(sqlx::FromRow, Debug, PartialEq, Deserialize, Serialize)]
-pub struct User {
+pub struct UserCreate {
     pub name: String,
     pub email: String,
-    pub verified: bool,
 }
 
 pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
@@ -42,20 +42,25 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
 
     async fn create_user(ctx: TaskContext) -> Result<Vec<u8>, TaskError> {
         let db = create_db().await;
-        let payload: User = serde_json::from_slice(ctx.param_bytes())?;
+        let payload: UserCreate = serde_json::from_slice(ctx.param_bytes())?;
 
-        sqlx::query(
-            "INSERT INTO users (name, email, verified) VALUES ($1, $2, false)"
+        let row = sqlx::query(
+            "INSERT INTO users (name, email, verified) VALUES ($1, $2, false)
+            RETURNING *
+            "
         )
         .bind(payload.name)
         .bind(payload.email)
-        .execute(&db)
+        .fetch_one(&db)
         .await
         .map_err(|e| TaskError::Message(format!("Could not save user: {e}")))?;
 
-        Ok(vec![])
+        let user_id: i64 = row.get("id");
+        let json_str = format!("{{\"user_id\":{user_id}}}");
+
+        Ok(json_str.into())
     }
-    let create_user = ctx.async_step("create-user", create_user).await;
+    let create_user_json = ctx.async_step("create-user", create_user).await;
 
     Ok(())
 }
