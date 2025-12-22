@@ -492,4 +492,18 @@ mod tests {
         let res = context.spawn_task("hello-world", b"payload data", None).await;
         assert!(res.is_ok());
     }
+
+    #[tokio::test]
+    async fn task_id_and_run_id() {
+        let app = create_app()
+            .await
+            .register_task("hello-world", hello_world);
+        let arc_app = Arc::new(app);
+
+        let claim = claim_task(&arc_app.storage, "hello-world").await;
+        let context = TaskContext::build(claim.clone(), arc_app.clone());
+
+        assert_eq!(claim.task_id, context.task_id());
+        assert_eq!(claim.run_id, context.run_id());
+    }
 }
