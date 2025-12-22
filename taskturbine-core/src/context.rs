@@ -96,6 +96,12 @@ impl TaskContext {
         self.task.run_id
     }
 
+    /// Get a reference to the parameters of the task as
+    /// [`Vec<u8>`].
+    pub fn param_bytes<'a>(&'a self) -> &'a Vec<u8> {
+        &self.task.params
+    }
+
     /// Define a new async step with a name.
     /// When steps complete, they create checkpoints of the
     /// step results which enables re-runs of the task to durably
@@ -316,7 +322,7 @@ mod tests {
     }
 
     async fn claim_task(storage: &Storage, task_name: &str) -> ClaimedTask {
-        let _ = storage.spawn_task("ns", task_name, b"", None).await;
+        let _ = storage.spawn_task("ns", task_name, b"", None).await.unwrap();
 
         let claim_until = Utc::now() + Duration::from_secs(60);
         let claimed = storage
@@ -505,5 +511,31 @@ mod tests {
 
         assert_eq!(claim.task_id, context.task_id());
         assert_eq!(claim.run_id, context.run_id());
+    }
+
+
+    #[tokio::test]
+    async fn param_bytes() {
+        let app = create_app()
+            .await
+            .register_task("hello-world", hello_world);
+        let arc_app = Arc::new(app);
+
+        let _ = arc_app.spawn_task("hello-world", b"{\"name\":\"test\"}", None).await.unwrap();
+
+        let claim_until = Utc::now() + Duration::from_secs(60);
+        let claimed = arc_app.storage
+            .claim_task(vec![], "worker-1", claim_until, 1)
+            .await
+            .unwrap();
+
+        let Some(claim) = claimed.get(0) else {
+            panic!("Did not claim a task");
+        };
+        let context = TaskContext::build(claim.clone(), arc_app.clone());
+
+        let bytes = context.param_bytes();
+        dbg!(str::from_utf8(&bytes).unwrap());
+        assert_eq!(bytes.as_slice(), b"{\"name\":\"test\"}");
     }
 }
