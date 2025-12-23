@@ -3,6 +3,8 @@ use std::env;
 use sqlx::{migrate, postgres::PgConnectOptions, ConnectOptions, PgPool, Pool, Postgres};
 
 
+pub const SALT: &str = "super-secret-value";
+
 pub async fn create_db() -> Pool<Postgres> {
     let database_url = env::var("DEMO_DATABASE_URL").expect("Missing DEMO_DATABASE_URL in env");
     let database_log_queries = env::var("DEMO_DATABASE_LOG_QUERIES").unwrap_or("false".into());
