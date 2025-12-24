@@ -117,12 +117,7 @@ async fn verify_user<'a>(
 
     // Save an event to continue the task workflow.
     let event_name = format!("email-verify-{}", row.get::<String, _>("email"));
-    let _ = state.tasks.emit_event(&event_name, b"").await;
-
-    let res = sqlx::query("UPDATE users SET verified = true WHERE id = $1")
-        .bind(&user_id)
-        .execute(&state.db)
-        .await;
+    let res = state.tasks.emit_event(&event_name, b"").await;
 
     let Ok(_) = res else {
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
