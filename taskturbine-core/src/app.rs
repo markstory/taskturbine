@@ -136,6 +136,21 @@ impl TaskturbineApp {
             .spawn_task(&self.config.default_channel, task_name, params, options)
             .await
     }
+
+    /// Record an event as having completed.
+    /// Events allow you to synchronize tasks with external actions
+    /// that can be recorded as events. Events can have a Payload of bytes.
+    /// How those bytes are encoded is an application concern.
+    pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
+        let res = self.storage.emit_event(event_name, payload).await;
+
+        if let Err(err) = res {
+            return Err(FlowControl::Failure(format!(
+                "Could not store event {err:?}"
+            )));
+        }
+        Ok(())
+    }
 }
 
 /// Trait for async Task functions that return a result.
@@ -491,6 +506,8 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 
 #[cfg(test)]
 mod tests {
+    use uuid::Uuid;
+
     use crate::{config::Config, storage::TaskTurbineError};
 
     use super::TaskturbineApp;
@@ -572,5 +589,15 @@ mod tests {
         assert!(res.is_err());
         let err = res.err().unwrap();
         assert!(matches!(err, TaskTurbineError::ValidationError(_)));
+    }
+
+    #[tokio::test]
+    async fn emit_event_saves_event() {
+        let app = create_app().await;
+
+        let uuid = Uuid::now_v7();
+        let event_id = format!("event-{uuid}");
+        let res = app.emit_event(&event_id, b"payload data").await;
+        assert!(res.is_ok());
     }
 }
