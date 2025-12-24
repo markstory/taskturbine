@@ -1,9 +1,10 @@
-use axum::{extract::State, response::Html, routing::{get, post}, Form, Router};
-use db::create_db;
+use axum::{extract::{Path, State}, response::Html, routing::{get, post}, Form, Router};
+use db::{create_db, SALT};
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
-use sqlx::{Pool, Postgres};
-use tasks::make_task_app;
+use sqlx::{Pool, Postgres, Row};
+use tasks::{make_task_app, HmacSha256};
+use hmac::{Hmac, Mac};
 use taskturbine_core::app::TaskturbineApp;
 use std::sync::Arc;
 use minijinja::{Environment, context, path_loader};
@@ -40,6 +41,7 @@ async fn main() {
         .route("/", get(home))
         .route("/register", get(register))
         .route("/register", post(process_register))
+        .route("/verify/{user_id}/{token}", get(verify_user))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -59,6 +61,7 @@ async fn home<'a>(State(state): State<Arc<AppState<'a>>>) -> Html<String> {
 struct Signup {
     name: String,
     email: String,
+    org_name: String,
 }
 
 async fn register<'a>(State(state): State<Arc<AppState<'a>>>) -> Html<String> {
@@ -79,5 +82,55 @@ async fn process_register<'a>(
     let tmpl = state.templates.get_template("process-register.html").unwrap();
     let html = tmpl.render(context!(name => "test")).unwrap();
 
+    Html(html)
+}
+
+async fn verify_user<'a>(
+    Path((user_id, token)): Path<(String, String)>,
+    State(state): State<Arc<AppState<'a>>>,
+) -> Html<String> {
+    // TODO this should have rate limiting and attempt tracking to avoid brute force attacks.
+    let user = sqlx::query("SELECT * FROM users WHERE id = $1")
+        .bind(&user_id)
+        .fetch_optional(&state.db)
+        .await;
+
+    let Ok(Some(row)) = user else {
+        let tmpl = state.templates.get_template("verify-failed.html").unwrap();
+        let html = tmpl.render(context!()).unwrap();
+        return Html(html)
+    };
+
+    let mut mac = HmacSha256::new_from_slice(SALT.as_bytes()).unwrap();
+    mac.update(row.get::<String, _>("email").as_bytes());
+
+    let Ok(token_bytes) = hex::decode(token) else {
+        let tmpl = state.templates.get_template("verify-failed.html").unwrap();
+        let html = tmpl.render(context!()).unwrap();
+        return Html(html)
+    };
+    let Ok(_) = mac.verify_slice(token_bytes.as_slice()) else {
+        let tmpl = state.templates.get_template("verify-failed.html").unwrap();
+        let html = tmpl.render(context!()).unwrap();
+        return Html(html)
+    };
+
+    // Save an event to continue the task workflow.
+    let event_name = format!("email-verify-{}", row.get::<String, _>("email"));
+    let _ = state.tasks.emit_event(&event_name, b"").await;
+
+    let res = sqlx::query("UPDATE users SET verified = true WHERE id = $1")
+        .bind(&user_id)
+        .execute(&state.db)
+        .await;
+
+    let Ok(_) = res else {
+        let tmpl = state.templates.get_template("verify-failed.html").unwrap();
+        let html = tmpl.render(context!()).unwrap();
+        return Html(html)
+    };
+
+    let tmpl = state.templates.get_template("verify-success.html").unwrap();
+    let html = tmpl.render(context!()).unwrap();
     Html(html)
 }

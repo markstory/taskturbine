@@ -8,7 +8,7 @@ use taskturbine_core::{app::TaskturbineApp, config::Config, context::{FlowContro
 
 use crate::db::{create_db, SALT};
 
-type HmacSha256 = Hmac<Sha256>;
+pub type HmacSha256 = Hmac<Sha256>;
 
 enum TaskError {
     Message(String),
@@ -104,6 +104,19 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
 
     // Wait for the link to be clicked.
     let _ = ctx.await_event(str::from_utf8(event_name.as_slice()).unwrap(), Some(Duration::from_secs(60 * 10))).await?;
+
+    // Save verification state
+    let _ = ctx.async_step("verification-complete", async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+        let db = create_db().await;
+        let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
+        let _ = sqlx::query("UPDATE users SET verified = true WHERE id = $1")
+            .bind(user_data.user_id)
+            .execute(&db)
+            .await
+            .map_err(|e| TaskError::Message(format!("Could not update user: {e}")))?;
+
+        Ok(vec![])
+    }).await?;
 
     // Create the organization and link the user as an owner.
     let _ = ctx.async_step("provision-organization", async |ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
