@@ -46,7 +46,7 @@ pub struct RegisterUserParams {
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct UserRegister {
-    pub user_id: i64,
+    pub id: i64,
     pub email: String,
 }
 
@@ -56,6 +56,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
     /// Steps can be defined as standard functions
     /// Store the user in the database.
     async fn create_user(ctx: TaskContext) -> Result<Vec<u8>, TaskError> {
+        log::info!("create the user in the database");
         let db = create_db().await;
         let payload: RegisterUserParams = serde_json::from_slice(ctx.param_bytes())?;
 
@@ -72,7 +73,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
 
         let user = UserRegister {
             email: row.get("email"),
-            user_id: row.get("user_id"),
+            id: row.get("id"),
         };
         let blob = serde_json::to_string(&user)?;
 
@@ -82,6 +83,8 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
 
     // Steps can also be async blocks if you need to capture values from previous steps
     let event_name = ctx.async_step("send-verification-code", async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+        log::info!("Generate and log a verification code");
+
         // This simulates an email verification flow.
         let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
         let mut mac = HmacSha256::new_from_slice(SALT.as_bytes()).unwrap();
@@ -93,7 +96,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         println!("User registration verification code");
         println!("");
         println!("Click the link to continue");
-        println!("http://localhost:3000/verify/{}/{}", user_data.user_id, hex_code);
+        println!("http://localhost:3000/verify/{}/{}", user_data.id, hex_code);
         println!("");
         println!("------------------------------------");
 
@@ -103,14 +106,16 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
     }).await?;
 
     // Wait for the link to be clicked.
+    log::info!("Wait for the user to verify their email");
     let _ = ctx.await_event(str::from_utf8(event_name.as_slice()).unwrap(), Some(Duration::from_secs(60 * 10))).await?;
 
     // Save verification state
     let _ = ctx.async_step("verification-complete", async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+        log::info!("Verification complete, update the user.");
         let db = create_db().await;
         let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
         let _ = sqlx::query("UPDATE users SET verified = true WHERE id = $1")
-            .bind(user_data.user_id)
+            .bind(user_data.id)
             .execute(&db)
             .await
             .map_err(|e| TaskError::Message(format!("Could not update user: {e}")))?;
@@ -120,6 +125,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
 
     // Create the organization and link the user as an owner.
     let _ = ctx.async_step("provision-organization", async |ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+        log::info!("Provision the organization.");
         let params: RegisterUserParams = serde_json::from_slice(ctx.param_bytes())?;
         let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
 
@@ -140,11 +146,11 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         .await
         .map_err(|e| TaskError::Message(format!("Could not create organization: {e}")))?;
 
-        let org_id: i64 = res.get("organization_id");
+        let org_id: i64 = res.get("id");
         let _ = sqlx::query(
             "INSERT INTO organization_members (user_id, organization_id, role) VALUES ($1, $2, 'owner')"
         )
-        .bind(&user_data.user_id)
+        .bind(&user_data.id)
         .bind(&org_id)
         .execute(&mut *atomic)
         .await
@@ -153,7 +159,8 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         atomic.commit().await.unwrap();
 
         Ok(vec![])
-    });
+    }).await?;
+    log::info!("All steps complete.");
 
     Ok(())
 }
