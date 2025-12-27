@@ -43,6 +43,12 @@ impl Checkpoints {
             0
         }
     }
+
+    /// Get the current counter value for a checkpoint name.
+    /// Will return None on checkpoints that aren't known yet.
+    pub fn get_counter<'a>(&'a self, name: &str) -> Option<&'a u32> {
+        self.counters.get(name)
+    }
 }
 
 /// The result of steps. The basic API is just bytes.
@@ -77,7 +83,13 @@ impl TaskContext {
     /// steps with the same name.
     fn checkpoint_name(&mut self, name: &str) -> String {
         let count = self.checkpoints.incr(name);
-        let suffix = if count == 1 {
+
+        self.format_checkpoint_name(name, &count)
+    }
+
+    /// Generate a checkpoint name that includes the name and counter value.
+    fn format_checkpoint_name(&self, name: &str, count: &u32) -> String {
+        let suffix = if *count == 1 {
             "".to_string()
         } else {
             format!("#{count}")
@@ -100,6 +112,27 @@ impl TaskContext {
     /// [`Vec<u8>`].
     pub fn param_bytes<'a>(&'a self) -> &'a Vec<u8> {
         &self.task.params
+    }
+
+    /// Get the result of a previously completed step name.
+    /// If the step has not been completed, the return is None.
+    /// If there are multiple steps with the same name, the *latest* iteration will be used.
+    pub async fn step_result(&self, step_name: &str) -> Result<Option<StepData>, TaskTurbineError> {
+        let Some(counter) = self.checkpoints.get_counter(step_name) else {
+            return Ok(None)
+        };
+        let checkpoint_name = self.format_checkpoint_name(step_name, counter);
+        let result_data = self
+            .app
+            .storage
+            .get_checkpoint(self.task.task_id, &checkpoint_name)
+            .await;
+
+        let Ok(Some(checkpoint)) = result_data else {
+            return Ok(None);
+        };
+
+        Ok(Some(checkpoint.state))
     }
 
     /// Define a new async step with a name.
@@ -129,6 +162,8 @@ impl TaskContext {
         }
         let checkpoint_opt = res.unwrap();
         if let Some(checkpoint) = checkpoint_opt {
+            // TODO store checkpoint value with name and checkpoint name together?
+            // For duplicate step names, getting values will be ambiguous.
             return Ok(checkpoint.state);
         }
         // Create a disposable context to avoid &mut reference and lifetime hell.
@@ -313,7 +348,7 @@ mod tests {
         let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
             .expect("Missing required TASKTURBINE_DATABASE_URL env var");
         let config = Config {
-            usecase: "test".into(),
+            usecase: format!("context-test-{}", Uuid::now_v7()),
             database_url: db_url,
             ..Config::default()
         };
@@ -537,7 +572,30 @@ mod tests {
         let context = TaskContext::build(claim.clone(), arc_app.clone());
 
         let bytes = context.param_bytes();
-        dbg!(str::from_utf8(&bytes).unwrap());
         assert_eq!(bytes.as_slice(), b"{\"name\":\"test\"}");
+    }
+
+    #[tokio::test]
+    async fn step_result() {
+        let app = create_app().await;
+        let arc_app = Arc::new(app);
+        let claim = claim_task(&arc_app.storage, "hello-world").await;
+        let mut context = TaskContext::build(claim.clone(), arc_app.clone());
+
+        let res = context
+            .step::<_, TaskTurbineError>("first-step", |_ctx| Ok(b"checkpoint value".to_vec()))
+            .await
+            .unwrap();
+        assert_eq!(res, b"checkpoint value".to_vec());
+
+        let stored = context.step_result("first-step").await;
+        assert!(stored.is_ok());
+        let value = stored.unwrap();
+        assert!(value.is_some());
+
+        let stored = context.step_result("undefined").await;
+        assert!(stored.is_ok());
+        let value = stored.unwrap();
+        assert!(value.is_none());
     }
 }
