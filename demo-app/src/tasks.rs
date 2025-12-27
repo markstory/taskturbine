@@ -105,11 +105,9 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         Ok(event_name.into())
     }).await?;
 
-    // Wait for the link to be clicked.
     log::info!("Wait for the user to verify their email");
     let _ = ctx.await_event(str::from_utf8(event_name.as_slice()).unwrap(), Some(Duration::from_secs(60 * 10))).await?;
 
-    // Save verification state
     let _ = ctx.async_step("verification-complete", async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
         log::info!("Verification complete, update the user.");
         let db = create_db().await;
@@ -123,7 +121,6 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         Ok(vec![])
     }).await?;
 
-    // Create the organization and link the user as an owner.
     let _ = ctx.async_step("provision-organization", async |ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
         log::info!("Provision the organization.");
         let params: RegisterUserParams = serde_json::from_slice(ctx.param_bytes())?;
@@ -132,7 +129,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         let db = create_db().await;
         let mut atomic = db.begin().await.unwrap();
 
-        // TODO proper slug generation
+        // TODO: proper slug generation
         let slug = params.org_name.to_lowercase().replace(" ", "-");
 
         // TODO: handle slug conflicts and generate unique slugs.
@@ -146,6 +143,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         .await
         .map_err(|e| TaskError::Message(format!("Could not create organization: {e}")))?;
 
+        log::info!("Link the user to the organization as owner.");
         let org_id: i64 = res.get("id");
         let _ = sqlx::query(
             "INSERT INTO organization_members (user_id, organization_id, role) VALUES ($1, $2, 'owner')"
