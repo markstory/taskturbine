@@ -78,6 +78,7 @@ async fn process_register<'a>(
     // create a json payload for the task and queue a task
     let params = serde_json::to_string(&sign_up).unwrap();
     state.tasks.spawn_task("register-user", params.as_bytes(), None).await.unwrap();
+    log::info!("Spawned registration task for {}", sign_up.email);
 
     let tmpl = state.templates.get_template("process-register.html").unwrap();
     let html = tmpl.render(context!(name => "test")).unwrap();
@@ -89,13 +90,22 @@ async fn verify_user<'a>(
     Path((user_id, token)): Path<(String, String)>,
     State(state): State<Arc<AppState<'a>>>,
 ) -> Html<String> {
+    let Ok(user_id) = user_id.parse::<i64>() else {
+        log::info!("Failed to parse user id");
+        let tmpl = state.templates.get_template("verify-failed.html").unwrap();
+        let html = tmpl.render(context!()).unwrap();
+        return Html(html)
+    };
+
+    log::info!("Verifying user {} with token {}", user_id, token);
     // TODO this should have rate limiting and attempt tracking to avoid brute force attacks.
-    let user = sqlx::query("SELECT * FROM users WHERE id = $1")
+    let res = sqlx::query("SELECT * FROM users WHERE id = $1")
         .bind(&user_id)
         .fetch_optional(&state.db)
         .await;
 
-    let Ok(Some(row)) = user else {
+    let Ok(Some(row)) = res else {
+        log::info!("Failed to load user");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
         return Html(html)
@@ -105,11 +115,13 @@ async fn verify_user<'a>(
     mac.update(row.get::<String, _>("email").as_bytes());
 
     let Ok(token_bytes) = hex::decode(token) else {
+        log::info!("Failed to decode token");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
         return Html(html)
     };
     let Ok(_) = mac.verify_slice(token_bytes.as_slice()) else {
+        log::info!("Failed to verify token hmac");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
         return Html(html)
@@ -120,6 +132,7 @@ async fn verify_user<'a>(
     let res = state.tasks.emit_event(&event_name, b"").await;
 
     let Ok(_) = res else {
+        log::info!("Failed to emit even");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
         return Html(html)
