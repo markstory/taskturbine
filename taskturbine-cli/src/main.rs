@@ -19,9 +19,14 @@ enum CliError {
 #[command(version = "1.0")]
 #[command(about = "Command line tools and interface for taskturbine")]
 struct Cli {
-    /// The database url to connect to. eg. postgres://user:pass@localhost/dbname
+    /// The database url to connect to. eg. postgres://user:pass@localhost/dbname.
+    /// Will use `TASKTURBINE_DATABASE_URL` as a fallback.
     #[arg(short, long)]
     database_url: Option<String>,
+
+    /// The usecase that is being operated on
+    #[arg(short, long, default_value = "default")]
+    usecase: String,
 
     /// Enable verbose/debug output
     #[arg(short, long)]
@@ -66,10 +71,13 @@ async fn main() {
     let config = Config {
         database_url: db_url,
         database_log_queries: false,
-        usecase: "demo".into(),
+        usecase: args.usecase,
         worker_concurrency: 3,
         ..Config::default()
     };
+    println!("Taskturbine CLI");
+    println!("usecase: {}", config.usecase);
+
     let storage = Storage::new(config);
     let result = match args.command {
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
