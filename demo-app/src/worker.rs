@@ -13,6 +13,7 @@ async fn main() {
 
     log::info!("Starting worker");
     let app = make_task_app();
+    let _ = app.update_schema().await;
 
     let worker = app.create_worker("worker-1", vec![]);
     run_worker(worker).await;

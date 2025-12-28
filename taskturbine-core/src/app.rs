@@ -7,6 +7,7 @@ use std::{
 
 use async_channel::{Receiver, Sender, TrySendError};
 use chrono::{DateTime, Utc};
+use sqlx::migrate::MigrateError;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::{
@@ -54,6 +55,11 @@ impl TaskturbineApp {
         self.storage = storage;
 
         self
+    }
+
+    /// TODO remove this
+    pub async fn update_schema(&self) -> Result<(), MigrateError> {
+        self.storage.update_schema().await
     }
 
     /// Define a channel that tasks can be consumed on.
