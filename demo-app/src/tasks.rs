@@ -32,6 +32,8 @@ pub fn make_task_app() -> TaskturbineApp {
 
     let app = TaskturbineApp::new(task_config)
         .add_channel("mail")
+        .register_task("err-fail", err_failure)
+        .register_task("panic-fail", panic_failure)
         .register_task("register-user", register_user);
 
     app
@@ -161,4 +163,16 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
     log::info!("All steps complete.");
 
     Ok(())
+}
+
+/// Task that always fail are handled.
+pub async fn err_failure(mut _ctx: TaskContext) -> Result<(), FlowControl> {
+    log::info!("Starting failure task");
+    Err(FlowControl::InvalidValue("something bad".into()))
+}
+
+/// Tasks that panic will be handled without killing the worker.
+pub async fn panic_failure(mut _ctx: TaskContext) -> Result<(), FlowControl> {
+    log::info!("Starting panic_failure task");
+    panic!("A task has hit panic!");
 }
