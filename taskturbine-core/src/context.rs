@@ -9,9 +9,14 @@ use crate::{
 /// needs to be suspended because it is waiting on an event.
 #[derive(Debug)]
 pub enum FlowControl {
+    /// The task has encountered an invalid value and cannot continue.
     InvalidValue(String),
+    /// The task has encountered a retriable error.
     Failure(String),
+    /// The task should be suspended for the given duration.
     Suspend(Duration),
+    /// The task is waiting for an event, and is currently suspended.
+    Suspended,
 }
 
 /// Provides in memory storage of steps -> checkpoint names
@@ -248,7 +253,7 @@ impl TaskContext {
 
         if let Ok(wait) = &res {
             if wait.should_suspend {
-                return Err(FlowControl::Suspend(wait_for));
+                return Err(FlowControl::Suspended);
             }
             let event = Event {
                 event_name: event_name.to_string(),
@@ -338,6 +343,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use sqlx::Row;
     use crate::{app::TaskturbineApp, config::Config, storage::{Storage, TaskTurbineError}};
 
     enum TestError {
@@ -457,7 +463,7 @@ mod tests {
     async fn await_event_saves_wait() {
         let app = Arc::new(create_app().await);
         let claim = claim_task(&app.storage, "hello-world").await;
-        let context = TaskContext::build(claim.clone(), app);
+        let context = TaskContext::build(claim.clone(), app.clone());
 
         let wait_key = format!("await-{}", Uuid::now_v7());
         let res = context
@@ -467,7 +473,10 @@ mod tests {
         let Err(err) = res else {
             panic!("await_event should return error here");
         };
-        assert!(matches!(err, FlowControl::Suspend(v) if v == Duration::from_secs(300)));
+        assert!(matches!(err, FlowControl::Suspended));
+        let run = app.storage.get_run(claim.run_id).await.unwrap();
+        assert_eq!(run.get::<String, _>("state"), "sleeping");
+        assert!(run.get::<Option<String>, _>("claimed_by").is_none());
     }
 
     #[tokio::test]

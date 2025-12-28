@@ -231,7 +231,7 @@ impl Storage {
 
     /// Testing helper: reading task runs
     #[cfg(test)]
-    async fn get_run(&self, run_id: RunId) -> Result<PgRow, TaskTurbineError> {
+    pub async fn get_run(&self, run_id: RunId) -> Result<PgRow, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.runs WHERE run_id = $1")
             .bind(run_id)
             .fetch_one(&self.pool)
