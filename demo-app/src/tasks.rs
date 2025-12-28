@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{env, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use hmac::{Hmac, Mac};
@@ -25,8 +25,11 @@ impl From<serde_json::Error> for TaskError {
 /// Factory method for the task application with all tasks bound in.
 /// In more complex applications, tasks would be defined in module files, and imported here.
 pub fn make_task_app() -> TaskturbineApp {
+    // TODO this should be the same as the db url but isn't right now
+    // because of sqlx_migration tables.
+    let database_url = env::var("TASKTURBINE_DATABASE_URL").expect("Missing TASKTURBINE_DATABASE_URL in env");
     let task_config = Config {
-        database_url: "postgresql://apps:password@localhost/test_taskturbine".into(),
+        database_url,
         ..Config::default()
     };
 
