@@ -5,7 +5,6 @@ use taskturbine_core::storage::Storage;
 
 mod cleanup;
 mod clear;
-mod demo;
 mod emit_event;
 mod spawn;
 
@@ -46,8 +45,6 @@ enum Commands {
     EmitEvent(emit_event::EmitEventArgs),
     /// Run a cleanup worker
     Cleanup,
-    /// Run a demo worker
-    Demo,
 }
 
 #[tokio::main]
@@ -83,7 +80,6 @@ async fn main() {
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::Cleanup => cleanup::cleanup(storage).await,
-        Commands::Demo => demo::demo(storage).await,
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
     };
     if result.is_ok() {
