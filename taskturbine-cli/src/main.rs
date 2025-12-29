@@ -67,9 +67,7 @@ async fn main() {
     // could be provided by the framework then.
     let config = Config {
         database_url: db_url,
-        database_log_queries: false,
         usecase: args.usecase,
-        worker_concurrency: 3,
         ..Config::default()
     };
     println!("Taskturbine CLI");
