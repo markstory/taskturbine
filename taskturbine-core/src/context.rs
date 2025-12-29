@@ -56,10 +56,7 @@ impl Checkpoints {
     }
 }
 
-/// The result of steps. The basic API is just bytes.
-///
-/// TODO figure out how to integrate serde for this.
-/// Perhaps that is best left to userland code?
+/// The result of steps. The primitive API is just bytes.
 pub type StepData = Vec<u8>;
 
 /// Execution context for a task.
@@ -114,7 +111,8 @@ impl TaskContext {
     }
 
     /// Get a reference to the parameters of the task as
-    /// [`Vec<u8>`].
+    /// [`Vec<u8>`]. Converting bytes into a structure is an application
+    /// concern.
     pub fn param_bytes<'a>(&'a self) -> &'a Vec<u8> {
         &self.task.params
     }
@@ -160,41 +158,45 @@ impl TaskContext {
             .storage
             .get_checkpoint(self.task.task_id, &checkpoint_name)
             .await;
-        if let Err(err) = res {
+        let Ok(checkpoint_opt) = res else { 
+            let err = res.err().unwrap();
             return Err(FlowControl::Failure(format!(
                 "Failed to read checkpoint {err:?}"
             )));
-        }
-        let checkpoint_opt = res.unwrap();
+        };
         if let Some(checkpoint) = checkpoint_opt {
-            // TODO store checkpoint value with name and checkpoint name together?
-            // For duplicate step names, getting values will be ambiguous.
             return Ok(checkpoint.state);
         }
+
         // Create a disposable context to avoid &mut reference and lifetime hell.
         let context = Self::build(self.task.clone(), self.app.clone());
         let res = step_fn(context).await;
-        if let Ok(state) = res {
-            let res = self
-                .app
-                .storage
-                .set_checkpoint(
-                    self.task.task_id,
-                    self.task.run_id,
-                    &checkpoint_name,
-                    state.as_slice(),
-                    None,
-                )
-                .await;
-            if let Err(err) = res {
-                return Err(FlowControl::Failure(format!(
-                    "Could not store checkpoint {err:?}"
-                )));
-            }
 
-            return Ok(state as StepData);
+        match res {
+            Ok(state) => {
+                let res = self
+                    .app
+                    .storage
+                    .set_checkpoint(
+                        self.task.task_id,
+                        self.task.run_id,
+                        &checkpoint_name,
+                        state.as_slice(),
+                        None,
+                    )
+                    .await;
+                if let Err(err) = res {
+                    return Err(FlowControl::Failure(format!(
+                        "Could not store checkpoint {err:?}"
+                    )));
+                }
+
+                Ok(state as StepData)
+            },
+            Err(_) => {
+                Err(FlowControl::Failure("Task execution failed".to_string()))
+            }
         }
-        Err(FlowControl::Failure("Task execution failed".to_string()))
     }
 
     /// Define a new synchronous step with a name.
@@ -251,22 +253,23 @@ impl TaskContext {
             )
             .await;
 
-        if let Ok(wait) = &res {
-            if wait.should_suspend {
-                return Err(FlowControl::Suspended);
+        match res {
+            Ok(wait) => {
+                if wait.should_suspend {
+                    return Err(FlowControl::Suspended);
+                }
+                let event = Event {
+                    event_name: event_name.to_string(),
+                    payload: wait.payload.to_vec(),
+                };
+                Ok(event)
+            },
+            Err(err) => {
+                Err(FlowControl::Failure(format!(
+                    "Could not store an event wait: {err:?}"
+                )))
             }
-            let event = Event {
-                event_name: event_name.to_string(),
-                payload: wait.payload.to_vec(),
-            };
-            return Ok(event);
         }
-
-        // TODO use thiserror to make error casting more succinct
-        let err = res.err().unwrap();
-        Err(FlowControl::Failure(format!(
-            "Could not store an event wait: {err:?}"
-        )))
     }
 
     /// Suspend the current task until the provided duration has elapsed.
@@ -307,13 +310,17 @@ impl TaskContext {
                 None,
             )
             .await;
-        if let Err(err) = res {
-            return Err(FlowControl::Failure(format!(
-                "Could not store checkpoint. {err:?}"
-            )));
-        }
 
-        Err(FlowControl::Suspend(duration))
+        match res {
+            Ok(_) => {
+                Err(FlowControl::Suspend(duration))
+            },
+            Err(err) => {
+                Err(FlowControl::Failure(format!(
+                    "Could not store checkpoint. {err:?}"
+                )))
+            }
+        }
     }
 
     /// Spawn a task on the default channel and initialize the first run.
