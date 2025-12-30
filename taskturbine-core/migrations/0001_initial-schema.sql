@@ -32,8 +32,6 @@ CREATE TABLE taskturbine.runs (
     claimed_by text,
     claim_expires_at timestamptz,
     available_at timestamptz not null,
-    wake_event text,
-    event_payload bytea,
     -- When the run was moved to running the first time.
     started_at timestamptz,
     -- Timestamp of when the run was completed/failed/cancelled.

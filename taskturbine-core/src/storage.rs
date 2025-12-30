@@ -749,8 +749,9 @@ impl Storage {
             .await?;
         let res = sqlx::query(
             "UPDATE taskturbine.runs
-            SET state = $1, completed_at = NOW(), 
-                wake_event = NULL, failure_reason = $2
+            SET state = $1,
+                completed_at = NOW(), 
+                failure_reason = $2
             WHERE run_id = $3",
         )
         .bind(TaskState::Failed)
