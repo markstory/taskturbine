@@ -27,7 +27,7 @@ impl From<serde_json::Error> for TaskError {
 pub fn make_task_app() -> TaskturbineApp {
     // TODO this should be the same as the db url but isn't right now
     // because of sqlx_migration tables.
-    let database_url = env::var("TASKTURBINE_DATABASE_URL").expect("Missing TASKTURBINE_DATABASE_URL in env");
+    let database_url = env::var("DEMO_DATABASE_URL").expect("Missing DEMO_DATABASE_URL in env");
     let task_config = Config {
         database_url,
         ..Config::default()

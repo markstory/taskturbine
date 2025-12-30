@@ -297,7 +297,7 @@ impl Storage {
 
         // Use the migrator API without the macro so the table can be stored
         // in the correct schema.
-        let mut migrator = Migrator::new(Path::new("./migrations")).await?;
+        let mut migrator = Migrator::new(Path::new("../taskturbine-core/migrations")).await?;
         migrator.dangerous_set_table_name("taskturbine._sqlx_migrations");
         migrator.run(&self.pool).await?;
 

@@ -6,6 +6,7 @@ use taskturbine_core::storage::Storage;
 mod cleanup;
 mod clear;
 mod emit_event;
+mod migrate;
 mod spawn;
 
 #[derive(Debug)]
@@ -45,6 +46,8 @@ enum Commands {
     EmitEvent(emit_event::EmitEventArgs),
     /// Run a cleanup worker
     Cleanup,
+    /// Run migrations for the taskturbine schema.
+    Migrate,
 }
 
 #[tokio::main]
@@ -75,6 +78,7 @@ async fn main() {
 
     let storage = Storage::new(config);
     let result = match args.command {
+        Commands::Migrate => migrate::run_migrations(storage).await,
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::Cleanup => cleanup::cleanup(storage).await,

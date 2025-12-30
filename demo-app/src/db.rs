@@ -20,7 +20,11 @@ pub async fn create_db() -> Pool<Postgres> {
         }
         pool.set_connect_options(opts);
     }
-    migrate!("./migrations").run(&pool).await.expect("Migrations failed to run! Abort");
+
+    migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Migrations failed to run! Abort");
 
     pool
 }
