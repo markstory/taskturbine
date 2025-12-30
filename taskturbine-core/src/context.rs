@@ -329,7 +329,7 @@ impl TaskContext {
         self.app.spawn_task(task_name, params, options).await
     }
 
-    /// Get a [`taskturbine_core::app::Channel`] wrapper to spawn tasks
+    /// Get a [`Channel`] wrapper to spawn tasks
     /// on non-default channels.
     ///
     /// An error is returned if the task name is not registered.

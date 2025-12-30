@@ -229,6 +229,9 @@ impl From<TaskTurbineError> for WorkerError {
 
 /// Worker instances claim tasks, execute them and update
 /// storage with task results.
+///
+/// A Worker can be run with [`run_worker`]. You can also
+/// use [`run_cleanup_worker`] to run a cleanup worker.
 pub struct Worker {
     /// The application instance this worker is for.
     app: Arc<TaskturbineApp>,
@@ -368,6 +371,11 @@ impl Worker {
 
 /// Run a worker in a while loop.
 /// Consumes the worker and runs indefinitely until the process is killed.
+///
+/// ```rust
+/// let app = TaskturbineApp::new(config);
+/// run_worker(app.worker()).await
+/// ```
 pub async fn run_worker(worker: Worker) {
     let arc_worker = Arc::new(worker);
     let config = arc_worker.config();
@@ -379,10 +387,10 @@ pub async fn run_worker(worker: Worker) {
     for _ in 0..config.worker_concurrency {
         task_set.spawn(process_task(arc_worker.clone(), recv.clone()));
     }
+    tokio::spawn(claim_tasks(arc_worker.clone(), send.clone()));
 
-    tokio::spawn(run_cleanup(arc_worker.clone()));
     if config.worker_cleanup_inline {
-        tokio::spawn(claim_tasks(arc_worker.clone(), send.clone()));
+        tokio::spawn(run_cleanup(arc_worker.clone()));
     }
 
     elegant_departure::tokio::depart()
@@ -398,6 +406,11 @@ pub async fn run_worker(worker: Worker) {
 /// periodically running cleanup operations.
 ///
 /// Consumes the worker and runs indefinitely until the process is killed.
+///
+/// ```rust
+/// let app = TaskturbineApp::new(config);
+/// run_cleanup_worker(app.worker()).await
+/// ```
 pub async fn run_cleanup_worker(worker: Worker) {
     let arc_worker = Arc::new(worker);
 
