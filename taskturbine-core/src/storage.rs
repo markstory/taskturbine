@@ -4,8 +4,8 @@ use std::path::Path;
 use crate::config::Config;
 use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
-use sqlx::migrate::Migrator;
 use sqlx::AssertSqlSafe;
+use sqlx::migrate::Migrator;
 use sqlx::{
     ConnectOptions, PgConnection, PgPool, QueryBuilder, Row,
     migrate::MigrateError,

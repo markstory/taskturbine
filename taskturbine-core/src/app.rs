@@ -336,7 +336,11 @@ impl Worker {
                 log::debug!("Task run failure: {msg}");
 
                 let retry_at = task.next_retry_at();
-                let res = self.app.storage.fail_run(task.run_id, b"", Some(retry_at)).await;
+                let res = self
+                    .app
+                    .storage
+                    .fail_run(task.run_id, b"", Some(retry_at))
+                    .await;
                 if let Err(schedule_err) = res {
                     log::error!("Failed to fail run {schedule_err:?}");
                 }

@@ -1,7 +1,9 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
-    app::{Channel, TaskturbineApp}, models::{ClaimedTask, Event, RunId, SpawnResult, TaskId}, storage::{TaskOptions, TaskTurbineError}
+    app::{Channel, TaskturbineApp},
+    models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
+    storage::{TaskOptions, TaskTurbineError},
 };
 
 /// Used as signaling 'errors' to the worker runtime
@@ -122,7 +124,7 @@ impl TaskContext {
     /// If there are multiple steps with the same name, the *latest* iteration will be used.
     pub async fn step_result(&self, step_name: &str) -> Result<Option<StepData>, TaskTurbineError> {
         let Some(counter) = self.checkpoints.get_counter(step_name) else {
-            return Ok(None)
+            return Ok(None);
         };
         let checkpoint_name = self.format_checkpoint_name(step_name, counter);
         let result_data = self
@@ -158,7 +160,7 @@ impl TaskContext {
             .storage
             .get_checkpoint(self.task.task_id, &checkpoint_name)
             .await;
-        let Ok(checkpoint_opt) = res else { 
+        let Ok(checkpoint_opt) = res else {
             let err = res.err().unwrap();
             return Err(FlowControl::Failure(format!(
                 "Failed to read checkpoint {err:?}"
@@ -192,10 +194,8 @@ impl TaskContext {
                 }
 
                 Ok(state as StepData)
-            },
-            Err(_) => {
-                Err(FlowControl::Failure("Task execution failed".to_string()))
             }
+            Err(_) => Err(FlowControl::Failure("Task execution failed".to_string())),
         }
     }
 
@@ -263,12 +263,10 @@ impl TaskContext {
                     payload: wait.payload.to_vec(),
                 };
                 Ok(event)
-            },
-            Err(err) => {
-                Err(FlowControl::Failure(format!(
-                    "Could not store an event wait: {err:?}"
-                )))
             }
+            Err(err) => Err(FlowControl::Failure(format!(
+                "Could not store an event wait: {err:?}"
+            ))),
         }
     }
 
@@ -312,14 +310,10 @@ impl TaskContext {
             .await;
 
         match res {
-            Ok(_) => {
-                Err(FlowControl::Suspend(duration))
-            },
-            Err(err) => {
-                Err(FlowControl::Failure(format!(
-                    "Could not store checkpoint. {err:?}"
-                )))
-            }
+            Ok(_) => Err(FlowControl::Suspend(duration)),
+            Err(err) => Err(FlowControl::Failure(format!(
+                "Could not store checkpoint. {err:?}"
+            ))),
         }
     }
 
@@ -350,8 +344,12 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use crate::{
+        app::TaskturbineApp,
+        config::Config,
+        storage::{Storage, TaskTurbineError},
+    };
     use sqlx::Row;
-    use crate::{app::TaskturbineApp, config::Config, storage::{Storage, TaskTurbineError}};
 
     enum TestError {
         GenericError,
@@ -372,7 +370,10 @@ mod tests {
     }
 
     async fn claim_task(storage: &Storage, task_name: &str) -> ClaimedTask {
-        let _ = storage.spawn_task("ns", task_name, b"", None).await.unwrap();
+        let _ = storage
+            .spawn_task("ns", task_name, b"", None)
+            .await
+            .unwrap();
 
         let claim_until = Utc::now() + Duration::from_secs(60);
         let claimed = storage
@@ -393,7 +394,8 @@ mod tests {
     async fn step_reads_existing_checkpoint() {
         let app = create_app().await;
         let claim = claim_task(&app.storage, "hello-world").await;
-        let res = app.storage
+        let res = app
+            .storage
             .set_checkpoint(claim.task_id, claim.run_id, "first-step", b"hi", None)
             .await;
         assert!(res.is_ok(), "checkpoint should save");
@@ -421,7 +423,10 @@ mod tests {
             .unwrap();
         assert_eq!(res, b"checkpoint value".to_vec());
 
-        let stored = arc_app.storage.get_checkpoint(claim.task_id, "first-step").await;
+        let stored = arc_app
+            .storage
+            .get_checkpoint(claim.task_id, "first-step")
+            .await;
         let Ok(Some(value)) = stored else {
             panic!("Should read stored checkpoint");
         };
@@ -447,7 +452,10 @@ mod tests {
             "Should get a flow control error"
         );
 
-        let stored = arc_app.storage.get_checkpoint(claim.task_id, "first-step").await;
+        let stored = arc_app
+            .storage
+            .get_checkpoint(claim.task_id, "first-step")
+            .await;
         assert!(
             stored.unwrap().is_none(),
             "Should not have stored checkpoint"
@@ -533,30 +541,33 @@ mod tests {
         let claim = claim_task(&app.storage, "hello-world").await;
         let context = TaskContext::build(claim.clone(), app.clone());
 
-        let res = context.spawn_task("favorite-food", b"payload data", None).await;
+        let res = context
+            .spawn_task("favorite-food", b"payload data", None)
+            .await;
         assert!(res.is_err(), "Should not be able to spawn undefined task");
-        assert!(matches!(res.err().unwrap(), TaskTurbineError::ValidationError(_)))
+        assert!(matches!(
+            res.err().unwrap(),
+            TaskTurbineError::ValidationError(_)
+        ))
     }
 
     #[tokio::test]
     async fn spawn_task_success() {
-        let app = create_app()
-            .await
-            .register_task("hello-world", hello_world);
+        let app = create_app().await.register_task("hello-world", hello_world);
         let arc_app = Arc::new(app);
 
         let claim = claim_task(&arc_app.storage, "hello-world").await;
         let context = TaskContext::build(claim.clone(), arc_app.clone());
 
-        let res = context.spawn_task("hello-world", b"payload data", None).await;
+        let res = context
+            .spawn_task("hello-world", b"payload data", None)
+            .await;
         assert!(res.is_ok());
     }
 
     #[tokio::test]
     async fn task_id_and_run_id() {
-        let app = create_app()
-            .await
-            .register_task("hello-world", hello_world);
+        let app = create_app().await.register_task("hello-world", hello_world);
         let arc_app = Arc::new(app);
 
         let claim = claim_task(&arc_app.storage, "hello-world").await;
@@ -566,18 +577,19 @@ mod tests {
         assert_eq!(claim.run_id, context.run_id());
     }
 
-
     #[tokio::test]
     async fn param_bytes() {
-        let app = create_app()
-            .await
-            .register_task("hello-world", hello_world);
+        let app = create_app().await.register_task("hello-world", hello_world);
         let arc_app = Arc::new(app);
 
-        let _ = arc_app.spawn_task("hello-world", b"{\"name\":\"test\"}", None).await.unwrap();
+        let _ = arc_app
+            .spawn_task("hello-world", b"{\"name\":\"test\"}", None)
+            .await
+            .unwrap();
 
         let claim_until = Utc::now() + Duration::from_secs(60);
-        let claimed = arc_app.storage
+        let claimed = arc_app
+            .storage
             .claim_task(vec![], "worker-1", claim_until, 1)
             .await
             .unwrap();
