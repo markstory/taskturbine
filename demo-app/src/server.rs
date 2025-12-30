@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
 };
 use db::{SALT, create_db};
-use hmac::{Hmac, Mac};
+use hmac::Mac;
 use minijinja::{Environment, context, path_loader};
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
@@ -112,7 +112,7 @@ async fn verify_user<'a>(
     log::info!("Verifying user {} with token {}", user_id, token);
     // TODO this should have rate limiting and attempt tracking to avoid brute force attacks.
     let res = sqlx::query("SELECT * FROM users WHERE id = $1")
-        .bind(&user_id)
+        .bind(user_id)
         .fetch_optional(&state.db)
         .await;
 

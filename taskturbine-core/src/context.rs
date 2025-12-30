@@ -115,7 +115,7 @@ impl TaskContext {
     /// Get a reference to the parameters of the task as
     /// [`Vec<u8>`]. Converting bytes into a structure is an application
     /// concern.
-    pub fn param_bytes<'a>(&'a self) -> &'a Vec<u8> {
+    pub fn param_bytes(&self) -> &Vec<u8> {
         &self.task.params
     }
 
@@ -594,7 +594,7 @@ mod tests {
             .await
             .unwrap();
 
-        let Some(claim) = claimed.get(0) else {
+        let Some(claim) = claimed.first() else {
             panic!("Did not claim a task");
         };
         let context = TaskContext::build(claim.clone(), arc_app.clone());

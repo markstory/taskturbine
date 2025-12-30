@@ -7,7 +7,6 @@ use std::{
 
 use async_channel::{Receiver, Sender, TrySendError};
 use chrono::{DateTime, Utc};
-use sqlx::migrate::MigrateError;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::{

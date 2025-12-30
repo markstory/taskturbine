@@ -36,13 +36,13 @@ pub fn make_task_app() -> TaskturbineApp {
         ..Config::default()
     };
 
-    let app = TaskturbineApp::new(task_config)
+    
+
+    TaskturbineApp::new(task_config)
         .add_channel("mail")
         .register_task("err-fail", err_failure)
         .register_task("panic-fail", panic_failure)
-        .register_task("register-user", register_user);
-
-    app
+        .register_task("register-user", register_user)
 }
 
 #[derive(sqlx::FromRow, Debug, PartialEq, Deserialize, Serialize)]
@@ -105,10 +105,10 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
                 // Ideally this would be sent in an email, but this is a prototype.
                 println!("------------------------------------");
                 println!("User registration verification code");
-                println!("");
+                println!();
                 println!("Click the link to continue");
                 println!("http://localhost:3000/verify/{}/{}", user_data.id, hex_code);
-                println!("");
+                println!();
                 println!("------------------------------------");
 
                 let event_name = format!("email-verify-{}", user_data.email);
@@ -171,8 +171,8 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         let _ = sqlx::query(
             "INSERT INTO organization_members (user_id, organization_id, role) VALUES ($1, $2, 'owner')"
         )
-        .bind(&user_data.id)
-        .bind(&org_id)
+        .bind(user_data.id)
+        .bind(org_id)
         .execute(&mut *atomic)
         .await
         .map_err(|e| TaskError::Message(format!("Could not create organization member: {e}")))?;
