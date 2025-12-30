@@ -57,11 +57,6 @@ impl TaskturbineApp {
         self
     }
 
-    /// TODO remove this
-    pub async fn update_schema(&self) -> Result<(), MigrateError> {
-        self.storage.update_schema().await
-    }
-
     /// Define a channel that tasks can be consumed on.
     ///
     /// Channels allow you to have dedicated workers for specific
