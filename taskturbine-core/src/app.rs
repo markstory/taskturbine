@@ -77,6 +77,10 @@ impl TaskturbineApp {
 
     /// Get a Channel that can be used to spawn tasks.
     ///
+    /// ```rust
+    /// app.channel("reports").spawn_task(...).await;
+    /// ```
+    ///
     /// Will panic if an undeclared channel is used.
     pub fn channel<'a>(&'a self, name: &'a str) -> Channel<'a> {
         if !self.has_channel(name) {
@@ -113,6 +117,15 @@ impl TaskturbineApp {
     ///
     /// A worker will only claim tasks in `channels` if channels is not-empty.
     /// If `channels` is empty, tasks in all channels will be processed.
+    ///
+    /// ```rust
+    /// // Create a worker that consumes from all channels
+    /// // in the application.
+    /// let worker = app.create_worker("worker-1", vec![]);
+    ///
+    /// // Create a worker that only consumes `reports` tasks.
+    /// let worker = app.create_worker("worker-1", vec!["reports"]);
+    /// ```
     pub fn create_worker(self, worker_id: &str, channels: Vec<String>) -> Worker {
         let arc_self = Arc::new(self);
         Worker::new(arc_self, worker_id.to_string(), channels)
@@ -141,6 +154,10 @@ impl TaskturbineApp {
     /// Events allow you to synchronize tasks with external actions
     /// that can be recorded as events. Events can have a Payload of bytes.
     /// How those bytes are encoded is an application concern.
+    ///
+    /// ```rust
+    /// app.emit_event("email-verify-foo@example.com", payload.as_bytes()).await;
+    /// ```
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
         let res = self.storage.emit_event(event_name, payload).await;
 
