@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use crate::config::Config;
 use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
+use sqlx::migrate::Migrator;
+use sqlx::AssertSqlSafe;
 use sqlx::{
     ConnectOptions, PgConnection, PgPool, QueryBuilder, Row,
     migrate::MigrateError,
@@ -183,8 +186,8 @@ impl Storage {
     pub async fn clear_storage(&self) -> Result<(), TaskTurbineError> {
         let tables = ["events", "waits", "checkpoints", "runs", "tasks"];
         for table in tables.iter() {
-            let query = format!("TRUNCATE taskturbine.{table} CASCADE");
-            sqlx::query(&query)
+            let query = AssertSqlSafe(format!("TRUNCATE taskturbine.{table} CASCADE"));
+            sqlx::query(query)
                 .execute(&self.pool)
                 .await
                 .map_err(TaskTurbineError::SqlError)?;
@@ -287,12 +290,17 @@ impl Storage {
     // Run migrations to create or update the database schema.
     // Will create a taskturbine schema and add all tables inside that schema.
     pub async fn update_schema(&self) -> Result<(), MigrateError> {
-        // TODO Currently taskturbine cannot co-exist in a database
-        // that is using sqlx for migrations as well. Both taskturbine and the
-        // application will want to use `_sqlx_migrations` table and conflict.
-        // 0.9.0 of sqlx will expose new APIs for changing the migration name,
-        // but there doesn't appear to be a timeline for it.
-        sqlx::migrate!("./migrations").run(&self.pool).await?;
+        // Ensure the schema exists so migrations can run.
+        sqlx::query("CREATE SCHEMA IF NOT EXISTS taskturbine")
+            .execute(&self.pool)
+            .await?;
+
+        // Use the migrator API without the macro so the table can be stored
+        // in the correct schema.
+        let mut migrator = Migrator::new(Path::new("./migrations")).await?;
+        migrator.dangerous_set_table_name("taskturbine._sqlx_migrations");
+        migrator.run(&self.pool).await?;
+
         Ok(())
     }
 

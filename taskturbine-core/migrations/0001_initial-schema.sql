@@ -1,5 +1,3 @@
-CREATE SCHEMA if not exists taskturbine;
-
 CREATE TABLE taskturbine.tasks (
     task_id uuid primary key,
     usecase text not null,
