@@ -6,7 +6,6 @@ mod tasks;
 
 use tasks::make_task_app;
 
-
 #[tokio::main]
 async fn main() {
     SimpleLogger::new().init().unwrap();

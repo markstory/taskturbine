@@ -1,12 +1,16 @@
 use std::{env, time::Duration};
 
-use serde::{Deserialize, Serialize};
 use hmac::{Hmac, Mac};
+use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use sqlx::Row;
-use taskturbine_core::{app::TaskturbineApp, config::Config, context::{FlowControl, TaskContext}};
+use taskturbine_core::{
+    app::TaskturbineApp,
+    config::Config,
+    context::{FlowControl, TaskContext},
+};
 
-use crate::db::{create_db, SALT};
+use crate::db::{SALT, create_db};
 
 pub type HmacSha256 = Hmac<Sha256>;
 
@@ -20,7 +24,6 @@ impl From<serde_json::Error> for TaskError {
         TaskError::Message(format!("serialization/deserialization error: {:?}", value))
     }
 }
-
 
 /// Factory method for the task application with all tasks bound in.
 /// In more complex applications, tasks would be defined in module files, and imported here.
@@ -68,7 +71,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         let row = sqlx::query(
             "INSERT INTO users (name, email, verified) VALUES ($1, $2, false)
             RETURNING *
-            "
+            ",
         )
         .bind(payload.name)
         .bind(payload.email)
@@ -87,44 +90,59 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
     let create_user_json = ctx.async_step("create-user", create_user).await?;
 
     // Steps can also be async blocks if you need to capture values from previous steps
-    let event_name = ctx.async_step("send-verification-code", async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
-        log::info!("Generate and log a verification code");
+    let event_name = ctx
+        .async_step(
+            "send-verification-code",
+            async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+                log::info!("Generate and log a verification code");
 
-        // This simulates an email verification flow.
-        let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
-        let mut mac = HmacSha256::new_from_slice(SALT.as_bytes()).unwrap();
-        mac.update(user_data.email.as_bytes());
-        let hex_code = hex::encode(mac.finalize().into_bytes());
+                // This simulates an email verification flow.
+                let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
+                let mut mac = HmacSha256::new_from_slice(SALT.as_bytes()).unwrap();
+                mac.update(user_data.email.as_bytes());
+                let hex_code = hex::encode(mac.finalize().into_bytes());
 
-        // Ideally this would be sent in an email, but this is a prototype.
-        println!("------------------------------------");
-        println!("User registration verification code");
-        println!("");
-        println!("Click the link to continue");
-        println!("http://localhost:3000/verify/{}/{}", user_data.id, hex_code);
-        println!("");
-        println!("------------------------------------");
+                // Ideally this would be sent in an email, but this is a prototype.
+                println!("------------------------------------");
+                println!("User registration verification code");
+                println!("");
+                println!("Click the link to continue");
+                println!("http://localhost:3000/verify/{}/{}", user_data.id, hex_code);
+                println!("");
+                println!("------------------------------------");
 
-        let event_name = format!("email-verify-{}", user_data.email);
+                let event_name = format!("email-verify-{}", user_data.email);
 
-        Ok(event_name.into())
-    }).await?;
+                Ok(event_name.into())
+            },
+        )
+        .await?;
 
     log::info!("Wait for the user to verify their email");
-    let _ = ctx.await_event(str::from_utf8(event_name.as_slice()).unwrap(), Some(Duration::from_secs(60 * 10))).await?;
+    let _ = ctx
+        .await_event(
+            str::from_utf8(event_name.as_slice()).unwrap(),
+            Some(Duration::from_secs(60 * 10)),
+        )
+        .await?;
 
-    let _ = ctx.async_step("verification-complete", async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
-        log::info!("Verification complete, update the user.");
-        let db = create_db().await;
-        let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
-        let _ = sqlx::query("UPDATE users SET verified = true WHERE id = $1")
-            .bind(user_data.id)
-            .execute(&db)
-            .await
-            .map_err(|e| TaskError::Message(format!("Could not update user: {e}")))?;
+    let _ = ctx
+        .async_step(
+            "verification-complete",
+            async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+                log::info!("Verification complete, update the user.");
+                let db = create_db().await;
+                let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
+                let _ = sqlx::query("UPDATE users SET verified = true WHERE id = $1")
+                    .bind(user_data.id)
+                    .execute(&db)
+                    .await
+                    .map_err(|e| TaskError::Message(format!("Could not update user: {e}")))?;
 
-        Ok(vec![])
-    }).await?;
+                Ok(vec![])
+            },
+        )
+        .await?;
 
     let _ = ctx.async_step("provision-organization", async |ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
         log::info!("Provision the organization.");

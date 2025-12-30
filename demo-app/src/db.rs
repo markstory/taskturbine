@@ -1,15 +1,14 @@
 use std::env;
 
-use sqlx::{migrate, postgres::PgConnectOptions, ConnectOptions, PgPool, Pool, Postgres};
-
+use sqlx::{ConnectOptions, PgPool, Pool, Postgres, migrate, postgres::PgConnectOptions};
 
 pub const SALT: &str = "super-secret-value";
 
 pub async fn create_db() -> Pool<Postgres> {
     let database_url = env::var("DEMO_DATABASE_URL").expect("Missing DEMO_DATABASE_URL in env");
     let database_log_queries = env::var("DEMO_DATABASE_LOG_QUERIES").unwrap_or("false".into());
-    let pool = PgPool::connect_lazy(&database_url)
-        .expect("Failed to create database connection pool");
+    let pool =
+        PgPool::connect_lazy(&database_url).expect("Failed to create database connection pool");
 
     let options: Result<PgConnectOptions, _> = database_url.parse();
     if let Ok(mut opts) = options {

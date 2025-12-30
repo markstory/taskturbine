@@ -1,13 +1,18 @@
-use axum::{extract::{Path, State}, response::Html, routing::{get, post}, Form, Router};
-use db::{create_db, SALT};
+use axum::{
+    Form, Router,
+    extract::{Path, State},
+    response::Html,
+    routing::{get, post},
+};
+use db::{SALT, create_db};
+use hmac::{Hmac, Mac};
+use minijinja::{Environment, context, path_loader};
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use sqlx::{Pool, Postgres, Row};
-use tasks::{make_task_app, HmacSha256};
-use hmac::{Hmac, Mac};
-use taskturbine_core::app::TaskturbineApp;
 use std::sync::Arc;
-use minijinja::{Environment, context, path_loader};
+use tasks::{HmacSha256, make_task_app};
+use taskturbine_core::app::TaskturbineApp;
 
 mod db;
 mod tasks;
@@ -31,7 +36,7 @@ fn create_template_env() -> Environment<'static> {
 async fn main() {
     SimpleLogger::new().init().unwrap();
 
-    let state = Arc::new(AppState { 
+    let state = Arc::new(AppState {
         db: create_db().await,
         tasks: make_task_app(),
         templates: create_template_env(),
@@ -77,10 +82,17 @@ async fn process_register<'a>(
 ) -> Html<String> {
     // create a json payload for the task and queue a task
     let params = serde_json::to_string(&sign_up).unwrap();
-    state.tasks.spawn_task("register-user", params.as_bytes(), None).await.unwrap();
+    state
+        .tasks
+        .spawn_task("register-user", params.as_bytes(), None)
+        .await
+        .unwrap();
     log::info!("Spawned registration task for {}", sign_up.email);
 
-    let tmpl = state.templates.get_template("process-register.html").unwrap();
+    let tmpl = state
+        .templates
+        .get_template("process-register.html")
+        .unwrap();
     let html = tmpl.render(context!(name => "test")).unwrap();
 
     Html(html)
@@ -94,7 +106,7 @@ async fn verify_user<'a>(
         log::info!("Failed to parse user id");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
-        return Html(html)
+        return Html(html);
     };
 
     log::info!("Verifying user {} with token {}", user_id, token);
@@ -108,7 +120,7 @@ async fn verify_user<'a>(
         log::info!("Failed to load user");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
-        return Html(html)
+        return Html(html);
     };
 
     let mut mac = HmacSha256::new_from_slice(SALT.as_bytes()).unwrap();
@@ -118,13 +130,13 @@ async fn verify_user<'a>(
         log::info!("Failed to decode token");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
-        return Html(html)
+        return Html(html);
     };
     let Ok(_) = mac.verify_slice(token_bytes.as_slice()) else {
         log::info!("Failed to verify token hmac");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
-        return Html(html)
+        return Html(html);
     };
 
     // Save an event to continue the task workflow.
@@ -135,7 +147,7 @@ async fn verify_user<'a>(
         log::info!("Failed to emit even");
         let tmpl = state.templates.get_template("verify-failed.html").unwrap();
         let html = tmpl.render(context!()).unwrap();
-        return Html(html)
+        return Html(html);
     };
 
     let tmpl = state.templates.get_template("verify-success.html").unwrap();
