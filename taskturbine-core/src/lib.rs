@@ -50,10 +50,19 @@
 //!    runs, allowing tasks to resume where they left off.
 //! - `event` Tasks can be suspended until named events are emit by the application. Events are
 //!    ideal for waiting on webhooks, or other tasks to complete.
+//! - `wait` When a task is waiting for an event, it records a `wait`.
 //!
 //! # Defining a Task
 //!
 //! # Events
+//!
+//! Tasks can wait for an event to happen outside of a task. Your application logic can _emit
+//! events_ as they happen. When an event is emit, any event that has a `wait` registered
+//! Events allow you to have tasks wait for events like webhooks, or other tasks.
+//!
+//! Use [TaskContext.await_event](context/struct.TaskContext.html#method.await_event) to await events,
+//! and [TaskturbineApp.emit_event](app/struct.TaskturbineApp.html#method.emit_event) or
+//! [TaskContext.emit_event](context/struct.TaskContext.html#method.emit_event) to emit events.
 //!
 //! # Running workers
 //!
