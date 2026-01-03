@@ -126,6 +126,42 @@
 //!
 //! # Running workers
 //!
+//! Workers claim and execute tasks from one or more channels. While taskturbine gives you
+//! the building blocks for a worker, you do need to put them together in your application
+//! to create a worker binary. A simple worker can look like
+//!
+//! ```rust
+//! use taskturbine_core::app::run_worker;
+//! 
+//! // Create a Task application.
+//! // Having a factory method for the task application will make
+//! // it easier to spawn tasks and emit events from other parts of your application.
+//! pub fn make_task_app() -> TaskturbineApp {
+//!     let database_url = env::var("DATABASE_URL").expect("Missing DATABASE_URL in env");
+//!     let task_config = Config {
+//!         database_url,
+//!         ..Config::default()
+//!     };
+//! 
+//!     TaskturbineApp::new(task_config)
+//!         .add_channel("email")
+//!         // Task functions can be imported from modules.
+//!         .register_task("send_mail", send_mail)
+//!         .register_task("register-user", register_user)
+//! }
+//!
+//! // Entry point for the worker.
+//! #[tokio::main]
+//! async fn main() {
+//!     log::info!("Starting worker");
+//!     let app = make_task_app();
+//!
+//!     // Each worker instance should have a different worker_id
+//!     let worker = app.create_worker("worker-1", vec![]);
+//!     run_worker(worker).await;
+//! }
+//! ```
+//!
 //! # Performing cleanup
 //!
 pub mod app;
