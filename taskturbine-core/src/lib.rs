@@ -67,6 +67,12 @@
 //! The [TaskContext](context/struct.TaskContext.html) exposes methods to define task steps,
 //! wait for events, spawn tasks and work with the tasks' parameters.
 //!
+//! The [FlowControl](context/enum.FlowControl.html) error is used by taskturbine to represent
+//! scenarios where task steps have failed due to application logic, or are waiting for events, or
+//! for a sleep to expire. Task steps, events, and sleep operations will return `FlowControl` to
+//! direct taskturbine on how to advance the statemachine for a task when the task is not yet
+//! complete.
+//!
 //! ## Steps
 //!
 //! Tasks execute their steps in the order they are defined, and the result
@@ -99,9 +105,6 @@
 //!     ).await?;
 //! }
 //! ```
-//!
-//! The `FlowControl` error is used by taskturbine to represent scenarios where task steps have
-//! failed due to application logic, or are waiting for events, or for a sleep to expire.
 //!
 //! ## Spawning Tasks
 //!
