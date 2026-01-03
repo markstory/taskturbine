@@ -52,7 +52,64 @@
 //!    ideal for waiting on webhooks, or other tasks to complete.
 //! - `wait` When a task is waiting for an event, it records a `wait`.
 //!
-//! # Defining a Task
+//! # Defining Tasks
+//!
+//! Tasks are defined as async functions with a signature like:
+//!
+//! ```rust
+//! use taskturbine::context::{TaskContext, FlowControl};
+//!
+//! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {
+//!   todo!();
+//! }
+//! ```
+//!
+//! The [TaskContext](context/struct.TaskContext.html) exposes methods to define task steps,
+//! wait for events, spawn tasks and work with the tasks' parameters.
+//!
+//! ## Steps
+//!
+//! Tasks execute their steps in the order they are defined, and the result
+//! of each step is stored. Should a task or step fail for any reason, a subsequent run can be
+//! scheduled. When the task run is resumed, it will have access to any previously completed 
+//! step results, and completed steps will not be run again.
+//!
+//! Step can either being synchronous or asynchronous. Task steps are defined using the
+//! [step()](context/struct.TaskContext.html#method.step) and
+//! [async_step()](context/struct.TaskContext.html#method.async_step).
+//!
+//! ```rust
+//! use taskturbine::context::{FlowControl, StepData, TaskContext};
+//!
+//! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {
+//!     // Define a sync step. `step_result` will contain the bytes returned by the step fn.
+//!     let prepared_bytes = ctx.step(
+//!         "prepare-data",
+//!         |ctx: TaskContext| -> Result<StepData, anyhow::Error> {
+//!             todo!();
+//!         }
+//!     ).await?;
+//! 
+//!     // Define an async step
+//!     let email_results = ctx.async_step(
+//!         "send-results",
+//!         async |ctx: TaskContext| -> Result<StepData, anyhow::Error> {
+//!             todo!();
+//!         }
+//!     ).await?;
+//! }
+//! ```
+//!
+//! The `FlowControl` error is used by taskturbine to represent scenarios where task steps have
+//! failed due to application logic, or are waiting for events, or for a sleep to expire.
+//!
+//! ## Spawning Tasks
+//!
+//! Tasks can be spawned using either
+//! [TaskturbineApp.spawn_task()](app/struct.TaskturbineApp.html#method.spawn_task) or 
+//! [TaskContext.spawn_task()](context/struct.TaskContext.html#method.spawn_task). Tasks
+//! take their parameters as a bytestring, and encoding/decoding parameter payloads is
+//! an application concern.
 //!
 //! # Events
 //!

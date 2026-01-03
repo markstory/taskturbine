@@ -195,6 +195,7 @@ impl TaskContext {
 
                 Ok(state as StepData)
             }
+            // TODO should propagate errors here.
             Err(_) => Err(FlowControl::Failure("Task execution failed".to_string())),
         }
     }
