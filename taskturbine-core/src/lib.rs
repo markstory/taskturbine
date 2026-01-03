@@ -131,7 +131,7 @@
 //! to create a worker binary. A simple worker can look like
 //!
 //! ```rust
-//! use taskturbine_core::app::run_worker;
+//! use taskturbine_core::app::{TaskTurbineApp, run_worker};
 //! 
 //! // Create a Task application.
 //! // Having a factory method for the task application will make
@@ -163,6 +163,32 @@
 //! ```
 //!
 //! # Performing cleanup
+//!
+//! As tasks are completed, the related state is retained in postgres until 
+//! _cleanup_ operations are performed. Cleanup operations are done within processing workers
+//! by default.
+//!
+//! You can tune how often cleanup operations are done by workers using
+//!
+//! - [Config.worker_cleanup_limit](config/struct.Config.html#structfield.worker_cleanup_limit)
+//! - [Config.worker_cleanup_cutoff_secs](config/struct.Config.html#structfield.worker_cleanup_cutoff_secs)
+//! - [Config.worker_cleanup_interval_secs](config/struct.Config.html#structfield.worker_cleanup_interval_secs)
+//! - [Config.worker_cleanup_inline](config/struct.Config.html#structfield.worker_cleanup_inline)
+//!
+//! # Cleanup workers
+//!
+//! If you have larger numbers of workers, the cleanup operations of those workers can create
+//! contention and consume cycles from executing tasks. In larger deployments it can be more efficient
+//! to have dedicated cleanup worker to reduce contention:
+//!
+//! ```rust
+//! use taskturbine_core::app::{TaskTurbineApp, run_cleanup_worker};
+//! // From the example above
+//! let app = make_task_app();
+//!
+//! let worker = app.create_worker("cleanup-worker-1", vec![]);
+//! run_cleanup_worker(worker).await;
+//! ```
 //!
 pub mod app;
 pub mod config;
