@@ -664,7 +664,7 @@ impl Storage {
             return Err(TaskTurbineError::SqlError(e));
         }
 
-        let res = sqlx::query(
+        let _ = sqlx::query(
             "UPDATE taskturbine.tasks
             SET state = $1, last_attempt_run = $2, completed_at = NOW()
             WHERE task_id = $3",
@@ -673,12 +673,53 @@ impl Storage {
         .bind(run_id)
         .bind(task_id)
         .execute(&mut *atomic)
-        .await;
-        if let Err(e) = res {
-            return Err(TaskTurbineError::SqlError(e));
-        }
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
 
         self.clear_waits(run_id, &mut atomic).await?;
+
+        atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
+
+        Ok(())
+    }
+
+    /// Cancel a task and any run that is pending or sleeping.
+    ///
+    /// Currently running tasks cannot be stopped as updating state in postgres
+    /// will not terminate the worker process elsewhere in your system.
+    pub async fn cancel_task(
+        &self,
+        task_id: TaskId,
+    ) -> Result<(), TaskTurbineError> {
+        let mut atomic = self
+            .pool
+            .begin()
+            .await
+            .map_err(TaskTurbineError::SqlError)?;
+        let task = self.get_locked_task(task_id, &mut atomic).await?;
+        if task.state == TaskState::Running {
+            // Cannot be cancelled if currently working.
+            atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
+            return Err(TaskTurbineError::ValidationError(format!("Cannot cancel {:?} it is currently running", task_id)));
+        }
+
+        // TODO should this use failure_reason? if not that column should be removed
+        let _ = sqlx::query(
+            "
+            WITH task_result AS (
+                UPDATE taskturbine.tasks 
+                SET state = 'cancelled', completed_at = NOW()
+                WHERE task_id = $1 RETURNING task_id
+            ),
+            UPDATE taskturbine.runs 
+            SET state = 'cancelled', completed_at = NOW()
+            WHERE task_id = $1
+            "
+        )
+        .bind(&task_id)
+        .execute(&mut *atomic)
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
 
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
@@ -2090,5 +2131,17 @@ mod tests {
             res.err().unwrap(),
             TaskTurbineError::NotRunning(_)
         ));
+    }
+
+    #[tokio::test]
+    async fn cancel_task_success() {
+    }
+
+    #[tokio::test]
+    async fn cancel_task_unknown() {
+    }
+
+    #[tokio::test]
+    async fn cancel_task_currently_running() {
     }
 }
