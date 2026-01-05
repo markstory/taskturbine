@@ -77,7 +77,7 @@
 //!
 //! Tasks execute their steps in the order they are defined, and the result
 //! of each step is stored. Should a task or step fail for any reason, a subsequent run can be
-//! scheduled. When the task run is resumed, it will have access to any previously completed 
+//! scheduled. When the task run is resumed, it will have access to any previously completed
 //! step results, and completed steps will not be run again.
 //!
 //! Step can either being synchronous or asynchronous. Task steps are defined using the
@@ -95,7 +95,7 @@
 //!             todo!();
 //!         }
 //!     ).await?;
-//! 
+//!
 //!     // Define an async step
 //!     let email_results = ctx.async_step(
 //!         "send-results",
@@ -109,7 +109,7 @@
 //! ## Spawning Tasks
 //!
 //! Tasks can be spawned using either
-//! [TaskturbineApp.spawn_task()](app/struct.TaskturbineApp.html#method.spawn_task) or 
+//! [TaskturbineApp.spawn_task()](app/struct.TaskturbineApp.html#method.spawn_task) or
 //! [TaskContext.spawn_task()](context/struct.TaskContext.html#method.spawn_task). Tasks
 //! take their parameters as a bytestring, and encoding/decoding parameter payloads is
 //! an application concern.
@@ -132,7 +132,7 @@
 //!
 //! ```rust
 //! use taskturbine_core::app::{TaskTurbineApp, run_worker};
-//! 
+//!
 //! // Create a Task application.
 //! // Having a factory method for the task application will make
 //! // it easier to spawn tasks and emit events from other parts of your application.
@@ -142,7 +142,7 @@
 //!         database_url,
 //!         ..Config::default()
 //!     };
-//! 
+//!
 //!     TaskturbineApp::new(task_config)
 //!         .add_channel("email")
 //!         // Task functions can be imported from modules.
@@ -164,7 +164,7 @@
 //!
 //! # Performing cleanup
 //!
-//! As tasks are completed, the related state is retained in postgres until 
+//! As tasks are completed, the related state is retained in postgres until
 //! _cleanup_ operations are performed. Cleanup operations are done within processing workers
 //! by default.
 //!
