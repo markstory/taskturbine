@@ -2,7 +2,9 @@ use clap::{Parser, Subcommand};
 
 use taskturbine_core::config::Config;
 use taskturbine_core::storage::Storage;
+use simple_logger::SimpleLogger;
 
+mod cancel;
 mod cleanup;
 mod clear;
 mod emit_event;
@@ -53,6 +55,7 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     let args = Cli::parse();
+    SimpleLogger::new().init().unwrap();
 
     // Find the database url. Use both CLI options and environment variables.
     let db_url = match args.database_url {
@@ -85,11 +88,11 @@ async fn main() {
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
     };
     if result.is_ok() {
-        println!("Complete");
+        log::info!("Complete");
     } else if let Err(err) = result {
         match err {
             CliError::Message(msg) => {
-                println!("Failed: {msg}");
+                log::error!("Failed: {msg}");
             }
         }
     }

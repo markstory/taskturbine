@@ -1809,6 +1809,7 @@ dependencies = [
  "simple_logger",
  "taskturbine-core",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
