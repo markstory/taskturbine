@@ -117,8 +117,9 @@
 //! # Events
 //!
 //! Tasks can wait for an event to happen outside of a task. Your application logic can _emit
-//! events_ as they happen. When an event is emit, any event that has a `wait` registered
-//! Events allow you to have tasks wait for events like webhooks, or other tasks.
+//! events_ as they happen. When an event is emit, any task/run that has a `wait` registered, will
+//! be woken up and made pending for execution again. This provides a simple sychronization
+//! tool that lets you have tasks wait for events like webhooks, or other tasks to complete.
 //!
 //! Use [TaskContext.await_event](context/struct.TaskContext.html#method.await_event) to await events,
 //! and [TaskturbineApp.emit_event](app/struct.TaskturbineApp.html#method.emit_event) or
@@ -189,7 +190,6 @@
 //! let worker = app.create_worker("cleanup-worker-1", vec![]);
 //! run_cleanup_worker(worker).await;
 //! ```
-//!
 pub mod app;
 pub mod config;
 pub mod context;

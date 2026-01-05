@@ -34,8 +34,6 @@ pub fn make_task_app() -> TaskturbineApp {
         ..Config::default()
     };
 
-    
-
     TaskturbineApp::new(task_config)
         .add_channel("mail")
         .register_task("err-fail", err_failure)
