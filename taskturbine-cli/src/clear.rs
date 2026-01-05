@@ -10,7 +10,7 @@ pub struct ClearArgs {
 }
 
 pub async fn clear_storage(storage: Storage, args: ClearArgs) -> Result<(), CliError> {
-    println!("Clearing all tasks from the database");
+    log::info!("Clearing all tasks from the database");
     if args.execute {
         let res = storage.clear_storage().await;
 
@@ -19,7 +19,7 @@ pub async fn clear_storage(storage: Storage, args: ClearArgs) -> Result<(), CliE
             Err(err) => Err(CliError::Message(format!("Failed to clear tasks {err:?}"))),
         }
     } else {
-        println!("SKIP: You did not provide --execute to confirm execution.");
+        log::info!("SKIP: You did not provide --execute to confirm execution.");
 
         Ok(())
     }

@@ -95,7 +95,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
         .channel
         .clone()
         .unwrap_or(storage.get_config().default_channel);
-    println!("Spawning task in channel={channel_name} for task={taskname}");
+    log::info!("Spawning task in channel={channel_name} for task={taskname}");
 
     let params = args.params.clone().unwrap_or("{\"args\":[]}".to_string());
     let mut results = vec![];
@@ -118,7 +118,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
             Ok(spawned) => {
                 let run_id = spawned.run_id;
                 let task_id = spawned.task_id;
-                println!("Spawned task_id={task_id} run_id={run_id}");
+                log::info!("Spawned task_id={task_id} run_id={run_id}");
             }
             Err(err) => return Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
         }
