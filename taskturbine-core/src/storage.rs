@@ -257,6 +257,7 @@ impl Storage {
     }
 
     // Testing helper: get a task
+    // TODO make this return Result<Task, TaskTurbineError> instead.
     #[cfg(test)]
     async fn get_task(&self, task_id: TaskId) -> Result<Option<PgRow>, TaskTurbineError> {
         let res = sqlx::query("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
@@ -515,8 +516,10 @@ impl Storage {
     }
 
     /// Release claims on tasks where the claim_timeout_at has passed.
+    /// Will only process up to `config.worker_cleanup_limit` expired 
+    /// claims at a time.
     ///
-    /// Should be run periodically by workers
+    /// Should be run periodically by workers, or by a dedicated cleanup process.
     pub async fn handle_expired_claims(&self) -> Result<i64, TaskTurbineError> {
         let mut atomic = self
             .pool
@@ -528,15 +531,17 @@ impl Storage {
             "SELECT run_id, task_id, claimed_by, claim_expires_at
             FROM taskturbine.runs
             WHERE claim_expires_at <= NOW()
-            AND state IN ('running', 'pending', 'sleeping')",
+            AND state IN ('running', 'pending', 'sleeping')
+            LIMIT $1",    
         )
+        .bind(&self.config.worker_cleanup_limit)
         .fetch_all(&mut *atomic)
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
         // fail all the candidates.
         for run in res.iter() {
-            let run_id = run.get::<RunId, _>("run_id");
+            let run_id: RunId = run.get("run_id");
             let failure_reason = b"{\"reason\":\"claim timeout\"}";
             self.do_fail_run(&mut atomic, run_id, failure_reason, None, false)
                 .await?;
@@ -690,7 +695,7 @@ impl Storage {
     pub async fn cancel_task(
         &self,
         task_id: TaskId,
-    ) -> Result<(), TaskTurbineError> {
+    ) -> Result<Task, TaskTurbineError> {
         let mut atomic = self
             .pool
             .begin()
@@ -699,31 +704,36 @@ impl Storage {
         let task = self.get_locked_task(task_id, &mut atomic).await?;
         if task.state == TaskState::Running {
             // Cannot be cancelled if currently working.
+            // as there isn't a way to interrupt the owning worker process.
             atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
             return Err(TaskTurbineError::ValidationError(format!("Cannot cancel {:?} it is currently running", task_id)));
         }
 
         // TODO should this use failure_reason? if not that column should be removed
-        let _ = sqlx::query(
+        // Use a CTE to update both tables at once and read the updated state
+        let task: Task = sqlx::query_as(
             "
             WITH task_result AS (
                 UPDATE taskturbine.tasks 
                 SET state = 'cancelled', completed_at = NOW()
-                WHERE task_id = $1 RETURNING task_id
+                WHERE task_id = $1 RETURNING *
             ),
-            UPDATE taskturbine.runs 
-            SET state = 'cancelled', completed_at = NOW()
-            WHERE task_id = $1
+            cancelled_run AS (
+                UPDATE taskturbine.runs 
+                SET state = 'cancelled', completed_at = NOW()
+                WHERE task_id = $1 RETURNING *
+            )
+            SELECT * FROM task_result 
             "
         )
         .bind(&task_id)
-        .execute(&mut *atomic)
+        .fetch_one(&mut *atomic)
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
         atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
-        Ok(())
+        Ok(task)
     }
 
     /// Clear waits on runs that we are no longer interested in
@@ -2135,13 +2145,53 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_task_success() {
+        let (storage, spawned) = create_task().await.unwrap();
+
+        let res = storage.cancel_task(spawned.task_id).await;
+        assert!(res.is_ok());
+        let updated = res.unwrap();
+        assert_eq!(updated.task_id, spawned.task_id);
+        assert_eq!(updated.state, TaskState::Cancelled);
+
+        // Double check against stored state.
+        let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
+        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
+        assert!(task.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+
+        let run = storage.get_run(spawned.run_id).await.unwrap();
+        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
+        assert!(run.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
     }
 
     #[tokio::test]
     async fn cancel_task_unknown() {
+        let (storage, _) = create_task().await.unwrap();
+        let fake_task_id = TaskId(Uuid::now_v7());
+
+        let res = storage.cancel_task(fake_task_id).await;
+        assert!(res.is_err());
+        assert!(matches!(
+            res.err().unwrap(),
+            TaskTurbineError::NotFound(_)
+        ));
     }
 
     #[tokio::test]
     async fn cancel_task_currently_running() {
+        let (storage, spawned) = create_task().await.unwrap();
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
+
+        let res = storage.cancel_task(spawned.task_id).await;
+        assert!(res.is_err());
+
+        let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
+        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Running);
+        assert!(task.get::<Option<DateTime<Utc>>, _>("completed_at").is_none());
+
+        let run = storage.get_run(spawned.run_id).await.unwrap();
+        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Running);
+        assert!(run.get::<Option<DateTime<Utc>>, _>("completed_at").is_none());
     }
 }

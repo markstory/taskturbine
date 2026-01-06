@@ -304,6 +304,7 @@ impl Worker {
     /// Runs a cleanup step on storage.
     ///
     /// Takes a datetime of what is considered stale and can be purged.
+    /// See [run_cleanup_worker](fn.run_cleanup_worker.html) for running cleanup operations.
     pub async fn run_cleanup(&self, older_than: DateTime<Utc>) -> Result<(), WorkerError> {
         let cleanup_limit = self.config().worker_cleanup_limit;
         let _ = self
@@ -393,6 +394,8 @@ impl Worker {
 /// let app = TaskturbineApp::new(config);
 /// run_worker(app.worker()).await
 /// ```
+///
+/// Use [Config](../config/struct.Config.html) to configure worker behavior.
 pub async fn run_worker(worker: Worker) {
     let arc_worker = Arc::new(worker);
     let config = arc_worker.config();
@@ -428,6 +431,8 @@ pub async fn run_worker(worker: Worker) {
 /// let app = TaskturbineApp::new(config);
 /// run_cleanup_worker(app.worker()).await
 /// ```
+///
+/// Use [Config](../config/struct.Config.html) to configure worker behavior.
 pub async fn run_cleanup_worker(worker: Worker) {
     let arc_worker = Arc::new(worker);
 
