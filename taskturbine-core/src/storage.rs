@@ -516,7 +516,7 @@ impl Storage {
     }
 
     /// Release claims on tasks where the claim_timeout_at has passed.
-    /// Will only process up to `config.worker_cleanup_limit` expired 
+    /// Will only process up to `config.worker_cleanup_limit` expired
     /// claims at a time.
     ///
     /// Should be run periodically by workers, or by a dedicated cleanup process.
@@ -532,7 +532,7 @@ impl Storage {
             FROM taskturbine.runs
             WHERE claim_expires_at <= NOW()
             AND state IN ('running', 'pending', 'sleeping')
-            LIMIT $1",    
+            LIMIT $1",
         )
         .bind(&self.config.worker_cleanup_limit)
         .fetch_all(&mut *atomic)
@@ -692,10 +692,7 @@ impl Storage {
     ///
     /// Currently running tasks cannot be stopped as updating state in postgres
     /// will not terminate the worker process elsewhere in your system.
-    pub async fn cancel_task(
-        &self,
-        task_id: TaskId,
-    ) -> Result<Task, TaskTurbineError> {
+    pub async fn cancel_task(&self, task_id: TaskId) -> Result<Task, TaskTurbineError> {
         let mut atomic = self
             .pool
             .begin()
@@ -706,7 +703,10 @@ impl Storage {
             // Cannot be cancelled if currently working.
             // as there isn't a way to interrupt the owning worker process.
             atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
-            return Err(TaskTurbineError::ValidationError(format!("Cannot cancel {:?} it is currently running", task_id)));
+            return Err(TaskTurbineError::ValidationError(format!(
+                "Cannot cancel {:?} it is currently running",
+                task_id
+            )));
         }
 
         // TODO should this use failure_reason? if not that column should be removed
@@ -724,7 +724,7 @@ impl Storage {
                 WHERE task_id = $1 RETURNING *
             )
             SELECT * FROM task_result 
-            "
+            ",
         )
         .bind(&task_id)
         .fetch_one(&mut *atomic)
@@ -2156,11 +2156,17 @@ mod tests {
         // Double check against stored state.
         let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
         assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(task.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+        assert!(
+            task.get::<Option<DateTime<Utc>>, _>("completed_at")
+                .is_some()
+        );
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(run.get::<Option<DateTime<Utc>>, _>("completed_at").is_some());
+        assert!(
+            run.get::<Option<DateTime<Utc>>, _>("completed_at")
+                .is_some()
+        );
     }
 
     #[tokio::test]
@@ -2170,10 +2176,7 @@ mod tests {
 
         let res = storage.cancel_task(fake_task_id).await;
         assert!(res.is_err());
-        assert!(matches!(
-            res.err().unwrap(),
-            TaskTurbineError::NotFound(_)
-        ));
+        assert!(matches!(res.err().unwrap(), TaskTurbineError::NotFound(_)));
     }
 
     #[tokio::test]
@@ -2188,10 +2191,16 @@ mod tests {
 
         let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
         assert_eq!(task.get::<TaskState, _>("state"), TaskState::Running);
-        assert!(task.get::<Option<DateTime<Utc>>, _>("completed_at").is_none());
+        assert!(
+            task.get::<Option<DateTime<Utc>>, _>("completed_at")
+                .is_none()
+        );
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.get::<TaskState, _>("state"), TaskState::Running);
-        assert!(run.get::<Option<DateTime<Utc>>, _>("completed_at").is_none());
+        assert!(
+            run.get::<Option<DateTime<Utc>>, _>("completed_at")
+                .is_none()
+        );
     }
 }

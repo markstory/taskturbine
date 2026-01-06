@@ -21,7 +21,7 @@ pub async fn cancel(storage: Storage, args: CancelArgs) -> Result<(), CliError> 
             Ok(())
         }
         Err(e) => {
-            log::error!("Could not cancel: {:?}", e);
+            log::error!("Could not cancel: {e:?}");
             Ok(())
         }
     }

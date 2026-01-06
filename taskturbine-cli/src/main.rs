@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 
+use simple_logger::SimpleLogger;
 use taskturbine_core::config::Config;
 use taskturbine_core::storage::Storage;
-use simple_logger::SimpleLogger;
 
 mod cancel;
 mod cleanup;
