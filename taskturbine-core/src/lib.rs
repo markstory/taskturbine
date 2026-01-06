@@ -190,6 +190,10 @@
 //! let worker = app.create_worker("cleanup-worker-1", vec![]);
 //! run_cleanup_worker(worker).await;
 //! ```
+//!
+//! When running a dedicated worker you may need to tune your configuration if you were previously
+//! running inline cleanup operations on many workers.
+//!
 pub mod app;
 pub mod config;
 pub mod context;
