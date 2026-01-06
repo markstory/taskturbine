@@ -10,7 +10,7 @@ pub struct CancelArgs {
     pub task_id: Uuid,
 }
 
-pub async fn cancel(storage: Storage, args) -> Result<(), CliError> {
+pub async fn cancel(storage: Storage, args: CancelArgs) -> Result<(), CliError> {
     log::info!("Cancelling task {}", args.task_id);
 
     let task_id = TaskId(args.task_id);

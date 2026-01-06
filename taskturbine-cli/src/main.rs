@@ -40,16 +40,18 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Spawn a new task.
-    Spawn(spawn::SpawnArgs),
+    /// Cancels a sleeping or pending task
+    Cancel(cancel::CancelArgs),
     /// Clears all data from storage.
     Clear(clear::ClearArgs),
-    /// Emit an event to storage.
-    EmitEvent(emit_event::EmitEventArgs),
     /// Run a cleanup worker
     Cleanup,
+    /// Emit an event to storage.
+    EmitEvent(emit_event::EmitEventArgs),
     /// Run migrations for the taskturbine schema.
     Migrate,
+    /// Spawn a new task.
+    Spawn(spawn::SpawnArgs),
 }
 
 #[tokio::main]
@@ -81,11 +83,12 @@ async fn main() {
 
     let storage = Storage::new(config);
     let result = match args.command {
+        Commands::Cancel(args) => cancel::cancel(storage, args).await,
+        Commands::Cleanup => cleanup::cleanup(storage).await,
+        Commands::Clear(args) => clear::clear_storage(storage, args).await,
+        Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
         Commands::Migrate => migrate::run_migrations(storage).await,
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
-        Commands::Clear(args) => clear::clear_storage(storage, args).await,
-        Commands::Cleanup => cleanup::cleanup(storage).await,
-        Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
     };
     if result.is_ok() {
         log::info!("Complete");
