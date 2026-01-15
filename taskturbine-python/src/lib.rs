@@ -165,7 +165,7 @@ impl TaskturbineApp {
 /// A Python module implemented in Rust. The name of this function must match
 /// the `lib.name` setting in the `Cargo.toml`, else Python will not be able to
 /// import the module.
-#[pymodule(name = "taskturbine_ext")]
+#[pymodule(name = "taskturbine")]
 mod taskturbine {
     #[pymodule_export]
     use super::Config;

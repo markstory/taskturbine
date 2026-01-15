@@ -9,3 +9,11 @@ dependencies = [
     "maturin==1.3.0",
     "tomli==2.0.1",
 ]
+
+[tool.maturin]
+python-source = "python"
+
+[dependency-groups]
+dev = [
+    "maturin[patchelf]>=1.3.0",
+]
