@@ -10,4 +10,4 @@ are in python.
 # Import from the rust library
 from .taskturbine import Config
 
-print('hello tasks')
+__all__ = ["Config"]

@@ -10,10 +10,14 @@ dependencies = [
     "tomli==2.0.1",
 ]
 
-[tool.maturin]
-python-source = "python"
-
 [dependency-groups]
 dev = [
     "maturin[patchelf]>=1.3.0",
+    "pytest",
 ]
+
+[tool.maturin]
+python-source = "python"
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
