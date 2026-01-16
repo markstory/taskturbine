@@ -1,5 +1,6 @@
 /target
 .env
+taskturbine-python/python/taskturbine/*.so
 
 
 # Added by cargo
