@@ -88,8 +88,14 @@ impl Config {
         kwargs: Option<&Bound<'_, PyDict>>
     ) -> PyResult<Self> {
         let kwargs = kwargs.unwrap();
+
+        let database_url = kwargs.get_item("database_url")
+            .unwrap_or(None)
+            .map(|value| value.to_string())
+            .unwrap_or("".to_string());
+
         let config = Config {
-            database_url: kwargs.get_item("database_url").unwrap().unwrap().to_string(),
+            database_url,
             database_log_queries: false,
             usecase: "".into(),
             default_channel: "".into(),
