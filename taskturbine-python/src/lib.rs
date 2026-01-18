@@ -83,29 +83,52 @@ impl From<Config> for taskturbine_core::config::Config {
 #[pymethods]
 impl Config {
     #[new]
-    #[pyo3(signature = (**kwargs))]
+    #[pyo3(signature = (
+        database_url="",
+        database_log_queries=false,
+        usecase="default",
+        default_channel="default",
+        worker_concurrency=3,
+        worker_sleep_secs=2,
+        worker_cleanup_limit=1000,
+        worker_cleanup_interval_secs=30,
+        worker_cleanup_inline=true,
+        worker_cleanup_cutoff_secs=600,
+        await_event_default_timeout_secs=120,
+    ))]
     fn __new__(
-        kwargs: Option<&Bound<'_, PyDict>>
+        database_url: &str,
+        database_log_queries: bool,
+        usecase: &str,
+        default_channel: &str,
+        worker_concurrency: i32,
+        worker_sleep_secs: i32,
+        worker_cleanup_limit: i32,
+        worker_cleanup_interval_secs: i32,
+        worker_cleanup_inline: bool,
+        worker_cleanup_cutoff_secs: i32,
+        await_event_default_timeout_secs: i32,
     ) -> PyResult<Self> {
-        let kwargs = kwargs.unwrap();
 
+        /* Read from kwargs without a rats nest.
+        let kwargs = kwargs.unwrap();
         let database_url = kwargs.get_item("database_url")
             .unwrap_or(None)
             .map(|value| value.to_string())
             .unwrap_or("".to_string());
-
+        */
         let config = Config {
-            database_url,
-            database_log_queries: false,
-            usecase: "".into(),
-            default_channel: "".into(),
-            worker_concurrency: 1,
-            worker_sleep_secs: 1,
-            worker_cleanup_limit: 1000,
-            worker_cleanup_interval_secs: 5,
-            worker_cleanup_inline: true,
-            worker_cleanup_cutoff_secs: 5,
-            await_event_default_timeout_secs: 120,
+            database_url: database_url.to_string(),
+            database_log_queries,
+            usecase: usecase.to_string(),
+            default_channel: default_channel.to_string(),
+            worker_concurrency,
+            worker_sleep_secs,
+            worker_cleanup_limit,
+            worker_cleanup_interval_secs,
+            worker_cleanup_inline,
+            worker_cleanup_cutoff_secs,
+            await_event_default_timeout_secs,
         };
 
         Ok(config)
