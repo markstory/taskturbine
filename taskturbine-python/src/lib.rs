@@ -84,7 +84,7 @@ impl From<Config> for taskturbine_core::config::Config {
 impl Config {
     #[new]
     #[pyo3(signature = (
-        database_url="",
+        database_url,
         database_log_queries=false,
         usecase="default",
         default_channel="default",
@@ -138,9 +138,11 @@ impl Config {
 
 #[pyclass(module="taskturbine_ext")]
 struct TaskturbineApp {
+    #[pyo3(get)]
     config: Config,
+
+    #[pyo3(get)]
     channels: Vec<String>,
-    // TODO add tasks
 }
 
 
@@ -148,9 +150,11 @@ struct TaskturbineApp {
 impl TaskturbineApp {
     #[new]
     fn py_new(config: Config) -> Self {
+        let channels = vec![config.default_channel.clone()];
+
         TaskturbineApp {
             config,
-            channels: vec![],
+            channels,
         }
     }
 
@@ -239,10 +243,3 @@ mod taskturbine {
     #[pymodule_export]
     use super::TaskturbineApp;
 }
-
-// #[pymodule(name = "taskturbine")]
-// fn taskturbine_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
-//     // m.add_function(wrap_pyfunction!(guess_the_number, m)?)?;
-
-//     Ok(())
-// }

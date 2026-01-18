@@ -8,6 +8,6 @@ are in python.
 """
 
 # Import from the rust library
-from .taskturbine import Config
+from .taskturbine import Config, TaskturbineApp
 
-__all__ = ["Config"]
+__all__ = ["Config", "TaskturbineApp"]
