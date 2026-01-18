@@ -1,5 +1,4 @@
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use taskturbine_core;
 
 #[pyclass(module="taskturbine")]
