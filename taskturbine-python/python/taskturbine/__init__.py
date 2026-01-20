@@ -26,7 +26,7 @@ class Task(Generic[P, R]):
         func: Callable[P, R],
     ):
         self._func = func
-        self._task_rs = TaskRs(module_name=func.__module__, task_name=name)
+        self.task_rs = TaskRs(module_name=func.__module__, task_name=name)
         update_wrapper(self, func)
 
     @property
@@ -40,9 +40,9 @@ class Task(Generic[P, R]):
         return self._func(*args, **kwargs)
 
 
-class TaskturbineApp():
+class TaskturbineApp:
     def __init__(self, config: Config) -> None:
-        self.app_rs = AppRs(config)
+        self._app_rs = AppRs(config)
         self._tasks: MutableMapping[str, Task] = {}
 
     def register_task(
@@ -61,6 +61,7 @@ class TaskturbineApp():
         def wrapped(func: Callable[P, R]) -> Task[P, R]:
             task = Task(name=name, func=func)
             self._tasks[name] = task
+            self._app_rs.register_task(task.task_rs)
             return task
 
         return wrapped
