@@ -1,9 +1,15 @@
+use std::collections::HashMap;
+
 use pyo3::prelude::*;
 use taskturbine_core;
 
 #[pyclass(module="taskturbine")]
 #[derive(Debug, Clone)]
 struct Config {
+    /// The path to the `package.module:app_var` of the python application to work with.
+    #[pyo3(get, set)]
+    pub app_module: String,
+
     /// The URI of the database your are connecting to.
     /// Example: postgresql://app:password@localhost/taskturbine
     #[pyo3(get, set)]
@@ -83,6 +89,7 @@ impl From<Config> for taskturbine_core::config::Config {
 impl Config {
     #[new]
     #[pyo3(signature = (
+        app_module,
         database_url,
         database_log_queries=false,
         usecase="default",
@@ -96,6 +103,7 @@ impl Config {
         await_event_default_timeout_secs=120,
     ))]
     fn __new__(
+        app_module: &str,
         database_url: &str,
         database_log_queries: bool,
         usecase: &str,
@@ -108,15 +116,8 @@ impl Config {
         worker_cleanup_cutoff_secs: i32,
         await_event_default_timeout_secs: i32,
     ) -> PyResult<Self> {
-
-        /* Read from kwargs without a rats nest.
-        let kwargs = kwargs.unwrap();
-        let database_url = kwargs.get_item("database_url")
-            .unwrap_or(None)
-            .map(|value| value.to_string())
-            .unwrap_or("".to_string());
-        */
         let config = Config {
+            app_module: app_module.to_string(),
             database_url: database_url.to_string(),
             database_log_queries,
             usecase: usecase.to_string(),
@@ -142,6 +143,8 @@ struct TaskturbineApp {
 
     #[pyo3(get)]
     channels: Vec<String>,
+
+    tasks: HashMap<String, Task>
 }
 
 
@@ -154,12 +157,24 @@ impl TaskturbineApp {
         TaskturbineApp {
             config,
             channels,
+            tasks: HashMap::new(),
         }
     }
 
     /// Add a channel to the list of channels this application can publish and consume from.
     fn add_channel(&mut self, value: String, _py: Python<'_>) {
         self.channels.push(value);
+    }
+
+    /// Register task metadata with the rust extension
+    /// Task metadata is used to generate python code that is executed by workers.
+    fn register_task(&mut self, task: Task) {
+        self.tasks.insert(task.task_name.clone(), task);
+    }
+
+    /// Check if a task has been registered.
+    fn has_task(&self, name: &str) -> bool {
+        self.tasks.contains_key(name)
     }
 
     /*
@@ -221,6 +236,43 @@ impl TaskturbineApp {
     */
 }
 
+/// An individual decorated python task. The expected task function signature is
+///
+/// ```
+/// def __call__(self, *args, **kwargs) -> str | None
+/// ```
+///
+/// The function bindings are held in python, and this struct enables
+/// the worker runtime to operate python tasks by using the metadata from this struct
+/// to generate code snippets of python that are executed.
+#[pyclass]
+#[derive(Debug, PartialEq, Clone)]
+struct Task {
+    /// The python module name of the task. This module is expected to be within
+    /// `[Config.app_module]`. This module will be imported when running the task.
+    #[pyo3(get, set)]
+    pub module_name: String,
+
+    /// The unique name of the task. Tasks having unique names helps ease refactoring
+    /// operations as module names are not persisted in task records.
+    #[pyo3(get, set)]
+    pub task_name: String,
+}
+
+#[pymethods]
+impl Task {
+    #[pyo3(signature = (module_name, task_name))]
+    #[new]
+    fn new(module_name: &str, task_name: &str) -> PyResult<Self> {
+        let task = Task {
+            module_name: module_name.to_string(),
+            task_name: task_name.to_string(),
+        };
+
+        Ok(task)
+    }
+}
+
 
 /// Notes
 /// -------
@@ -241,4 +293,6 @@ mod taskturbine {
     use super::Config;
     #[pymodule_export]
     use super::TaskturbineApp;
+    #[pymodule_export]
+    use super::Task;
 }
