@@ -19,6 +19,7 @@ __all__ = ["Config", "TaskturbineApp"]
 P = ParamSpec("P")
 R = TypeVar("R")
 
+
 class Task(Generic[P, R]):
     def __init__(
         self,
@@ -31,7 +32,7 @@ class Task(Generic[P, R]):
 
     @property
     def name(self) -> str:
-        return self._task_rs.task_name
+        return self.task_rs.task_name
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         """
@@ -44,6 +45,19 @@ class TaskturbineApp:
     def __init__(self, config: Config) -> None:
         self._app_rs = AppRs(config)
         self._tasks: MutableMapping[str, Task] = {}
+
+    def add_channel(self, name: str) -> None:
+        """
+        Add a channel that tasks can be spawned on.
+
+        Channels let you separate backlogs and worker pools
+        """
+        self._app_rs.add_channel(name)
+
+    @property
+    def channels(self) -> list[str]:
+        """Get the list of channels"""
+        return self._app_rs.channels
 
     def register_task(
         self,
@@ -66,4 +80,10 @@ class TaskturbineApp:
 
         return wrapped
 
+    def has_task(self, name: str) -> bool:
+        """Check if a task is defined"""
+        return self._app_rs.has_task(name)
 
+    def get_task(self, name: str) -> Task:
+        """Get a task by name. Raises KeyError on unknown values"""
+        return self._tasks[name]

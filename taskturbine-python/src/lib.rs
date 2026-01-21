@@ -7,6 +7,7 @@ use taskturbine_core;
 #[derive(Debug, Clone)]
 struct Config {
     /// The path to the `package.module:app_var` of the python application to work with.
+    /// The worker runtime will import this symbol and use it to lookup and execute tasks
     #[pyo3(get, set)]
     pub app_module: String,
 
