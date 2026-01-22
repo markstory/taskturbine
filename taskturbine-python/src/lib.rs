@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core;
 
 #[pyclass(module="taskturbine")]
@@ -142,10 +142,20 @@ struct TaskturbineApp {
     #[pyo3(get)]
     config: Config,
 
+    /// The set of channels that have been defined.
     #[pyo3(get)]
     channels: Vec<String>,
 
-    tasks: HashMap<String, Task>
+    /// A map of all registered tasks.
+    tasks: HashMap<String, Task>,
+
+    /// The tokio runtime for interacting with taskturbine_core
+    /// which is tokio based.
+    tokio_rt: tokio::runtime::Runtime,
+
+    /// The Storage interface. This struct generally needs to be run
+    /// in a tokio runtime.
+    storage: taskturbine_core::storage::Storage,
 }
 
 
@@ -154,11 +164,19 @@ impl TaskturbineApp {
     #[new]
     fn py_new(config: Config) -> Self {
         let channels = vec![config.default_channel.clone()];
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let storage = taskturbine_core::storage::Storage::new(config.clone().into());
 
         TaskturbineApp {
             config,
             channels,
             tasks: HashMap::new(),
+            tokio_rt: runtime,
+            storage,
         }
     }
 
@@ -178,6 +196,29 @@ impl TaskturbineApp {
         self.tasks.contains_key(name)
     }
 
+    /// Spawn a task on the default channel and initialize the first run.
+    ///
+    /// An error is returned if the task name is not registered.
+    fn spawn_task(
+        &self,
+        task_name: &str,
+        params: &[u8],
+        options: TaskOptions,
+    ) -> PyResult<SpawnResult> {
+        if !self.tasks.contains_key(task_name) {
+            return Err(PyValueError::new_err(format!(
+                "No task named {task_name} is registered."
+            )));
+        }
+        let result = self.tokio_rt.block_on(
+           self.storage.spawn_task(&self.config.default_channel, task_name, params, Some(options.into()))
+        );
+
+        // TODO map the error better.
+        result.map(|v| v.into()).map_err(|v| PyValueError::new_err("Could not spawn task"))
+    }
+
+
     /*
     /// Create a worker by consuming the app.
     ///
@@ -196,26 +237,6 @@ impl TaskturbineApp {
         let arc_self = Arc::new(self);
         Worker::new(arc_self, worker_id.to_string(), channels)
     }
-
-    /// Spawn a task on the default channel and initialize the first run.
-    ///
-    /// An error is returned if the task name is not registered.
-    pub async fn spawn_task(
-        &self,
-        task_name: &str,
-        params: &[u8],
-        options: Option<TaskOptions>,
-    ) -> Result<SpawnResult, TaskTurbineError> {
-        if !self.tasks.contains_key(task_name) {
-            return Err(TaskTurbineError::ValidationError(format!(
-                "No task named {task_name} is registered."
-            )));
-        }
-        self.storage
-            .spawn_task(&self.config.default_channel, task_name, params, options)
-            .await
-    }
-
     /// Record an event as having completed.
     /// Events allow you to synchronize tasks with external actions
     /// that can be recorded as events. Events can have a Payload of bytes.
@@ -274,6 +295,83 @@ impl Task {
     }
 }
 
+/// The result of spawning a task.
+#[pyclass]
+#[derive(Debug, PartialEq, Clone)]
+struct SpawnResult {
+    #[pyo3(get)]
+    run_id: String,
+    #[pyo3(get)]
+    task_id: String,
+}
+
+/// Convert from the python module to the core struct. 
+impl TryFrom<SpawnResult> for taskturbine_core::models::SpawnResult {
+    type Error = PyErr;
+
+    fn try_from(value: SpawnResult) -> Result<Self, Self::Error> {
+        let Ok(task_uuid): Result<uuid::Uuid, _> = value.task_id.try_into() else {
+            return Err(PyValueError::new_err("Invalid task_id"));
+        };
+        let Ok(run_uuid): Result<uuid::Uuid, _> = value.run_id.try_into() else {
+            return Err(PyValueError::new_err("Invalid task_id"));
+        };
+        let task_id = taskturbine_core::models::TaskId(task_uuid);
+        let run_id = taskturbine_core::models::RunId(run_uuid);
+
+        Ok(taskturbine_core::models::SpawnResult { task_id, run_id })
+    }
+}
+
+/// Convert from storage API to python binding
+impl From<taskturbine_core::models::SpawnResult> for SpawnResult {
+    fn from(value: taskturbine_core::models::SpawnResult) -> SpawnResult {
+        let task_id = value.task_id.0.into();
+        let run_id = value.run_id.0.into();
+
+        SpawnResult { task_id, run_id }
+    }
+}
+
+
+#[pyclass]
+#[derive(Debug, PartialEq, Clone)]
+struct TaskOptions {
+    /// Map of headers to include with the task activation
+    pub headers: HashMap<String, String>,
+
+    /// The maximum number of attempts to make on this task
+    pub max_attempts: i32,
+
+    /// The minimum number of seconds to wait between retries.
+    pub retry_seconds: i32,
+
+    /// The multipier to apply to retry delays between attempts.
+    /// Use > 1.0 to create exponential backoff.
+    pub retry_factor: f64,
+
+    /// The maximum number of seconds to wait between retries.
+    pub retry_max_seconds: i32,
+
+    /// The maximum age of a task before it should not be run.
+    /// Measured in seconds from when the task was created.
+    pub cancellation_max_age: i32,
+}
+
+/// Convert from python to taskturbine_core
+impl From<TaskOptions> for taskturbine_core::storage::TaskOptions {
+    fn from(value: TaskOptions) -> taskturbine_core::storage::TaskOptions {
+        let mut out = taskturbine_core::storage::TaskOptions::default();
+        out.headers = value.headers;
+        out.max_attempts = value.max_attempts;
+        out.retry_seconds = value.retry_seconds;
+        out.retry_factor = value.retry_factor;
+        out.retry_max_seconds = value.retry_max_seconds;
+        out.cancellation_max_age = value.cancellation_max_age;
+        out
+    }
+}
+
 
 /// Notes
 /// -------
@@ -296,4 +394,8 @@ mod taskturbine {
     use super::TaskturbineApp;
     #[pymodule_export]
     use super::Task;
+    #[pymodule_export]
+    use super::SpawnResult;
+    #[pymodule_export]
+    use super::TaskOptions;
 }

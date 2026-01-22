@@ -7,10 +7,11 @@ with rust, the parts of tasks that interact directly with your code
 are in python.
 """
 from functools import update_wrapper
-from typing import Callable, Generic, MutableMapping, ParamSpec, TypeVar
+from typing import Any, Callable, Generic, MutableMapping, ParamSpec, TypeVar
+import json
 
 # Import from the rust library
-from .taskturbine import Config
+from .taskturbine import Config, TaskOptions, SpawnResult
 from .taskturbine import Task as TaskRs
 from .taskturbine import TaskturbineApp as AppRs
 
@@ -87,3 +88,51 @@ class TaskturbineApp:
     def get_task(self, name: str) -> Task:
         """Get a task by name. Raises KeyError on unknown values"""
         return self._tasks[name]
+
+    def serialize_params(self, params: dict[str, Any]) -> bytes:
+        """Convert parameters into bytes
+
+        TODO make this a hook method so other serializers can be used.
+        """
+        return json.dumps(params).encode()
+
+    def spawn_task(self, taskname: str, params: dict[str, Any], ) -> SpawnResult:
+        options = TaskOptions()
+        try:
+            self._app_rs.spawn_task(taskname, self.serialize_params(params), options)
+        except ValueError:
+            raise
+
+        """
+        TODO continue from here.
+
+        options to add as kwargs
+        these options should be marshalled into TaskOptions
+        and sent to app_rs method that converts to rust
+
+        app_rs should have a reference to the storage object
+
+    /// Map of headers to include with the task activation
+    pub headers: HashMap<String, String>,
+
+    /// The maximum number of attempts to make on this task
+    pub max_attempts: i32,
+
+    /// The minimum number of seconds to wait between retries.
+    pub retry_seconds: i32,
+
+    /// The multipier to apply to retry delays between attempts.
+    /// Use > 1.0 to create exponential backoff.
+    pub retry_factor: f64,
+
+    /// The maximum number of seconds to wait between retries.
+    pub retry_max_seconds: i32,
+
+    /// The maximum age of a task before it should not be run.
+    /// Measured in seconds from when the task was created.
+    pub cancellation_max_age: i32,
+
+        task_name: &str,
+        params: &[u8],
+        options: Option<TaskOptions>,
+        """
