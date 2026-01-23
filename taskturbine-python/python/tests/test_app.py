@@ -1,10 +1,19 @@
 import pytest
+import os
 
 from taskturbine import Config, TaskturbineApp, Task
 
+
 @pytest.fixture
-def config() -> Config:
-    return Config(app_module="", database_url="postgres://app:password@localhost:5432/taskturbine")
+def config(database_url) -> Config:
+    return Config(app_module="", database_url=database_url)
+
+
+@pytest.fixture
+def database_url() -> str:
+    value = os.getenv("TEST_DATABASE_URL")
+    assert value, "Required environment variable TEST_DATABASE_URL undefined"
+    return value
 
 
 def test_add_channel(config) -> None:
@@ -36,3 +45,21 @@ def test_register_task(config) -> None:
     assert task.name == "first-task"
     # The class will proxy to the wrapped function
     assert task("one") == "called one"
+
+
+def test_spawn_task_unregistered(config):
+    app = TaskturbineApp(config)
+    with pytest.raises(ValueError) as err:
+        app.spawn_task("undefined", {})
+    assert "task 'undefined' is not registered" in str(err)
+
+
+def test_spawn_task(config):
+    app = TaskturbineApp(config)
+
+    @app.register_task(name="first-task")
+    def first_task(a: str) -> str:
+        return f"called {a}"
+
+    res = app.spawn_task("first-task", {})
+    assert res

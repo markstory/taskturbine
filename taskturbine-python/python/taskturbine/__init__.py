@@ -131,8 +131,4 @@ class TaskturbineApp:
     /// The maximum age of a task before it should not be run.
     /// Measured in seconds from when the task was created.
     pub cancellation_max_age: i32,
-
-        task_name: &str,
-        params: &[u8],
-        options: Option<TaskOptions>,
         """
