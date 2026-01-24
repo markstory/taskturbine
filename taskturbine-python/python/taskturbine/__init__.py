@@ -118,6 +118,9 @@ class TaskturbineApp:
         retry_max_seconds: int | None = None,
         cancellation_max_age: int | None = None,
     ) -> SpawnResult:
+        """
+        Spawn a task to be run later by a worker.
+        """
         options = self._default_spawn_options.copy_with(
             headers=headers,
             max_attempts=max_attempts,

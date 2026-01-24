@@ -1,3 +1,4 @@
+import psycopg2
 import pytest
 import os
 
@@ -14,6 +15,17 @@ def database_url() -> str:
     value = os.getenv("TASKTURBINE_DATABASE_URL")
     assert value, "Required environment variable TASKTURBIN_DATABASE_URL undefined"
     return value
+
+@pytest.fixture
+def db_connection(database_url):
+    return psycopg2.connect(database_url)
+
+
+def row_factory(cursor, row):
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
 
 
 def test_add_channel(config) -> None:
@@ -67,7 +79,7 @@ def test_spawn_task(config):
     assert res.run_id
 
 
-def test_spawn_task_with_options(config):
+def test_spawn_task_with_options(config, db_connection):
     app = TaskturbineApp(config)
 
     @app.register_task(name="first-task")
@@ -78,3 +90,14 @@ def test_spawn_task_with_options(config):
     assert res
     assert res.task_id
     assert res.run_id
+
+    cur = db_connection.cursor()
+    cur.execute(
+        "SELECT * FROM taskturbine.tasks WHERE task_id = %s",
+        [res.task_id]
+    )
+    row = row_factory(cur, cur.fetchone())
+    assert row
+    assert row["task_id"] == res.task_id
+    assert row["retry_seconds"] == 5
+    assert row["max_attempts"] == 10
