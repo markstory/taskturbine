@@ -63,3 +63,18 @@ def test_spawn_task(config):
 
     res = app.spawn_task("first-task", {})
     assert res
+    assert res.task_id
+    assert res.run_id
+
+
+def test_spawn_task_with_options(config):
+    app = TaskturbineApp(config)
+
+    @app.register_task(name="first-task")
+    def first_task(a: str) -> str:
+        return f"called {a}"
+
+    res = app.spawn_task("first-task", {}, retry_seconds=5, max_attempts=10)
+    assert res
+    assert res.task_id
+    assert res.run_id

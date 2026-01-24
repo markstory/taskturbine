@@ -47,6 +47,16 @@ class TaskturbineApp:
         self._app_rs = AppRs(config)
         self._tasks: MutableMapping[str, Task] = {}
 
+        # TODO add method to set default spawn options
+        # Or define options per task that is registered.
+        self._default_spawn_options = TaskOptions(
+            max_attempts=5,
+            retry_seconds=30,
+            retry_factor=1.0,
+            retry_max_seconds=300,
+            cancellation_max_age=86400,
+        )
+
     def add_channel(self, name: str) -> None:
         """
         Add a channel that tasks can be spawned on.
@@ -96,41 +106,26 @@ class TaskturbineApp:
         """
         return json.dumps(params).encode()
 
-    def spawn_task(self, taskname: str, params: dict[str, Any], ) -> SpawnResult:
-        options = TaskOptions()
-        try:
-            return self._app_rs.spawn_task(
-                taskname, self.serialize_params(params), options
-            )
-        except ValueError:
-            raise
-
-        """
-        TODO continue from here.
-
-        options to add as kwargs
-        these options should be marshalled into TaskOptions
-        and sent to app_rs method that converts to rust
-
-        app_rs should have a reference to the storage object
-
-    /// Map of headers to include with the task activation
-    pub headers: HashMap<String, String>,
-
-    /// The maximum number of attempts to make on this task
-    pub max_attempts: i32,
-
-    /// The minimum number of seconds to wait between retries.
-    pub retry_seconds: i32,
-
-    /// The multipier to apply to retry delays between attempts.
-    /// Use > 1.0 to create exponential backoff.
-    pub retry_factor: f64,
-
-    /// The maximum number of seconds to wait between retries.
-    pub retry_max_seconds: i32,
-
-    /// The maximum age of a task before it should not be run.
-    /// Measured in seconds from when the task was created.
-    pub cancellation_max_age: i32,
-        """
+    def spawn_task(
+        self,
+        taskname: str,
+        params: dict[str, Any],
+        *,
+        headers: dict[str, str] | None = None,
+        max_attempts: int | None = None,
+        retry_seconds: int | None = None,
+        retry_factor: float | None = None,
+        retry_max_seconds: int | None = None,
+        cancellation_max_age: int | None = None,
+    ) -> SpawnResult:
+        options = self._default_spawn_options.copy_with(
+            headers=headers,
+            max_attempts=max_attempts,
+            retry_seconds=retry_seconds,
+            retry_factor=retry_factor,
+            retry_max_seconds=retry_max_seconds,
+            cancellation_max_age=cancellation_max_age,
+        )
+        return self._app_rs.spawn_task(
+            taskname, self.serialize_params(params), options
+        )

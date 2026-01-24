@@ -404,11 +404,11 @@ impl TaskOptions {
     #[new]
     #[pyo3(signature = (
         *,
-        max_attempts = 5,
-        retry_seconds = 30,
-        retry_factor = 1.0,
-        retry_max_seconds = 300,
-        cancellation_max_age = 86400
+        max_attempts,
+        retry_seconds,
+        retry_factor,
+        retry_max_seconds,
+        cancellation_max_age
     ))]
     fn __new__(
         max_attempts: i32,
@@ -425,6 +425,46 @@ impl TaskOptions {
             retry_max_seconds,
             cancellation_max_age,
         }
+    }
+
+    #[pyo3(signature = (
+        *,
+        headers,
+        max_attempts,
+        retry_seconds,
+        retry_factor,
+        retry_max_seconds,
+        cancellation_max_age
+    ))]
+    fn copy_with(
+        &self,
+        headers: Option<HashMap<String, String>>,
+        max_attempts: Option<i32>,
+        retry_seconds: Option<i32>,
+        retry_factor: Option<f64>,
+        retry_max_seconds: Option<i32>,
+        cancellation_max_age: Option<i32>,
+    ) -> Self {
+        let mut copied = self.clone();
+        if let Some(value) = headers {
+            copied.headers = value;
+        }
+        if let Some(value) = max_attempts {
+            copied.max_attempts = value;
+        }
+        if let Some(value) = retry_seconds {
+            copied.retry_seconds = value;
+        }
+        if let Some(value) = retry_factor {
+            copied.retry_factor = value;
+        }
+        if let Some(value) = retry_max_seconds {
+            copied.retry_max_seconds = value;
+        }
+        if let Some(value) = cancellation_max_age {
+            copied.cancellation_max_age = value;
+        }
+        copied
     }
 }
 
