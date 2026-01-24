@@ -11,8 +11,8 @@ def config(database_url) -> Config:
 
 @pytest.fixture
 def database_url() -> str:
-    value = os.getenv("TEST_DATABASE_URL")
-    assert value, "Required environment variable TEST_DATABASE_URL undefined"
+    value = os.getenv("TASKTURBINE_DATABASE_URL")
+    assert value, "Required environment variable TASKTURBIN_DATABASE_URL undefined"
     return value
 
 
@@ -51,7 +51,7 @@ def test_spawn_task_unregistered(config):
     app = TaskturbineApp(config)
     with pytest.raises(ValueError) as err:
         app.spawn_task("undefined", {})
-    assert "task 'undefined' is not registered" in str(err)
+    assert "task `undefined` is not registered" in str(err.value)
 
 
 def test_spawn_task(config):

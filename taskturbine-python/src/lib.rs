@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core;
 
-#[pyclass(module="taskturbine")]
+#[pyclass(module = "taskturbine")]
 #[derive(Debug, Clone)]
 struct Config {
     /// The path to the `package.module:app_var` of the python application to work with.
@@ -65,7 +65,7 @@ struct Config {
     pub await_event_default_timeout_secs: i32,
 }
 
-/// Convert from the python module to the core struct. 
+/// Convert from the python module to the core struct.
 impl From<Config> for taskturbine_core::config::Config {
     fn from(value: Config) -> Self {
         // Jank! This is gross but I'm hacking to learn more.
@@ -136,8 +136,45 @@ impl Config {
     }
 }
 
+/// Internal blocking storage adapter.
+/// Bridges between the tokio based runtime of the rust library
+/// with sync python.
+struct BlockingStorage {
+    /// The Storage interface. This struct generally needs to be run
+    /// in a tokio runtime.
+    inner: taskturbine_core::storage::Storage,
+    /// The tokio runtime for interacting with taskturbine_core
+    /// which is tokio based.
+    rt: tokio::runtime::Runtime,
+}
 
-#[pyclass(module="taskturbine_ext")]
+impl BlockingStorage {
+    /// Create a new BlockingStorage instance
+    pub fn new(config: Config) -> Self {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let inner = rt.block_on(taskturbine_core::storage::Storage::new_fut(config.into()));
+
+        Self { inner, rt }
+    }
+
+    /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
+    pub fn spawn_task(
+        &self,
+        channel: &str,
+        task_name: &str,
+        params: &[u8],
+        options: Option<taskturbine_core::storage::TaskOptions>,
+    ) -> Result<taskturbine_core::models::SpawnResult, taskturbine_core::storage::TaskTurbineError>
+    {
+        self.rt
+            .block_on(self.inner.spawn_task(channel, task_name, params, options))
+    }
+}
+
+#[pyclass(module = "taskturbine_ext")]
 struct TaskturbineApp {
     #[pyo3(get)]
     config: Config,
@@ -149,33 +186,21 @@ struct TaskturbineApp {
     /// A map of all registered tasks.
     tasks: HashMap<String, Task>,
 
-    /// The tokio runtime for interacting with taskturbine_core
-    /// which is tokio based.
-    tokio_rt: tokio::runtime::Runtime,
-
-    /// The Storage interface. This struct generally needs to be run
-    /// in a tokio runtime.
-    storage: taskturbine_core::storage::Storage,
+    /// A blocking wrapper on taskturbine_core::storage::Storage
+    storage: BlockingStorage,
 }
-
 
 #[pymethods]
 impl TaskturbineApp {
     #[new]
     fn py_new(config: Config) -> Self {
         let channels = vec![config.default_channel.clone()];
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let storage = taskturbine_core::storage::Storage::new(config.clone().into());
+        let storage = BlockingStorage::new(config.clone());
 
         TaskturbineApp {
             config,
             channels,
             tasks: HashMap::new(),
-            tokio_rt: runtime,
             storage,
         }
     }
@@ -207,17 +232,20 @@ impl TaskturbineApp {
     ) -> PyResult<SpawnResult> {
         if !self.tasks.contains_key(task_name) {
             return Err(PyValueError::new_err(format!(
-                "No task named {task_name} is registered."
+                "The task `{task_name}` is not registered."
             )));
         }
-        let result = self.tokio_rt.block_on(
-           self.storage.spawn_task(&self.config.default_channel, task_name, params, Some(options.into()))
+        let result = self.storage.spawn_task(
+            &self.config.default_channel,
+            task_name,
+            params,
+            Some(options.into()),
         );
 
-        // TODO map the error better.
-        result.map(|v| v.into()).map_err(|v| PyValueError::new_err("Could not spawn task"))
+        result
+            .map(|v| v.into())
+            .map_err(|v| PyValueError::new_err(format!("Could not spawn task: {v:?}")))
     }
-
 
     /*
     /// Create a worker by consuming the app.
@@ -305,7 +333,7 @@ struct SpawnResult {
     task_id: String,
 }
 
-/// Convert from the python module to the core struct. 
+/// Convert from the python module to the core struct.
 impl TryFrom<SpawnResult> for taskturbine_core::models::SpawnResult {
     type Error = PyErr;
 
@@ -332,7 +360,6 @@ impl From<taskturbine_core::models::SpawnResult> for SpawnResult {
         SpawnResult { task_id, run_id }
     }
 }
-
 
 #[pyclass]
 #[derive(Debug, PartialEq, Clone)]
@@ -372,6 +399,34 @@ impl From<TaskOptions> for taskturbine_core::storage::TaskOptions {
     }
 }
 
+#[pymethods]
+impl TaskOptions {
+    #[new]
+    #[pyo3(signature = (
+        *,
+        max_attempts = 5,
+        retry_seconds = 30,
+        retry_factor = 1.0,
+        retry_max_seconds = 300,
+        cancellation_max_age = 86400
+    ))]
+    fn __new__(
+        max_attempts: i32,
+        retry_seconds: i32,
+        retry_factor: f64,
+        retry_max_seconds: i32,
+        cancellation_max_age: i32
+    ) -> Self {
+        Self {
+            headers: HashMap::new(),
+            max_attempts,
+            retry_seconds,
+            retry_factor,
+            retry_max_seconds,
+            cancellation_max_age,
+        }
+    }
+}
 
 /// Notes
 /// -------
@@ -382,7 +437,6 @@ impl From<TaskOptions> for taskturbine_core::storage::TaskOptions {
 /// Should the app also be python only? Perhaps config, storage, and models are the key parts to
 /// reuse.
 
-
 /// A Python module implemented in Rust. The name of this function must match
 /// the `lib.name` setting in the `Cargo.toml`, else Python will not be able to
 /// import the module.
@@ -391,11 +445,11 @@ mod taskturbine {
     #[pymodule_export]
     use super::Config;
     #[pymodule_export]
-    use super::TaskturbineApp;
+    use super::SpawnResult;
     #[pymodule_export]
     use super::Task;
     #[pymodule_export]
-    use super::SpawnResult;
-    #[pymodule_export]
     use super::TaskOptions;
+    #[pymodule_export]
+    use super::TaskturbineApp;
 }

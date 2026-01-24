@@ -99,7 +99,9 @@ class TaskturbineApp:
     def spawn_task(self, taskname: str, params: dict[str, Any], ) -> SpawnResult:
         options = TaskOptions()
         try:
-            self._app_rs.spawn_task(taskname, self.serialize_params(params), options)
+            return self._app_rs.spawn_task(
+                taskname, self.serialize_params(params), options
+            )
         except ValueError:
             raise
 
