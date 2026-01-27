@@ -99,7 +99,7 @@ class TaskturbineApp:
         """Get a task by name. Raises KeyError on unknown values"""
         return self._tasks[name]
 
-    def serialize_params(self, params: dict[str, Any]) -> bytes:
+    def serialize_value(self, params: dict[str, Any]) -> bytes:
         """Convert parameters into bytes
 
         TODO make this a hook method so other serializers can be used.
@@ -130,5 +130,18 @@ class TaskturbineApp:
             cancellation_max_age=cancellation_max_age,
         )
         return self._app_rs.spawn_task(
-            taskname, self.serialize_params(params), options
+            taskname, self.serialize_value(params), options
         )
+
+    def emit_event(
+        self,
+        event_name: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """
+        Record an external event that a task/run is waiting for.
+
+        Payload can be an arbitrary JSON encodable value that
+        can be retrieved later.
+        """
+        self._app_rs.emit_event(event_name, self.serialize_value(payload))

@@ -172,6 +172,17 @@ impl BlockingStorage {
         self.rt
             .block_on(self.inner.spawn_task(channel, task_name, params, options))
     }
+
+    /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
+    pub fn emit_event(
+        &self,
+        event_name: &str,
+        payload: &[u8],
+    ) -> Result<(), taskturbine_core::storage::TaskTurbineError>
+    {
+        self.rt
+            .block_on(self.inner.emit_event(event_name, payload))
+    }
 }
 
 #[pyclass(module = "taskturbine_ext")]
@@ -247,6 +258,20 @@ impl TaskturbineApp {
             .map_err(|v| PyValueError::new_err(format!("Could not spawn task: {v:?}")))
     }
 
+    /// Record an event as having completed.
+    /// Events allow you to synchronize tasks with external actions
+    /// that can be recorded as events. Events can have a Payload of bytes.
+    /// How those bytes are encoded is an application concern.
+    ///
+    /// ```rust
+    /// app.emit_event("email-verify-foo@example.com", payload.as_bytes()).await;
+    /// ```
+    fn emit_event(&self, event_name: &str, payload: &[u8]) -> PyResult<()> {
+        let res = self.storage.emit_event(event_name, payload);
+
+        res.map_err(|v| PyValueError::new_err(format!("Could not store event {v:?}")))
+    }
+
     /*
     /// Create a worker by consuming the app.
     ///
@@ -264,24 +289,6 @@ impl TaskturbineApp {
     pub fn create_worker(self, worker_id: &str, channels: Vec<String>) -> Worker {
         let arc_self = Arc::new(self);
         Worker::new(arc_self, worker_id.to_string(), channels)
-    }
-    /// Record an event as having completed.
-    /// Events allow you to synchronize tasks with external actions
-    /// that can be recorded as events. Events can have a Payload of bytes.
-    /// How those bytes are encoded is an application concern.
-    ///
-    /// ```rust
-    /// app.emit_event("email-verify-foo@example.com", payload.as_bytes()).await;
-    /// ```
-    pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
-        let res = self.storage.emit_event(event_name, payload).await;
-
-        if let Err(err) = res {
-            return Err(FlowControl::Failure(format!(
-                "Could not store event {err:?}"
-            )));
-        }
-        Ok(())
     }
     */
 }

@@ -102,6 +102,8 @@ impl Storage {
         Self { config, pool }
     }
 
+    /// Create a new Storage instance that immediately connects and returns a Future
+    /// Used to bridge between sync bindings and async rust.
     pub async fn new_fut(config: Config) -> Self {
         let pool = PgPool::connect(&config.database_url)
             .await

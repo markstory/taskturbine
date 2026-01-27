@@ -1,5 +1,6 @@
 import psycopg2
 import pytest
+import json
 import os
 
 from taskturbine import Config, TaskturbineApp, Task
@@ -101,3 +102,18 @@ def test_spawn_task_with_options(config, db_connection):
     assert row["task_id"] == res.task_id
     assert row["retry_seconds"] == 5
     assert row["max_attempts"] == 10
+
+def test_emit_event(config, db_connection):
+    app = TaskturbineApp(config)
+
+    data = {"key": "value"}
+    app.emit_event("event-1", data)
+
+    cur = db_connection.cursor()
+    cur.execute(
+        "SELECT * FROM taskturbine.events WHERE event_name = %s",
+        ["event-1"]
+    )
+    row = row_factory(cur, cur.fetchone())
+    assert row
+    assert row["payload"].tobytes() == json.dumps(data).encode()
