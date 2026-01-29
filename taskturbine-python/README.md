@@ -50,10 +50,10 @@ def process_signup(ctx: TaskContext) -> None:
         # Send registration code
         return ""
 
-    event_name = ctx.step("send-registration-code", send_registration_code)
+    regstration_data = ctx.step("send-registration-code", send_registration_code)
 
     # Wait for an external event.
-    payload = ctx.await_event(event_name, timeout=timedelta(minutes=10))
+    payload = ctx.await_event(registration_data['event_name'], timeout=timedelta(minutes=10))
     
     def complete_registration(ctx: TaskContext) -> str:
         # Provision the rest of the account
