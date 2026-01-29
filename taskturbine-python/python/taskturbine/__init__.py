@@ -6,14 +6,16 @@ durable function framework. While all the IO operations are built
 with rust, the parts of tasks that interact directly with your code
 are in python.
 """
+from datetime import timedelta
 from functools import update_wrapper
-from typing import Any, Callable, Generic, MutableMapping, ParamSpec, TypeVar
+from typing import Any, Callable, Generic, MutableMapping, ParamSpec, Self, TypeVar
 import json
 
 # Import from the rust library
 from .taskturbine import Config, TaskOptions, SpawnResult
 from .taskturbine import Task as TaskRs
 from .taskturbine import TaskturbineApp as AppRs
+from .taskturbine import ContextInner
 
 __all__ = ["Config", "TaskturbineApp"]
 
@@ -145,3 +147,41 @@ class TaskturbineApp:
         can be retrieved later.
         """
         self._app_rs.emit_event(event_name, self.serialize_value(payload))
+
+
+class SuspendError(Exception):
+    """Signal the worker runtime to suspend this task for its retry timeout, or sleep time"""
+
+
+class TaskContext:
+    def __init__(self, claimed: Any, inner: ContextInner) -> None:
+        # TODO define claimed and provide a way to make them
+        self._inner = inner
+
+    def await_event(self, event_name: str, timeout: float|timedelta|None = None) -> dict[str, Any]:
+        """
+        Wait for an event. Will return the event payload if the event has been emit.
+        If the event has not happened, a SuspendError will be raised.
+        """
+        if isinstance(timeout, float):
+            timeout_secs = timeout
+        elif isinstance(timeout, timedelta):
+            timeout_secs = timeout.total_seconds()
+        wait = self._inner.get_event_payload(event_name, timeout_secs)
+        if wait.should_suspend:
+            raise SuspendError()
+
+        return {}
+
+    def step(self, step_name: str, func: Callable[[Self], None]) -> dict[str, Any]:
+        """
+        Run a durable step
+
+        Create a step with the given name. If a name is used multiple times, a suffix
+        will be added based on call order.
+
+        If the step has been completed the captured state will be used. If the step raises an error
+        it will be considered 'failed' and a retry will be scheduled according to the task's retry
+        configuration.
+        """
+        return {}

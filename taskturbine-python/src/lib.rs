@@ -199,6 +199,7 @@ struct TaskturbineApp {
 
     /// A blocking wrapper on taskturbine_core::storage::Storage
     storage: BlockingStorage,
+    // TODO if this was Arc I could give references to TaskContext
 }
 
 #[pymethods]
@@ -291,6 +292,32 @@ impl TaskturbineApp {
         Worker::new(arc_self, worker_id.to_string(), channels)
     }
     */
+}
+
+/// Expose a minimal interface to the python client.
+#[pyclass]
+#[derive(Debug, PartialEq, Clone)]
+struct ContextInner {
+}
+#[pymethods]
+impl ContextInner {
+    #[new]
+    fn py_new() -> Self {
+        Self {}
+    }
+
+    fn get_event_payload(&self, event_name: String, timeout_secs: u64) -> PyResult<String> {
+        let step_name = format!("$awaitEvent:{event_name}");
+        let payload_res = self.storage.await_event(
+            self.task.task_id,
+            self.task.run_id,
+            &step_name,
+            event_name,
+            Some(timeout_secs),
+        );
+
+        Ok("".to_string())
+    }
 }
 
 /// An individual decorated python task. The expected task function signature is
