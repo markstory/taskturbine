@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use pyo3::{exceptions::PyValueError, prelude::*};
-use taskturbine_core;
+use taskturbine_core::{self, models::{RunId, TaskId}};
+use uuid::Uuid;
 
 #[pyclass(module = "taskturbine")]
 #[derive(Debug, Clone)]
@@ -157,7 +158,7 @@ impl BlockingStorage {
             .unwrap();
         let inner = rt.block_on(taskturbine_core::storage::Storage::new_fut(config.into()));
 
-        Self { inner, rt }
+        Self { inner: inner, rt }
     }
 
     /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
@@ -183,6 +184,25 @@ impl BlockingStorage {
         self.rt
             .block_on(self.inner.emit_event(event_name, payload))
     }
+
+    /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
+    pub fn await_event(
+        &self,
+        task_id: TaskId,
+        run_id: RunId,
+        step_name: &str,
+        event_name: &str,
+        timeout: Option<u64>,
+    ) -> Result<taskturbine_core::storage::AwaitResult, taskturbine_core::storage::TaskTurbineError>
+    {
+        self.rt
+            .block_on(self.inner.await_event(task_id, run_id, step_name, event_name, timeout))
+    }
+
+    /// Get the config of the application
+    pub fn get_config(&self) -> taskturbine_core::config::Config {
+        self.inner.get_config()
+    }
 }
 
 #[pyclass(module = "taskturbine_ext")]
@@ -198,8 +218,7 @@ struct TaskturbineApp {
     tasks: HashMap<String, Task>,
 
     /// A blocking wrapper on taskturbine_core::storage::Storage
-    storage: BlockingStorage,
-    // TODO if this was Arc I could give references to TaskContext
+    storage: Arc<BlockingStorage>,
 }
 
 #[pymethods]
@@ -213,7 +232,7 @@ impl TaskturbineApp {
             config,
             channels,
             tasks: HashMap::new(),
-            storage,
+            storage: Arc::new(storage),
         }
     }
 
@@ -292,31 +311,45 @@ impl TaskturbineApp {
         Worker::new(arc_self, worker_id.to_string(), channels)
     }
     */
+
+    fn create_context(&self) -> ContextInner {
+        ContextInner::new(self.storage.clone())
+    }
 }
 
 /// Expose a minimal interface to the python client.
 #[pyclass]
-#[derive(Debug, PartialEq, Clone)]
 struct ContextInner {
+    storage: Arc<BlockingStorage>,
 }
 #[pymethods]
 impl ContextInner {
-    #[new]
-    fn py_new() -> Self {
-        Self {}
+    fn new(storage: Arc<BlockingStorage>) -> Self {
+        Self { storage }
     }
 
-    fn get_event_payload(&self, event_name: String, timeout_secs: u64) -> PyResult<String> {
+    /// Proxy to the config value.
+    fn await_event_default_timeout_secs(&self) -> i32 {
+        self.storage.get_config().await_event_default_timeout_secs
+    }
+
+    fn get_event_payload(&self, event_name: String, timeout_secs: u64) -> PyResult<AwaitResult> {
         let step_name = format!("$awaitEvent:{event_name}");
         let payload_res = self.storage.await_event(
-            self.task.task_id,
-            self.task.run_id,
+            // TODO fix this
+            TaskId(Uuid::now_v7()),
+            RunId(Uuid::now_v7()),
+            // self.task.task_id,
+            // self.task.run_id,
             &step_name,
-            event_name,
+            event_name.as_ref(),
             Some(timeout_secs),
         );
-
-        Ok("".to_string())
+        match payload_res {
+            // TODO this isn't working yet.
+            Ok(result) => Ok(result.into()),
+            Err(err) => Err(PyValueError::new_err(format!("Could not await_event: {err:?}"))),
+        }
     }
 }
 
@@ -354,6 +387,27 @@ impl Task {
         };
 
         Ok(task)
+    }
+}
+
+#[pyclass]
+#[derive(Debug, PartialEq, Clone)]
+struct AwaitResult {
+    /// The event payload that was awaited upon.
+    /// Application logic is responsible for decoding bytes.
+    pub payload: Vec<u8>,
+
+    /// Whether or not the runtime should suspend as we're still waiting for the event.
+    pub should_suspend: bool,
+}
+
+/// Convert from storage API to python binding
+impl From<taskturbine_core::storage::AwaitResult> for AwaitResult {
+    fn from(value: taskturbine_core::storage::AwaitResult) -> AwaitResult {
+        let payload = value.payload;
+        let should_suspend = value.should_suspend;
+
+        AwaitResult { payload, should_suspend }
     }
 }
 

@@ -44,6 +44,42 @@ class Task(Generic[P, R]):
         return self._func(*args, **kwargs)
 
 
+class TaskContext:
+    def __init__(self, claimed: Any, inner: ContextInner) -> None:
+        # TODO define claimed and provide a way to make them
+        self._inner = inner
+
+    def await_event(self, event_name: str, timeout: float|timedelta|None = None) -> dict[str, Any]:
+        """
+        Wait for an event. Will return the event payload if the event has been emit.
+        If the event has not happened, a SuspendError will be raised.
+        """
+        timeout_secs = self._inner.
+        if isinstance(timeout, float):
+            timeout_secs = timeout
+        elif isinstance(timeout, timedelta):
+            timeout_secs = timeout.total_seconds()
+        assert timeout_secs
+        wait = self._inner.get_event_payload(event_name, timeout_secs)
+        if wait.should_suspend:
+            raise SuspendError()
+
+        return {}
+
+    def step(self, step_name: str, func: Callable[[Self], None]) -> dict[str, Any]:
+        """
+        Run a durable step
+
+        Create a step with the given name. If a name is used multiple times, a suffix
+        will be added based on call order.
+
+        If the step has been completed the captured state will be used. If the step raises an error
+        it will be considered 'failed' and a retry will be scheduled according to the task's retry
+        configuration.
+        """
+        return {}
+
+
 class TaskturbineApp:
     def __init__(self, config: Config) -> None:
         self._app_rs = AppRs(config)
@@ -148,40 +184,13 @@ class TaskturbineApp:
         """
         self._app_rs.emit_event(event_name, self.serialize_value(payload))
 
+    def create_context(self, claimed_task = None) -> TaskContext:
+        # TODO implement claiming tasks
+        context = TaskContext({}, self._app_rs.create_context())
+        return context
+
 
 class SuspendError(Exception):
     """Signal the worker runtime to suspend this task for its retry timeout, or sleep time"""
 
 
-class TaskContext:
-    def __init__(self, claimed: Any, inner: ContextInner) -> None:
-        # TODO define claimed and provide a way to make them
-        self._inner = inner
-
-    def await_event(self, event_name: str, timeout: float|timedelta|None = None) -> dict[str, Any]:
-        """
-        Wait for an event. Will return the event payload if the event has been emit.
-        If the event has not happened, a SuspendError will be raised.
-        """
-        if isinstance(timeout, float):
-            timeout_secs = timeout
-        elif isinstance(timeout, timedelta):
-            timeout_secs = timeout.total_seconds()
-        wait = self._inner.get_event_payload(event_name, timeout_secs)
-        if wait.should_suspend:
-            raise SuspendError()
-
-        return {}
-
-    def step(self, step_name: str, func: Callable[[Self], None]) -> dict[str, Any]:
-        """
-        Run a durable step
-
-        Create a step with the given name. If a name is used multiple times, a suffix
-        will be added based on call order.
-
-        If the step has been completed the captured state will be used. If the step raises an error
-        it will be considered 'failed' and a retry will be scheduled according to the task's retry
-        configuration.
-        """
-        return {}
