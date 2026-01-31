@@ -54,7 +54,7 @@ class TaskContext:
         Wait for an event. Will return the event payload if the event has been emit.
         If the event has not happened, a SuspendError will be raised.
         """
-        timeout_secs = self._inner.
+        timeout_secs = self._inner.await_event_default_timeout_secs()
         if isinstance(timeout, float):
             timeout_secs = timeout
         elif isinstance(timeout, timedelta):

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{self, models::{RunId, TaskId}};
@@ -151,12 +151,12 @@ struct BlockingStorage {
 
 impl BlockingStorage {
     /// Create a new BlockingStorage instance
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: taskturbine_core::config::Config) -> Self {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
-        let inner = rt.block_on(taskturbine_core::storage::Storage::new_fut(config.into()));
+        let inner = rt.block_on(taskturbine_core::storage::Storage::new_fut(config));
 
         Self { inner: inner, rt }
     }
@@ -226,7 +226,7 @@ impl TaskturbineApp {
     #[new]
     fn py_new(config: Config) -> Self {
         let channels = vec![config.default_channel.clone()];
-        let storage = BlockingStorage::new(config.clone());
+        let storage = BlockingStorage::new(config.clone().into());
 
         TaskturbineApp {
             config,
@@ -313,9 +313,11 @@ impl TaskturbineApp {
     */
 
     fn create_context(&self) -> ContextInner {
-        ContextInner::new(self.storage.clone())
+        // TODO add claimed task parameter
+        ContextInner { storage: self.storage.clone() }
     }
 }
+
 
 /// Expose a minimal interface to the python client.
 #[pyclass]
@@ -324,10 +326,6 @@ struct ContextInner {
 }
 #[pymethods]
 impl ContextInner {
-    fn new(storage: Arc<BlockingStorage>) -> Self {
-        Self { storage }
-    }
-
     /// Proxy to the config value.
     fn await_event_default_timeout_secs(&self) -> i32 {
         self.storage.get_config().await_event_default_timeout_secs
@@ -580,4 +578,6 @@ mod taskturbine {
     use super::TaskOptions;
     #[pymodule_export]
     use super::TaskturbineApp;
+    #[pymodule_export]
+    use super::ContextInner;
 }

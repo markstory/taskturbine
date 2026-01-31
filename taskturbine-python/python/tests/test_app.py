@@ -117,3 +117,9 @@ def test_emit_event(config, db_connection):
     row = row_factory(cur, cur.fetchone())
     assert row
     assert row["payload"].tobytes() == json.dumps(data).encode()
+
+
+def test_create_context(config):
+    app = TaskturbineApp(config)
+    context = app.create_context()
+    assert context
