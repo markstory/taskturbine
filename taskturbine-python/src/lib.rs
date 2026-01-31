@@ -312,6 +312,7 @@ impl TaskturbineApp {
     }
     */
 
+    /// Create a ContextInner which bridges into the python client.
     fn create_context(&self) -> ContextInner {
         // TODO add claimed task parameter
         ContextInner { storage: self.storage.clone() }
@@ -331,6 +332,8 @@ impl ContextInner {
         self.storage.get_config().await_event_default_timeout_secs
     }
 
+    /// Read the payload for an event.
+    /// Will raise an exception if the read fails
     fn get_event_payload(&self, event_name: String, timeout_secs: u64) -> PyResult<AwaitResult> {
         let step_name = format!("$awaitEvent:{event_name}");
         let payload_res = self.storage.await_event(

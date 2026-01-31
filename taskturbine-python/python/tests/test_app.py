@@ -123,3 +123,15 @@ def test_create_context(config):
     app = TaskturbineApp(config)
     context = app.create_context()
     assert context
+
+
+@pytest.mark.skip(reason="need to be able make tasks running")
+def test_context_await_event(config):
+    # TODO implement all of this
+    app = TaskturbineApp(config)
+    app.emit_event("context_await_event", {"status": "ok"})
+    context = app.create_context()
+
+    result = context.await_event("context_await_event")
+    assert result
+    assert result["status"] == "ok"
