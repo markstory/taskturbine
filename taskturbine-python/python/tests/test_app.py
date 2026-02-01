@@ -125,12 +125,26 @@ def test_create_context(config):
     assert context
 
 
-@pytest.mark.skip(reason="need to be able make tasks running")
-def test_context_await_event(config):
-    # TODO implement all of this
+def test_context_await_event(config, db_connection):
     app = TaskturbineApp(config)
+
+    @app.register_task(name="first-task")
+    def first_task(a: str) -> str:
+        return f"called {a}"
+
+    res = app.spawn_task("first-task", {})
+    cur = db_connection.cursor()
+    cur.execute(
+        "UPDATE taskturbine.tasks SET state = 'running' WHERE task_id = %s",
+        [res.task_id]
+    )
+    cur.execute(
+        "UPDATE taskturbine.runs SET state = 'running' WHERE task_id = %s",
+        [res.task_id]
+    )
     app.emit_event("context_await_event", {"status": "ok"})
-    context = app.create_context()
+    # TODO need claimed tasks next
+    context = app.create_context(claimed_task)
 
     result = context.await_event("context_await_event")
     assert result

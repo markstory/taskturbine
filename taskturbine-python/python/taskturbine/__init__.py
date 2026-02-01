@@ -6,13 +6,13 @@ durable function framework. While all the IO operations are built
 with rust, the parts of tasks that interact directly with your code
 are in python.
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import update_wrapper
 from typing import Any, Callable, Generic, MutableMapping, ParamSpec, Self, TypeVar
 import json
 
 # Import from the rust library
-from .taskturbine import Config, TaskOptions, SpawnResult
+from .taskturbine import Config, TaskOptions, SpawnResult, ClaimedTask
 from .taskturbine import Task as TaskRs
 from .taskturbine import TaskturbineApp as AppRs
 from .taskturbine import ContextInner
@@ -183,6 +183,15 @@ class TaskturbineApp:
         can be retrieved later.
         """
         self._app_rs.emit_event(event_name, self.serialize_value(payload))
+
+    def claim_task(
+        self,
+        channels: list[str],
+        worker_id: str,
+        claim_timeout: datetime,
+        qty: int,
+   ) -> list[ClaimedTask]:
+        return self._app_rs.claim_task(channels, worker_id, claim_timeout, qty)
 
     def create_context(self, claimed_task = None) -> TaskContext:
         # TODO implement claiming tasks
