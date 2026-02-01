@@ -1,4 +1,6 @@
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyValueError, prelude::*};
+use taskturbine_core::models::{RunId, TaskId};
+use uuid::Uuid;
 
 /// Entity structure for a task that has been claimed
 /// by a worker for execution. This is a snapshot of the state
@@ -29,6 +31,7 @@ pub struct ClaimedTask {
 }
 
 /// Convert from the python module to the core struct.
+/// TODO convert to try_from
 impl From<ClaimedTask> for taskturbine_core::models::ClaimedTask {
     fn from(value: ClaimedTask) -> Self {
         // TODO: This is a bit YOLO
@@ -61,7 +64,7 @@ impl From<ClaimedTask> for taskturbine_core::models::ClaimedTask {
 /// to generate code snippets of python that are executed.
 #[pyclass]
 #[derive(Debug, PartialEq, Clone)]
-struct Task {
+pub struct Task {
     /// The python module name of the task. This module is expected to be within
     /// `[Config.app_module]`. This module will be imported when running the task.
     #[pyo3(get, set)]
@@ -73,6 +76,9 @@ struct Task {
     pub task_name: String,
 }
 
+/// The metadata for a task.
+///
+/// This is shared data to/from python.
 #[pymethods]
 impl Task {
     #[pyo3(signature = (module_name, task_name))]
@@ -87,9 +93,12 @@ impl Task {
     }
 }
 
+/// The metadata for the result of await_event
+///
+/// This is shared data to/from python.
 #[pyclass]
 #[derive(Debug, PartialEq, Clone)]
-struct AwaitResult {
+pub struct AwaitResult {
     /// The event payload that was awaited upon.
     /// Application logic is responsible for decoding bytes.
     pub payload: Vec<u8>,
@@ -109,9 +118,11 @@ impl From<taskturbine_core::storage::AwaitResult> for AwaitResult {
 }
 
 /// The result of spawning a task.
+///
+/// This is shared data to/from python.
 #[pyclass]
 #[derive(Debug, PartialEq, Clone)]
-struct SpawnResult {
+pub struct SpawnResult {
     #[pyo3(get)]
     run_id: String,
     #[pyo3(get)]
@@ -145,4 +156,3 @@ impl From<taskturbine_core::models::SpawnResult> for SpawnResult {
         SpawnResult { task_id, run_id }
     }
 }
-
