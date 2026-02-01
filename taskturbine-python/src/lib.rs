@@ -32,7 +32,7 @@ impl BlockingStorage {
             .unwrap();
         let inner = rt.block_on(taskturbine_core::storage::Storage::new_fut(config));
 
-        Self { inner: inner, rt }
+        Self { inner, rt }
     }
 
     /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
@@ -166,6 +166,18 @@ impl TaskturbineApp {
         res.map_err(|v| PyValueError::new_err(format!("Could not store event {v:?}")))
     }
 
+    fn claim_task(
+        &self,
+        channels: Vec<&str>,
+        worker_id: &str,
+        claim_timeout: DateTime<Utc>,
+        qty: i32,
+    ) -> PyResult<Vec<ClaimedTask>> {
+        let res = self.storage.claim_task(channels, worker_id, claim_timeout);
+
+        res.map_err(|v| PyValueError::new_err(format!("Could not claim tasks {v:?}")))
+    }
+
     /*
     /// Create a worker by consuming the app.
     ///
@@ -187,7 +199,7 @@ impl TaskturbineApp {
     */
 
     /// Create a ContextInner which bridges into the python client.
-    fn create_context(&self) -> ContextInner {
+    fn create_context(&self, claimed_task) -> ContextInner {
         // TODO add claimed task parameter
         ContextInner { storage: self.storage.clone() }
     }
