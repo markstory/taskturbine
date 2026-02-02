@@ -119,9 +119,11 @@ impl Task {
 pub struct AwaitResult {
     /// The event payload that was awaited upon.
     /// Application logic is responsible for decoding bytes.
+    #[pyo3(get)]
     pub payload: Vec<u8>,
 
     /// Whether or not the runtime should suspend as we're still waiting for the event.
+    #[pyo3(get)]
     pub should_suspend: bool,
 }
 
