@@ -197,8 +197,7 @@ class TaskturbineApp:
         claim_timeout: timedelta,
         qty: int,
    ) -> list[ClaimedTask]:
-        return self._app_rs.claim_task(channels, worker_id, qty)
-        # return self._app_rs.claim_task(channels, worker_id, claim_timeout, qty)
+        return self._app_rs.claim_task(channels, worker_id, claim_timeout, qty)
 
     def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
         context = TaskContext(self._app_rs.create_context(claimed_task))

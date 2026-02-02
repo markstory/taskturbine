@@ -184,13 +184,9 @@ impl TaskturbineApp {
         &self,
         channels: Vec<String>,
         worker_id: &str,
-        // claim_timeout: PyDateTime,
+        claim_timeout: Duration,
         qty: i32,
     ) -> PyResult<Vec<ClaimedTask>> {
-        // TODO figure out how to get a datetime from python,
-        // or use int seconds.
-        let claim_timeout = Duration::from_secs(60);
-
         let channels = channels.iter().map(|chan| chan.as_ref()).collect();
         let res = self.storage.claim_task(channels, worker_id, claim_timeout, qty);
 
