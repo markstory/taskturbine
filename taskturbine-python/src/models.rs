@@ -53,6 +53,24 @@ impl From<ClaimedTask> for taskturbine_core::models::ClaimedTask {
     }
 }
 
+/// Convert from taskturbine_core model to the pyo3 one
+impl From<taskturbine_core::models::ClaimedTask> for ClaimedTask {
+    fn from(value: taskturbine_core::models::ClaimedTask) -> Self {
+        ClaimedTask {
+            task_id: value.task_id.0.to_string(),
+            run_id: value.run_id.0.to_string(),
+            channel: value.channel,
+            task_name: value.task_name,
+            params: value.params,
+            retry_seconds: value.retry_seconds,
+            retry_factor: value.retry_factor,
+            retry_max_seconds: value.retry_max_seconds,
+            attempt: value.attempt,
+            max_attempts: value.max_attempts,
+        }
+    }
+}
+
 /// An individual decorated python task. The expected task function signature is
 ///
 /// ```

@@ -1,9 +1,10 @@
 import psycopg2
 import pytest
+from datetime import datetime, timedelta
 import json
 import os
 
-from taskturbine import Config, TaskturbineApp, Task
+from taskturbine import Config, SuspendError, TaskturbineApp, Task
 
 
 @pytest.fixture
@@ -125,7 +126,7 @@ def test_create_context(config):
     assert context
 
 
-def test_context_await_event(config, db_connection):
+def test_context_await_event_event_present(config):
     app = TaskturbineApp(config)
 
     @app.register_task(name="first-task")
@@ -133,19 +134,39 @@ def test_context_await_event(config, db_connection):
         return f"called {a}"
 
     res = app.spawn_task("first-task", {})
-    cur = db_connection.cursor()
-    cur.execute(
-        "UPDATE taskturbine.tasks SET state = 'running' WHERE task_id = %s",
-        [res.task_id]
-    )
-    cur.execute(
-        "UPDATE taskturbine.runs SET state = 'running' WHERE task_id = %s",
-        [res.task_id]
-    )
-    app.emit_event("context_await_event", {"status": "ok"})
-    # TODO need claimed tasks next
-    context = app.create_context(claimed_task)
+    assert res.task_id
+    assert res.run_id
 
+    five_min = datetime.now() + timedelta(minutes=5)
+    app.emit_event("context_await_event", {"status": "ok"})
+
+    # Claim a task so that it is 'running' and TaskContext can wait for the event.
+    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    assert len(claims) >= 1
+
+    context = app.create_context(claims[0])
     result = context.await_event("context_await_event")
     assert result
     assert result["status"] == "ok"
+
+
+def test_context_await_event_no_event(config):
+    app = TaskturbineApp(config)
+
+    @app.register_task(name="first-task")
+    def first_task(a: str) -> str:
+        return f"called {a}"
+
+    res = app.spawn_task("first-task", {})
+    assert res.task_id
+    assert res.run_id
+
+    # Claim a task so that it is 'running' and TaskContext can wait for the event.
+    five_min = datetime.now() + timedelta(minutes=5)
+    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    assert len(claims) >= 1
+
+    context = app.create_context(claims[0])
+    with pytest.raises(SuspendError) as err
+        context.await_event("context_await_event")
+    assert err

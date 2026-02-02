@@ -45,8 +45,7 @@ class Task(Generic[P, R]):
 
 
 class TaskContext:
-    def __init__(self, claimed: Any, inner: ContextInner) -> None:
-        # TODO define claimed and provide a way to make them
+    def __init__(self, inner: ContextInner) -> None:
         self._inner = inner
 
     def await_event(self, event_name: str, timeout: float|timedelta|None = None) -> dict[str, Any]:
@@ -63,8 +62,15 @@ class TaskContext:
         wait = self._inner.get_event_payload(event_name, timeout_secs)
         if wait.should_suspend:
             raise SuspendError()
+        return json.loads(wait.payload)
 
-        return {}
+    def emit_event(self):
+        # TODO implement this
+        ... 
+
+    def sleep_for(self):
+        # TODO implement this
+        ... 
 
     def step(self, step_name: str, func: Callable[[Self], None]) -> dict[str, Any]:
         """
@@ -191,11 +197,11 @@ class TaskturbineApp:
         claim_timeout: datetime,
         qty: int,
    ) -> list[ClaimedTask]:
-        return self._app_rs.claim_task(channels, worker_id, claim_timeout, qty)
+        return self._app_rs.claim_task(channels, worker_id, qty)
+        # return self._app_rs.claim_task(channels, worker_id, claim_timeout, qty)
 
-    def create_context(self, claimed_task = None) -> TaskContext:
-        # TODO implement claiming tasks
-        context = TaskContext({}, self._app_rs.create_context())
+    def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
+        context = TaskContext(self._app_rs.create_context(claimed_task))
         return context
 
 

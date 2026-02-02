@@ -1,6 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use pyo3::{exceptions::PyValueError, prelude::*};
+use chrono::{DateTime, Utc};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyDateTime};
 use taskturbine_core::{self, models::{RunId, TaskId}};
 use uuid::Uuid;
 
@@ -71,6 +72,19 @@ impl BlockingStorage {
     {
         self.rt
             .block_on(self.inner.await_event(task_id, run_id, step_name, event_name, timeout))
+    }
+
+    /// Make a blocking call to [`taskturbine_core::storage::Storage.claim_task()`]
+    pub fn claim_task(
+        &self,
+        channels: Vec<&str>,
+        worker_id: &str,
+        claim_timeout: DateTime<Utc>,
+        qty: i32,
+    ) -> Result<Vec<taskturbine_core::models::ClaimedTask>, taskturbine_core::storage::TaskTurbineError>
+    {
+        self.rt
+            .block_on(self.inner.claim_task(channels, worker_id, claim_timeout, qty))
     }
 
     /// Get the config of the application
@@ -163,19 +177,31 @@ impl TaskturbineApp {
     fn emit_event(&self, event_name: &str, payload: &[u8]) -> PyResult<()> {
         let res = self.storage.emit_event(event_name, payload);
 
-        res.map_err(|v| PyValueError::new_err(format!("Could not store event {v:?}")))
+        res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
 
     fn claim_task(
         &self,
-        channels: Vec<&str>,
+        channels: Vec<String>,
         worker_id: &str,
-        claim_timeout: DateTime<Utc>,
+        // claim_timeout: PyDateTime,
         qty: i32,
     ) -> PyResult<Vec<ClaimedTask>> {
-        let res = self.storage.claim_task(channels, worker_id, claim_timeout);
+        // TODO figure out how to get a datetime from python,
+        // or use int seconds.
+        let claim_timeout = Utc::now() + Duration::from_secs(60);
 
-        res.map_err(|v| PyValueError::new_err(format!("Could not claim tasks {v:?}")))
+        let channels = channels.iter().map(|chan| chan.as_ref()).collect();
+        let res = self.storage.claim_task(channels, worker_id, claim_timeout, qty);
+
+        res
+            .map(|v| {
+                let mapped: Vec<ClaimedTask> = v.into_iter()
+                    .map(|task| task.into())
+                    .collect();
+                mapped
+            })
+            .map_err(|v| PyValueError::new_err(format!("Could not claim tasks: {v:?}")))
     }
 
     /*
@@ -199,9 +225,9 @@ impl TaskturbineApp {
     */
 
     /// Create a ContextInner which bridges into the python client.
-    fn create_context(&self, claimed_task) -> ContextInner {
+    fn create_context(&self, claimed_task: ClaimedTask) -> ContextInner {
         // TODO add claimed task parameter
-        ContextInner { storage: self.storage.clone() }
+        ContextInner { storage: self.storage.clone(), claimed_task }
     }
 }
 
@@ -210,6 +236,7 @@ impl TaskturbineApp {
 #[pyclass]
 struct ContextInner {
     storage: Arc<BlockingStorage>,
+    claimed_task: ClaimedTask,
 }
 #[pymethods]
 impl ContextInner {
@@ -220,20 +247,24 @@ impl ContextInner {
 
     /// Read the payload for an event.
     /// Will raise an exception if the read fails
-    fn get_event_payload(&self, event_name: String, timeout_secs: u64) -> PyResult<AwaitResult> {
+    fn get_event_payload(
+        &self,
+        event_name: String,
+        timeout_secs: u64
+    ) -> PyResult<AwaitResult> {
+        // TODO this is yolo. Should raise errors on invalid values.
+        let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
+        let run_id = Uuid::parse_str(&self.claimed_task.run_id).unwrap();
+
         let step_name = format!("$awaitEvent:{event_name}");
         let payload_res = self.storage.await_event(
-            // TODO This needs context to have ClaimedTask.
-            TaskId(Uuid::now_v7()),
-            RunId(Uuid::now_v7()),
-            // self.task.task_id,
-            // self.task.run_id,
+            TaskId(task_id),
+            RunId(run_id),
             &step_name,
             event_name.as_ref(),
             Some(timeout_secs),
         );
         match payload_res {
-            // TODO this isn't working yet.
             Ok(result) => Ok(result.into()),
             Err(err) => Err(PyValueError::new_err(format!("Could not await_event: {err:?}"))),
         }
