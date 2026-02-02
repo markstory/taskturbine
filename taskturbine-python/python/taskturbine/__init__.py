@@ -45,8 +45,10 @@ class Task(Generic[P, R]):
 
 
 class TaskContext:
-    def __init__(self, inner: ContextInner) -> None:
+    def __init__(self, inner: ContextInner, serializer: Callable[[dict[str, Any]], bytes]) -> None:
         self._inner = inner
+        self._serializer = serializer
+        self._checkpoint_counters: dict[str, int] = {}
 
     def await_event(self, event_name: str, timeout: float|timedelta|None = None) -> dict[str, Any]:
         """
@@ -64,13 +66,46 @@ class TaskContext:
             raise SuspendError()
         return json.loads(wait.payload)
 
-    def emit_event(self):
-        # TODO implement this
-        ... 
+    def emit_event(self, event_name: str, payload: dict[str, Any]) -> None:
+        """
+        Record an external event that a task/run is waiting for.
 
-    def sleep_for(self):
-        # TODO implement this
-        ... 
+        Payload can be an arbitrary JSON encodable value that
+        can be retrieved later.
+        """
+        self._inner.emit_event(event_name, self._serializer(payload))
+
+    def _checkpoint_name(self, step_name: str) -> str:
+        """
+        Resolve a step name into a checkpoint name.
+        A task can contain steps with duplicate names, and each
+        instance of a name needs to resolve to a distinct checkpoint
+        """
+        if step_name not in self._checkpoint_counters:
+            self._checkpoint_counters[step_name] = 0
+        self._checkpoint_counters[step_name] += 1
+        value = self._checkpoint_counters[step_name]
+        if value == 1:
+            return step_name
+        return f"{step_name}#{value}"
+
+    def sleep_for(self, step_name: str, duration: timedelta):
+        """
+        Pause the current task until `duration` has elapsed.
+
+        Will create a checkpoint, and raise a SuspendError with
+        the duration the current task should sleep for.
+        """
+        checkpoint_name = self._checkpoint_name(step_name)
+        try:
+            self._inner.get_checkpoint(checkpoint_name)
+            return 
+        except ValueError:
+            # An exception here means that the checkpoint was not found.
+            pass
+        self._inner.set_checkpoint(checkpoint_name, step_name.encode(), None)
+
+        raise SuspendError(duration=duration)
 
     def step(self, step_name: str, func: Callable[[Self], None]) -> dict[str, Any]:
         """
@@ -206,11 +241,18 @@ class TaskturbineApp:
         """
         Create a TaskContext with links to the rust context.
         """
-        context = TaskContext(self._app_rs.create_context(claimed_task))
+        context = TaskContext(
+            inner=self._app_rs.create_context(claimed_task),
+            serializer=self.serialize_value,
+        )
         return context
 
 
 class SuspendError(Exception):
     """Signal the worker runtime to suspend this task for its retry timeout, or sleep time"""
+
+    def __init__(self, duration: timedelta | None = None) -> None:
+        super().__init__("Task suspended")
+        self.duration = duration
 
 

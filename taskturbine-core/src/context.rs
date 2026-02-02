@@ -304,7 +304,7 @@ impl TaskContext {
             .set_checkpoint(
                 self.task.task_id,
                 self.task.run_id,
-                step_name,
+                &checkpoint_name,
                 payload.as_bytes(),
                 None,
             )

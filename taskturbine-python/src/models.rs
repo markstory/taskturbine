@@ -1,4 +1,4 @@
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyDateTime};
 use taskturbine_core::models::{RunId, TaskId};
 use uuid::Uuid;
 
@@ -174,5 +174,37 @@ impl From<taskturbine_core::models::SpawnResult> for SpawnResult {
         let run_id = value.run_id.0.into();
 
         SpawnResult { task_id, run_id }
+    }
+}
+
+
+#[pyclass]
+pub struct Checkpoint {
+    /// The task id of the spawned task.
+    pub task_id: String,
+    /// The step name of the checkpoint. Step names are made
+    /// unique per task to handle duplicate step names.
+    pub step_name: String,
+    /// The payload/state of the checkpoint in bytes.
+    /// Applications are responsible for serializing/deserializing
+    pub state: Vec<u8>,
+    /// The run that created this checkpoint.
+    pub owner_run_id: String,
+    /// The timestamp the checkpoint was created or updated.
+    pub updated_at: i64
+}
+
+/// Convert from core API to python binding
+impl From<taskturbine_core::models::Checkpoint> for Checkpoint {
+    fn from(value: taskturbine_core::models::Checkpoint) -> Checkpoint {
+        let task_id = value.task_id.0.into();
+        let owner_run_id = value.owner_run_id.0.into();
+        Checkpoint {
+            task_id,
+            owner_run_id,
+            step_name: value.step_name.to_string(),
+            state: value.state.clone(),
+            updated_at: value.updated_at.timestamp()
+        }
     }
 }

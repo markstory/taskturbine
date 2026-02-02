@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use chrono::{DateTime, Utc};
-use pyo3::{exceptions::PyValueError, prelude::*, types::PyDateTime};
+use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{self, models::{RunId, TaskId}};
 use uuid::Uuid;
 
@@ -9,7 +8,7 @@ mod config;
 mod models;
 
 use config::Config;
-use models::{AwaitResult, ClaimedTask, SpawnResult, Task};
+use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, Task};
 
 
 /// Internal blocking storage adapter.
@@ -85,6 +84,23 @@ impl BlockingStorage {
     {
         self.rt
             .block_on(self.inner.claim_task(channels, worker_id, claim_timeout, qty))
+    }
+
+    pub fn get_checkpoint(&self, task_id: TaskId, step_name: &str) -> Result<Option<taskturbine_core::models::Checkpoint>, taskturbine_core::storage::TaskTurbineError>
+    {
+        self.rt.block_on(self.inner.get_checkpoint(task_id, step_name))
+    }
+
+    pub fn set_checkpoint(
+        &self,
+        task_id: TaskId,
+        run_id: RunId,
+        step_name: &str,
+        state: &[u8],
+        extend_claim: Option<Duration>,
+    ) -> Result<(), taskturbine_core::storage::TaskTurbineError>
+    {
+        self.rt.block_on(self.inner.set_checkpoint(task_id, run_id, step_name, state, extend_claim))
     }
 
     /// Get the config of the application
@@ -222,7 +238,6 @@ impl TaskturbineApp {
 
     /// Create a ContextInner which bridges into the python client.
     fn create_context(&self, claimed_task: ClaimedTask) -> ContextInner {
-        // TODO add claimed task parameter
         ContextInner { storage: self.storage.clone(), claimed_task }
     }
 }
@@ -239,6 +254,43 @@ impl ContextInner {
     /// Proxy to the config value.
     fn await_event_default_timeout_secs(&self) -> i32 {
         self.storage.get_config().await_event_default_timeout_secs
+    }
+
+    /// Record an event taking place.
+    fn emit_event(&self, event_name: String, payload: &[u8]) -> PyResult<(),> {
+        let res = self.storage.emit_event(&event_name, payload);
+
+        res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
+    }
+
+    /// Get a checkpoint by name for a task.
+    /// `checkpoint_name` is expected to be a unique name.
+    fn get_checkpoint(&self, checkpoint_name: String) -> PyResult<Checkpoint> {
+        // TODO this unwrap() is yolo
+        let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
+        let res = self.storage.get_checkpoint(TaskId(task_id), &checkpoint_name);
+
+        // TODO this is masking a storage error
+        if let Ok(Some(checkpoint)) = res {
+            Ok(checkpoint.into())
+        } else {
+            Err(PyValueError::new_err("Checkpoint not found, or read failed"))
+        }
+    }
+
+    /// Set the state for a named checkpoint.
+    fn set_checkpoint(
+        &self,
+        step_name: &str,
+        state: &[u8],
+        extend_claim: Option<Duration>,
+    ) -> PyResult<()> {
+        let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
+        let run_id = Uuid::parse_str(&self.claimed_task.run_id).unwrap();
+
+        let res = self.storage.set_checkpoint(TaskId(task_id), RunId(run_id), step_name, state, extend_claim);
+
+        res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }
 
     /// Read the payload for an event.
