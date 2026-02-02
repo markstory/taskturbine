@@ -79,7 +79,7 @@ impl BlockingStorage {
         &self,
         channels: Vec<&str>,
         worker_id: &str,
-        claim_timeout: DateTime<Utc>,
+        claim_timeout: Duration,
         qty: i32,
     ) -> Result<Vec<taskturbine_core::models::ClaimedTask>, taskturbine_core::storage::TaskTurbineError>
     {
@@ -189,7 +189,7 @@ impl TaskturbineApp {
     ) -> PyResult<Vec<ClaimedTask>> {
         // TODO figure out how to get a datetime from python,
         // or use int seconds.
-        let claim_timeout = Utc::now() + Duration::from_secs(60);
+        let claim_timeout = Duration::from_secs(60);
 
         let channels = channels.iter().map(|chan| chan.as_ref()).collect();
         let res = self.storage.claim_task(channels, worker_id, claim_timeout, qty);

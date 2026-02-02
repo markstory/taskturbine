@@ -414,7 +414,7 @@ impl Storage {
         &self,
         channels: Vec<&str>,
         worker_id: &str,
-        claim_timeout: DateTime<Utc>,
+        claim_timeout: Duration,
         qty: i32,
     ) -> Result<Vec<ClaimedTask>, TaskTurbineError> {
         if qty <= 0 {
@@ -423,6 +423,7 @@ impl Storage {
             ));
         }
         let now = Utc::now();
+        let claim_timeout = now + claim_timeout;
         if claim_timeout < now {
             return Err(TaskTurbineError::ValidationError(
                 "claim_timeout must be in the future".into(),
@@ -1899,7 +1900,7 @@ mod tests {
     #[tokio::test]
     async fn claim_task_zero_qty() {
         let storage = create_storage().await;
-        let timeout = Utc::now() + Duration::from_secs(60 * 5);
+        let timeout = Duration::from_secs(60 * 5);
         let res = storage
             .claim_task(vec!["default"], "worker-1", timeout, 0)
             .await;
@@ -1913,7 +1914,7 @@ mod tests {
     #[tokio::test]
     async fn claim_task_past_expiration() {
         let storage = create_storage().await;
-        let timeout = Utc::now() - Duration::from_secs(1);
+        let timeout = Duration::from_secs(1);
         let res = storage
             .claim_task(vec!["default"], "worker-1", timeout, 0)
             .await;
@@ -1928,7 +1929,7 @@ mod tests {
     async fn claim_task_success() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
-        let timeout = Utc::now() + Duration::from_secs(30);
+        let timeout = Duration::from_secs(30);
 
         let _ = storage.spawn_task("test", "hello-world", b"", None).await;
         let _ = storage.spawn_task("test", "hello-world", b"", None).await;
@@ -1950,7 +1951,7 @@ mod tests {
     async fn claim_task_success_in_channel() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
-        let timeout = Utc::now() + Duration::from_secs(30);
+        let timeout = Duration::from_secs(30);
 
         let _ = storage
             .spawn_task("in-scope", "hello-world", b"", None)
@@ -1973,7 +1974,7 @@ mod tests {
     async fn claim_task_complete_run_workflow() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
-        let timeout = Utc::now() + Duration::from_secs(30);
+        let timeout = Duration::from_secs(30);
 
         let _ = storage.spawn_task("test", "hello-world", b"", None).await;
 
@@ -1995,7 +1996,7 @@ mod tests {
     async fn handle_expired_claims() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
-        let timeout = Utc::now() + Duration::from_secs(1);
+        let timeout = Duration::from_secs(1);
 
         let _ = storage.spawn_task("test", "hello-world", b"", None).await;
         let res = storage.claim_task(vec![], "worker-1", timeout, 1).await;
@@ -2123,7 +2124,7 @@ mod tests {
     #[tokio::test]
     async fn extend_claim_on_run_running() {
         let (storage, _) = create_task().await.unwrap();
-        let timeout = Utc::now() + Duration::from_secs(1);
+        let timeout = Duration::from_secs(1);
 
         let res = storage.claim_task(vec![], "worker-1", timeout, 1).await;
         assert!(res.is_ok());
@@ -2145,7 +2146,7 @@ mod tests {
     #[tokio::test]
     async fn extend_claim_on_other_worker() {
         let (storage, _) = create_task().await.unwrap();
-        let timeout = Utc::now() + Duration::from_secs(1);
+        let timeout = Duration::from_secs(1);
 
         let res = storage.claim_task(vec![], "worker-1", timeout, 1).await;
         assert!(res.is_ok());

@@ -42,6 +42,12 @@ pub struct Config {
     /// Set to false if you are going to run cleanup workers separately.
     pub worker_cleanup_inline: bool,
 
+    /// The number of seconds that workers will claim tasks for.
+    /// Workers are expected to complete tasks within their claim timeout.
+    /// After a claim timeout is exceeded, the task will be made pending again.
+    /// Default value is 600 (10m)
+    pub worker_claim_timeout_secs: i32,
+
     /// The default number of seconds that events are waited on for.
     pub await_event_default_timeout_secs: i32,
 }
@@ -59,6 +65,7 @@ impl Default for Config {
             worker_cleanup_interval_secs: 30,
             worker_cleanup_cutoff_secs: 60 * 10,
             worker_cleanup_limit: 1000,
+            worker_claim_timeout_secs: 60 * 10,
             await_event_default_timeout_secs: 120,
         }
     }

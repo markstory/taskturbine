@@ -286,7 +286,7 @@ impl Worker {
     /// is determined by [`Worker::claim_count`]
     pub async fn claim_tasks(
         &self,
-        timeout: DateTime<Utc>,
+        timeout: Duration,
     ) -> Result<Vec<ClaimedTask>, WorkerError> {
         let channels = self.channels.iter().map(|i| i.as_ref()).collect();
         let res = self
@@ -486,7 +486,7 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
     let guard = elegant_departure::get_shutdown_guard();
 
     loop {
-        let timeout = Utc::now() + Duration::from_secs(60);
+        let timeout = Duration::from_secs(config.worker_claim_timeout_secs as u64);
         tokio::select! {
             Ok(mut claimed) = worker.claim_tasks(timeout) => {
                 log::debug!("Claimed {} tasks", claimed.len());
@@ -498,7 +498,7 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                 while !claimed.is_empty() {
                     let task_opt = claimed.last();
                     if task_opt.is_none() {
-                        // We got to the end, break this while loop
+                        // All claimed tasks have been processsed.
                         break;
                     }
                     let task = task_opt.unwrap();

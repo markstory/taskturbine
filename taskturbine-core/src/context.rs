@@ -376,7 +376,7 @@ mod tests {
             .await
             .unwrap();
 
-        let claim_until = Utc::now() + Duration::from_secs(60);
+        let claim_until = Duration::from_secs(60);
         let claimed = storage
             .claim_task(vec![], "worker-1", claim_until, 1)
             .await
@@ -588,7 +588,7 @@ mod tests {
             .await
             .unwrap();
 
-        let claim_until = Utc::now() + Duration::from_secs(60);
+        let claim_until = Duration::from_secs(60);
         let claimed = arc_app
             .storage
             .claim_task(vec![], "worker-1", claim_until, 1)
