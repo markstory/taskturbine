@@ -284,10 +284,7 @@ impl Worker {
 
     /// Claim a batch of tasks from storage. The size of the batch
     /// is determined by [`Worker::claim_count`]
-    pub async fn claim_tasks(
-        &self,
-        timeout: Duration,
-    ) -> Result<Vec<ClaimedTask>, WorkerError> {
+    pub async fn claim_tasks(&self, timeout: Duration) -> Result<Vec<ClaimedTask>, WorkerError> {
         let channels = self.channels.iter().map(|i| i.as_ref()).collect();
         let res = self
             .app

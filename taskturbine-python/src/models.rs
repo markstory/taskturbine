@@ -133,7 +133,10 @@ impl From<taskturbine_core::storage::AwaitResult> for AwaitResult {
         let payload = value.payload;
         let should_suspend = value.should_suspend;
 
-        AwaitResult { payload, should_suspend }
+        AwaitResult {
+            payload,
+            should_suspend,
+        }
     }
 }
 
@@ -200,7 +203,7 @@ pub struct Checkpoint {
 
     /// The timestamp the checkpoint was created or updated.
     #[pyo3(get)]
-    pub updated_at: i64
+    pub updated_at: i64,
 }
 
 /// Convert from core API to python binding
@@ -213,7 +216,7 @@ impl From<taskturbine_core::models::Checkpoint> for Checkpoint {
             owner_run_id,
             step_name: value.step_name.to_string(),
             state: value.state.clone(),
-            updated_at: value.updated_at.timestamp()
+            updated_at: value.updated_at.timestamp(),
         }
     }
 }

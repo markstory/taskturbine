@@ -1,7 +1,10 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use pyo3::{exceptions::PyValueError, prelude::*};
-use taskturbine_core::{self, models::{RunId, TaskId}};
+use taskturbine_core::{
+    self,
+    models::{RunId, TaskId},
+};
 use uuid::Uuid;
 
 mod config;
@@ -9,7 +12,6 @@ mod models;
 
 use config::Config;
 use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, Task};
-
 
 /// Internal blocking storage adapter.
 /// Bridges between the tokio based runtime of the rust library
@@ -53,10 +55,8 @@ impl BlockingStorage {
         &self,
         event_name: &str,
         payload: &[u8],
-    ) -> Result<(), taskturbine_core::storage::TaskTurbineError>
-    {
-        self.rt
-            .block_on(self.inner.emit_event(event_name, payload))
+    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
+        self.rt.block_on(self.inner.emit_event(event_name, payload))
     }
 
     /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
@@ -69,8 +69,10 @@ impl BlockingStorage {
         timeout: Option<u64>,
     ) -> Result<taskturbine_core::storage::AwaitResult, taskturbine_core::storage::TaskTurbineError>
     {
-        self.rt
-            .block_on(self.inner.await_event(task_id, run_id, step_name, event_name, timeout))
+        self.rt.block_on(
+            self.inner
+                .await_event(task_id, run_id, step_name, event_name, timeout),
+        )
     }
 
     /// Make a blocking call to [`taskturbine_core::storage::Storage.claim_task()`]
@@ -80,15 +82,26 @@ impl BlockingStorage {
         worker_id: &str,
         claim_timeout: Duration,
         qty: i32,
-    ) -> Result<Vec<taskturbine_core::models::ClaimedTask>, taskturbine_core::storage::TaskTurbineError>
-    {
-        self.rt
-            .block_on(self.inner.claim_task(channels, worker_id, claim_timeout, qty))
+    ) -> Result<
+        Vec<taskturbine_core::models::ClaimedTask>,
+        taskturbine_core::storage::TaskTurbineError,
+    > {
+        self.rt.block_on(
+            self.inner
+                .claim_task(channels, worker_id, claim_timeout, qty),
+        )
     }
 
-    pub fn get_checkpoint(&self, task_id: TaskId, step_name: &str) -> Result<Option<taskturbine_core::models::Checkpoint>, taskturbine_core::storage::TaskTurbineError>
-    {
-        self.rt.block_on(self.inner.get_checkpoint(task_id, step_name))
+    pub fn get_checkpoint(
+        &self,
+        task_id: TaskId,
+        step_name: &str,
+    ) -> Result<
+        Option<taskturbine_core::models::Checkpoint>,
+        taskturbine_core::storage::TaskTurbineError,
+    > {
+        self.rt
+            .block_on(self.inner.get_checkpoint(task_id, step_name))
     }
 
     pub fn set_checkpoint(
@@ -98,9 +111,11 @@ impl BlockingStorage {
         step_name: &str,
         state: &[u8],
         extend_claim: Option<Duration>,
-    ) -> Result<(), taskturbine_core::storage::TaskTurbineError>
-    {
-        self.rt.block_on(self.inner.set_checkpoint(task_id, run_id, step_name, state, extend_claim))
+    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
+        self.rt.block_on(
+            self.inner
+                .set_checkpoint(task_id, run_id, step_name, state, extend_claim),
+        )
     }
 
     /// Get the config of the application
@@ -204,16 +219,15 @@ impl TaskturbineApp {
         qty: i32,
     ) -> PyResult<Vec<ClaimedTask>> {
         let channels = channels.iter().map(|chan| chan.as_ref()).collect();
-        let res = self.storage.claim_task(channels, worker_id, claim_timeout, qty);
+        let res = self
+            .storage
+            .claim_task(channels, worker_id, claim_timeout, qty);
 
-        res
-            .map(|v| {
-                let mapped: Vec<ClaimedTask> = v.into_iter()
-                    .map(|task| task.into())
-                    .collect();
-                mapped
-            })
-            .map_err(|v| PyValueError::new_err(format!("Could not claim tasks: {v:?}")))
+        res.map(|v| {
+            let mapped: Vec<ClaimedTask> = v.into_iter().map(|task| task.into()).collect();
+            mapped
+        })
+        .map_err(|v| PyValueError::new_err(format!("Could not claim tasks: {v:?}")))
     }
 
     /*
@@ -238,10 +252,12 @@ impl TaskturbineApp {
 
     /// Create a ContextInner which bridges into the python client.
     fn create_context(&self, claimed_task: ClaimedTask) -> ContextInner {
-        ContextInner { storage: self.storage.clone(), claimed_task }
+        ContextInner {
+            storage: self.storage.clone(),
+            claimed_task,
+        }
     }
 }
-
 
 /// Expose a minimal interface to the python client.
 #[pyclass]
@@ -257,7 +273,7 @@ impl ContextInner {
     }
 
     /// Record an event taking place.
-    fn emit_event(&self, event_name: String, payload: &[u8]) -> PyResult<(),> {
+    fn emit_event(&self, event_name: String, payload: &[u8]) -> PyResult<()> {
         let res = self.storage.emit_event(&event_name, payload);
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
@@ -268,13 +284,17 @@ impl ContextInner {
     fn get_checkpoint(&self, checkpoint_name: String) -> PyResult<Checkpoint> {
         // TODO this unwrap() is yolo
         let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
-        let res = self.storage.get_checkpoint(TaskId(task_id), &checkpoint_name);
+        let res = self
+            .storage
+            .get_checkpoint(TaskId(task_id), &checkpoint_name);
 
         // TODO this is masking a storage error
         if let Ok(Some(checkpoint)) = res {
             Ok(checkpoint.into())
         } else {
-            Err(PyValueError::new_err("Checkpoint not found, or read failed"))
+            Err(PyValueError::new_err(
+                "Checkpoint not found, or read failed",
+            ))
         }
     }
 
@@ -289,18 +309,20 @@ impl ContextInner {
         let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
         let run_id = Uuid::parse_str(&self.claimed_task.run_id).unwrap();
 
-        let res = self.storage.set_checkpoint(TaskId(task_id), RunId(run_id), checkpoint_name, state, extend_claim);
+        let res = self.storage.set_checkpoint(
+            TaskId(task_id),
+            RunId(run_id),
+            checkpoint_name,
+            state,
+            extend_claim,
+        );
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }
 
     /// Read the payload for an event.
     /// Will raise an exception if the read fails
-    fn get_event_payload(
-        &self,
-        event_name: String,
-        timeout_secs: u64
-    ) -> PyResult<AwaitResult> {
+    fn get_event_payload(&self, event_name: String, timeout_secs: u64) -> PyResult<AwaitResult> {
         // TODO this is yolo. Should raise errors on invalid values.
         let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
         let run_id = Uuid::parse_str(&self.claimed_task.run_id).unwrap();
@@ -315,7 +337,9 @@ impl ContextInner {
         );
         match payload_res {
             Ok(result) => Ok(result.into()),
-            Err(err) => Err(PyValueError::new_err(format!("Could not await_event: {err:?}"))),
+            Err(err) => Err(PyValueError::new_err(format!(
+                "Could not await_event: {err:?}"
+            ))),
         }
     }
 }
@@ -374,7 +398,7 @@ impl TaskOptions {
         retry_seconds: i32,
         retry_factor: f64,
         retry_max_seconds: i32,
-        cancellation_max_age: i32
+        cancellation_max_age: i32,
     ) -> Self {
         Self {
             headers: HashMap::new(),
@@ -442,7 +466,11 @@ impl TaskOptions {
 #[pymodule(name = "taskturbine")]
 mod taskturbine {
     #[pymodule_export]
+    use super::ClaimedTask;
+    #[pymodule_export]
     use super::Config;
+    #[pymodule_export]
+    use super::ContextInner;
     #[pymodule_export]
     use super::SpawnResult;
     #[pymodule_export]
@@ -451,8 +479,4 @@ mod taskturbine {
     use super::TaskOptions;
     #[pymodule_export]
     use super::TaskturbineApp;
-    #[pymodule_export]
-    use super::ContextInner;
-    #[pymodule_export]
-    use super::ClaimedTask;
 }
