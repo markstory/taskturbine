@@ -71,6 +71,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pip"
+version = "26.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/44/c2/65686a7783a7c27a329706207147e82f23c41221ee9ae33128fc331670a0/pip-26.0.tar.gz", hash = "sha256:3ce220a0a17915972fbf1ab451baae1521c4539e778b28127efa79b974aff0fa", size = 1812654, upload-time = "2026-01-31T01:40:54.361Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/00/5ac7aa77688ec4d34148b423d34dc0c9bc4febe0d872a9a1ad9860b2f6f1/pip-26.0-py3-none-any.whl", hash = "sha256:98436feffb9e31bc9339cf369fd55d3331b1580b6a6f1173bacacddcf9c34754", size = 1787564, upload-time = "2026-01-31T01:40:52.252Z" },
+]
+
+[[package]]
 name = "pluggy"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -146,6 +155,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "maturin", extra = ["patchelf"] },
+    { name = "pip" },
     { name = "psycopg2-binary" },
     { name = "pytest" },
 ]
@@ -159,6 +169,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "maturin", extras = ["patchelf"], specifier = ">=1.3.0" },
+    { name = "pip" },
     { name = "psycopg2-binary" },
     { name = "pytest" },
 ]
