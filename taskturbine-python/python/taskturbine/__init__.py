@@ -197,9 +197,15 @@ class TaskturbineApp:
         claim_timeout: timedelta,
         qty: int,
    ) -> list[ClaimedTask]:
+        """
+        Claim one or more tasks for the provided worker_id
+        """
         return self._app_rs.claim_task(channels, worker_id, claim_timeout, qty)
 
     def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
+        """
+        Create a TaskContext with links to the rust context.
+        """
         context = TaskContext(self._app_rs.create_context(claimed_task))
         return context
 
