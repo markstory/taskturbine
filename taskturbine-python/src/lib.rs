@@ -279,16 +279,17 @@ impl ContextInner {
     }
 
     /// Set the state for a named checkpoint.
+    /// The caller is responsible for making checkpoint_names unique.
     fn set_checkpoint(
         &self,
-        step_name: &str,
+        checkpoint_name: &str,
         state: &[u8],
         extend_claim: Option<Duration>,
     ) -> PyResult<()> {
         let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
         let run_id = Uuid::parse_str(&self.claimed_task.run_id).unwrap();
 
-        let res = self.storage.set_checkpoint(TaskId(task_id), RunId(run_id), step_name, state, extend_claim);
+        let res = self.storage.set_checkpoint(TaskId(task_id), RunId(run_id), checkpoint_name, state, extend_claim);
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }

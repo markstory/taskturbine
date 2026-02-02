@@ -1,10 +1,11 @@
+from typing import Any
 import psycopg2
 import pytest
 from datetime import datetime, timedelta
 import json
 import os
 
-from taskturbine import Config, SuspendError, TaskturbineApp, Task
+from taskturbine import Config, SuspendError, TaskturbineApp, Task, TaskContext
 
 
 @pytest.fixture
@@ -223,3 +224,32 @@ def test_context_sleep_for(config) -> None:
         context.sleep_for("sleep-timer", timedelta(minutes=3))
     assert err.value
     assert err.value.duration == timedelta(minutes=3)
+
+
+def test_context_step_return_result(config) -> None:
+    app = TaskturbineApp(config)
+
+    @app.register_task(name="first-task")
+    def first_task(ctx: TaskContext) -> dict[str, Any]:
+        def step_one(ctx) -> dict[str, Any]:
+            assert isinstance(ctx, TaskContext)
+            return {"step": "one"}
+
+        step_data = ctx.step("first-step", step_one)
+        assert isinstance(step_data, dict)
+        assert step_data["step"] == "one"
+
+        return step_data
+
+    five_min = timedelta(minutes=5)
+    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    context = app.create_context(claims[0])
+
+    task_result = first_task(context)
+    assert task_result
+    assert task_result["step"] == "one"
+
+    checkpoint = context._inner.get_checkpoint("first-step")
+    assert checkpoint
+    assert checkpoint.step_name == "first-step"
+    assert checkpoint.state == b'{"step": "one"}'

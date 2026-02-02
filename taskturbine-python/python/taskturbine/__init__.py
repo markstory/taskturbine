@@ -45,9 +45,15 @@ class Task(Generic[P, R]):
 
 
 class TaskContext:
-    def __init__(self, inner: ContextInner, serializer: Callable[[dict[str, Any]], bytes]) -> None:
+    def __init__(
+        self,
+        inner: ContextInner,
+        serialize: Callable[[dict[str, Any]], bytes],
+        deserialize: Callable[[bytes], dict[str, Any] | None],
+    ) -> None:
         self._inner = inner
-        self._serializer = serializer
+        self._serialize = serialize
+        self._deserialize = deserialize
         self._checkpoint_counters: dict[str, int] = {}
 
     def await_event(self, event_name: str, timeout: float|timedelta|None = None) -> dict[str, Any]:
@@ -73,7 +79,7 @@ class TaskContext:
         Payload can be an arbitrary JSON encodable value that
         can be retrieved later.
         """
-        self._inner.emit_event(event_name, self._serializer(payload))
+        self._inner.emit_event(event_name, self._serialize(payload))
 
     def _checkpoint_name(self, step_name: str) -> str:
         """
@@ -107,7 +113,7 @@ class TaskContext:
 
         raise SuspendError(duration=duration)
 
-    def step(self, step_name: str, func: Callable[[Self], None]) -> dict[str, Any]:
+    def step(self, step_name: str, func: Callable[[Self], dict[str, Any] | None]) -> dict[str, Any] | None:
         """
         Run a durable step
 
@@ -118,7 +124,26 @@ class TaskContext:
         it will be considered 'failed' and a retry will be scheduled according to the task's retry
         configuration.
         """
-        return {}
+        checkpoint_name = self._checkpoint_name(step_name)
+        try:
+            checkpoint = self._inner.get_checkpoint(checkpoint_name)
+            return self._deserialize(checkpoint.state)
+        except ValueError:
+            # No checkpoint data.
+            pass
+
+        try:
+            step_result = func(self)
+        except Exception as err:
+            # Step failed, record failure
+            raise StepFailed()
+
+        result_bytes = b""
+        if step_result:
+            result_bytes = self._serialize(step_result)
+        self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
+
+        return step_result
 
 
 class TaskturbineApp:
@@ -185,6 +210,15 @@ class TaskturbineApp:
         """
         return json.dumps(params).encode()
 
+    def deserialize_value(self, blob: bytes) -> dict[str, Any] | None:
+        """Convert a bytestring into a dict
+
+        TODO make this a hook method so other serializers can be used.
+        """
+        if blob == b"":
+            return None
+        return json.loads(blob)
+
     def spawn_task(
         self,
         taskname: str,
@@ -243,7 +277,8 @@ class TaskturbineApp:
         """
         context = TaskContext(
             inner=self._app_rs.create_context(claimed_task),
-            serializer=self.serialize_value,
+            serialize=self.serialize_value,
+            deserialize=self.deserialize_value,
         )
         return context
 
@@ -256,3 +291,7 @@ class SuspendError(Exception):
         self.duration = duration
 
 
+
+class StepFailed(Exception):
+    """Signal that a step/task failed"""
+    # TODO capture execution context

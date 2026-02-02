@@ -177,20 +177,29 @@ impl From<taskturbine_core::models::SpawnResult> for SpawnResult {
     }
 }
 
-
+// Python compatible version of taskturbine_core::models::Checkpoint
 #[pyclass]
 pub struct Checkpoint {
     /// The task id of the spawned task.
+    #[pyo3(get)]
     pub task_id: String,
+
     /// The step name of the checkpoint. Step names are made
     /// unique per task to handle duplicate step names.
+    #[pyo3(get)]
     pub step_name: String,
+
     /// The payload/state of the checkpoint in bytes.
     /// Applications are responsible for serializing/deserializing
+    #[pyo3(get)]
     pub state: Vec<u8>,
+
     /// The run that created this checkpoint.
+    #[pyo3(get)]
     pub owner_run_id: String,
+
     /// The timestamp the checkpoint was created or updated.
+    #[pyo3(get)]
     pub updated_at: i64
 }
 
