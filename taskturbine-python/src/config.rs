@@ -60,6 +60,13 @@ pub struct Config {
     /// The default number of seconds that events are waited on for.
     #[pyo3(get, set)]
     pub await_event_default_timeout_secs: i32,
+
+    /// The number of seconds that workers will claim tasks for.
+    /// Workers are expected to complete tasks within their claim timeout.
+    /// After a claim timeout is exceeded, the task will be made pending again.
+    /// Default value is 600 (10m)
+    #[pyo3(get, set)]
+    pub worker_claim_timeout_secs: i32,
 }
 
 /// Convert from the python module to the core struct.
@@ -77,6 +84,7 @@ impl From<Config> for taskturbine_core::config::Config {
         core_config.worker_cleanup_interval_secs = value.worker_cleanup_interval_secs;
         core_config.worker_cleanup_inline = value.worker_cleanup_inline;
         core_config.worker_cleanup_cutoff_secs = value.worker_cleanup_cutoff_secs;
+        core_config.worker_claim_timeout_secs = value.worker_claim_timeout_secs;
         core_config.await_event_default_timeout_secs = value.await_event_default_timeout_secs;
 
         core_config
@@ -98,6 +106,7 @@ impl Config {
         worker_cleanup_interval_secs=30,
         worker_cleanup_inline=true,
         worker_cleanup_cutoff_secs=600,
+        worker_claim_timeout_secs=600,
         await_event_default_timeout_secs=120,
     ))]
     fn __new__(
@@ -112,6 +121,7 @@ impl Config {
         worker_cleanup_interval_secs: i32,
         worker_cleanup_inline: bool,
         worker_cleanup_cutoff_secs: i32,
+        worker_claim_timeout_secs: i32,
         await_event_default_timeout_secs: i32,
     ) -> PyResult<Self> {
         let config = Config {
@@ -126,6 +136,7 @@ impl Config {
             worker_cleanup_interval_secs,
             worker_cleanup_inline,
             worker_cleanup_cutoff_secs,
+            worker_claim_timeout_secs,
             await_event_default_timeout_secs,
         };
 
