@@ -121,8 +121,8 @@ impl Config {
         worker_cleanup_cutoff_secs: i32,
         worker_claim_timeout_secs: i32,
         await_event_default_timeout_secs: i32,
-    ) -> PyResult<Self> {
-        let config = Config {
+    ) -> Self {
+        Config {
             app_module: app_module.to_string(),
             database_url: database_url.to_string(),
             database_log_queries,
@@ -136,8 +136,6 @@ impl Config {
             worker_cleanup_cutoff_secs,
             worker_claim_timeout_secs,
             await_event_default_timeout_secs,
-        };
-
-        Ok(config)
+        }
     }
 }
