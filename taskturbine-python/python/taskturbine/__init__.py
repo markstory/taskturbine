@@ -194,7 +194,7 @@ class TaskturbineApp:
         self,
         channels: list[str],
         worker_id: str,
-        claim_timeout: datetime,
+        claim_timeout: timedelta,
         qty: int,
    ) -> list[ClaimedTask]:
         return self._app_rs.claim_task(channels, worker_id, qty)

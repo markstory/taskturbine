@@ -15,7 +15,7 @@ def config(database_url) -> Config:
 @pytest.fixture
 def database_url() -> str:
     value = os.getenv("TASKTURBINE_DATABASE_URL")
-    assert value, "Required environment variable TASKTURBIN_DATABASE_URL undefined"
+    assert value, "Required environment variable TASKTURBINE_DATABASE_URL undefined"
     return value
 
 @pytest.fixture
@@ -120,12 +120,6 @@ def test_emit_event(config, db_connection):
     assert row["payload"].tobytes() == json.dumps(data).encode()
 
 
-def test_create_context(config):
-    app = TaskturbineApp(config)
-    context = app.create_context()
-    assert context
-
-
 def test_context_await_event_event_present(config):
     app = TaskturbineApp(config)
 
@@ -137,7 +131,7 @@ def test_context_await_event_event_present(config):
     assert res.task_id
     assert res.run_id
 
-    five_min = datetime.now() + timedelta(minutes=5)
+    five_min = timedelta(minutes=5)
     app.emit_event("context_await_event", {"status": "ok"})
 
     # Claim a task so that it is 'running' and TaskContext can wait for the event.
@@ -162,11 +156,11 @@ def test_context_await_event_no_event(config):
     assert res.run_id
 
     # Claim a task so that it is 'running' and TaskContext can wait for the event.
-    five_min = datetime.now() + timedelta(minutes=5)
+    five_min = timedelta(minutes=5)
     claims = app.claim_task(["default"], "worker-1", five_min, 1)
     assert len(claims) >= 1
 
     context = app.create_context(claims[0])
-    with pytest.raises(SuspendError) as err
-        context.await_event("context_await_event")
+    with pytest.raises(SuspendError) as err:
+        context.await_event("context_await_event_no_event")
     assert err
