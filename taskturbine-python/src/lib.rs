@@ -93,7 +93,7 @@ impl BlockingStorage {
     }
 }
 
-#[pyclass(module = "taskturbine_ext")]
+#[pyclass]
 struct TaskturbineApp {
     #[pyo3(get)]
     config: Config,
