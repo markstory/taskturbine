@@ -278,3 +278,31 @@ def test_context_step_raise_error(config) -> None:
 
     with pytest.raises(ValueError) as err:
         context._inner.get_checkpoint("first-step")
+
+
+def test_context_step_duplicate_runs(config) -> None:
+    app = TaskturbineApp(config)
+
+    @app.register_task(name="context-step-duplicate-task")
+    def first_task(ctx: TaskContext) -> dict[str, Any]:
+        def step_one(ctx) -> dict[str, Any]:
+            return {"step": "first"}
+
+        step_data = ctx.step("first-step", step_one)
+        assert isinstance(step_data, dict)
+        assert step_data["step"] == "first"
+
+        return step_data
+
+    five_min = timedelta(minutes=5)
+    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    context = app.create_context(claims[0])
+
+    result = first_task(context)
+    assert result == {"step": "first"}
+
+    result = first_task(context)
+    assert result == {"step": "first"}
+
+    checkpoint = context._inner.get_checkpoint("first-step")
+    assert checkpoint
