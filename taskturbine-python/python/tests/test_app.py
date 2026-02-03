@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import json
 import os
 
-from taskturbine import Config, SuspendError, TaskturbineApp, Task, TaskContext
+from taskturbine import Config, StepFailed, SuspendError, TaskturbineApp, Task, TaskContext
 
 
 @pytest.fixture
@@ -253,3 +253,28 @@ def test_context_step_return_result(config) -> None:
     assert checkpoint
     assert checkpoint.step_name == "first-step"
     assert checkpoint.state == b'{"step": "one"}'
+
+
+def test_context_step_raise_error(config) -> None:
+    app = TaskturbineApp(config)
+
+    @app.register_task(name="first-task")
+    def first_task(ctx: TaskContext) -> dict[str, Any]:
+        def step_one(ctx) -> dict[str, Any]:
+            raise KeyError("oh no")
+
+        step_data = ctx.step("first-step", step_one)
+        assert isinstance(step_data, dict)
+        assert step_data["step"] == "one"
+
+        return step_data
+
+    five_min = timedelta(minutes=5)
+    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    context = app.create_context(claims[0])
+
+    with pytest.raises(StepFailed) as err:
+        first_task(context)
+
+    with pytest.raises(ValueError) as err:
+        context._inner.get_checkpoint("first-step")
