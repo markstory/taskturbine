@@ -230,25 +230,18 @@ impl TaskturbineApp {
         .map_err(|v| PyValueError::new_err(format!("Could not claim tasks: {v:?}")))
     }
 
-    /*
-    /// Create a worker by consuming the app.
+    /// Create a worker for the application tasks
     ///
     /// A worker will only claim tasks in `channels` if channels is not-empty.
     /// If `channels` is empty, tasks in all channels will be processed.
-    ///
-    /// ```rust
-    /// // Create a worker that consumes from all channels
-    /// // in the application.
-    /// let worker = app.create_worker("worker-1", vec![]);
-    ///
-    /// // Create a worker that only consumes `reports` tasks.
-    /// let worker = app.create_worker("worker-1", vec!["reports"]);
-    /// ```
-    pub fn create_worker(self, worker_id: &str, channels: Vec<String>) -> Worker {
-        let arc_self = Arc::new(self);
-        Worker::new(arc_self, worker_id.to_string(), channels)
+    fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
+        WorkerInner {
+            storage: self.storage.clone(),
+            claim_count: self.config.worker_concurrency,
+            worker_id,
+            channels,
+        }
     }
-    */
 
     /// Create a ContextInner which bridges into the python client.
     fn create_context(&self, claimed_task: ClaimedTask) -> ContextInner {
@@ -257,6 +250,44 @@ impl TaskturbineApp {
             claimed_task,
         }
     }
+}
+
+/// Expose the minimal worker API to be used by the python worker.
+#[pyclass]
+struct WorkerInner {
+    storage: Arc<BlockingStorage>,
+    channels: Vec<String>,
+    worker_id: String,
+    claim_count: i32,
+}
+
+#[pymethods]
+impl WorkerInner {
+    /// Claim a collection tasks for timeout seconds.
+    fn claim_tasks(&self, timeout: Duration) -> Vec<ClaimedTask> {
+        vec![]
+    }
+
+    /// Run all the cleanup operations on the database.
+    fn run_cleanup(&self) -> PyResult<()> {
+        Ok(())
+    }
+
+    /// Mark a run as failed.
+    fn fail_run(&self, run_id: String, retry_at: Option<Duration>) -> PyResult<()> {
+        Ok(())
+    }
+
+    /// Mark a run as complete.
+    fn complete_run(&self, run_id: String) -> PyResult<()> {
+        Ok(())
+    }
+
+    /// Re-schedule a task to run in the future.
+    fn schedule_run(&self, run_id: String, wait_for: Duration) -> PyResult<()> {
+        Ok(())
+    }
+
 }
 
 /// Expose a minimal interface to the python client.
@@ -464,6 +495,8 @@ impl TaskOptions {
 /// import the module.
 #[pymodule(name = "taskturbine")]
 mod taskturbine {
+    #[pymodule_export]
+    use super::WorkerInner;
     #[pymodule_export]
     use super::ClaimedTask;
     #[pymodule_export]
