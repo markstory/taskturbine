@@ -8,14 +8,14 @@ are in python.
 """
 from datetime import datetime, timedelta
 from functools import update_wrapper
-from typing import Any, Callable, Generic, MutableMapping, ParamSpec, Self, TypeVar
+from typing import Any, Callable, Generic, Mapping, MutableMapping, ParamSpec, Self, TypeVar
 import json
 
 # Import from the rust library
 from .taskturbine import Config, TaskOptions, SpawnResult, ClaimedTask
 from .taskturbine import Task as TaskRs
 from .taskturbine import TaskturbineApp as AppRs
-from .taskturbine import ContextInner
+from .taskturbine import ContextInner, WorkerInner
 
 __all__ = ["Config", "TaskturbineApp"]
 
@@ -144,6 +144,40 @@ class TaskContext:
         self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
 
         return step_result
+
+
+class Worker:
+    def __init__(
+        self,
+        inner: WorkerInner,
+        tasks: Mapping[str, Task],
+    ) -> None:
+        self._inner = inner
+        self._tasks = tasks
+
+    def start(self):
+        """
+        Start the worker run loop
+        """
+        while True:
+            self.run_once()
+
+    def run_once(self):
+        # claim a batch of tasks
+        # run the batch of tasks sequentially
+        # create context for task
+        # call task
+        # collect result
+        # Report the results of all tasks to _inner.
+        #
+        # Figure out how multiprocessing could work.
+        # Perhaps worker sends task to child, and child
+        # sends result back, and all the pg interactions happen
+        # in the parent.
+        # Doing multiple processes will require threads for
+        # io operations.
+        ...
+
 
 
 class TaskturbineApp:
@@ -281,6 +315,16 @@ class TaskturbineApp:
             deserialize=self.deserialize_value,
         )
         return context
+
+    def create_worker(self, worker_id: str, channels: list[str]) -> Worker:
+        """
+        Create a Worker that is connected to Rust storage API.
+        """
+        worker = Worker(
+            inner=self._app_rs.create_worker(worker_id, channels),
+            tasks=self._tasks,
+        )
+        return worker
 
 
 class SuspendError(Exception):

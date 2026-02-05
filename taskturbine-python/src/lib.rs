@@ -150,6 +150,8 @@ impl TaskturbineApp {
         TaskturbineApp {
             config,
             channels,
+            // TODO if tasks are run in python why is this here?
+            // task registration could all be done in python.
             tasks: HashMap::new(),
             storage: Arc::new(storage),
         }
