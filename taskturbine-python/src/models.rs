@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::models::{RunId, TaskId};
 use uuid::Uuid;
@@ -28,6 +30,17 @@ pub struct ClaimedTask {
     pub attempt: i32,
     /// The maximum number of attempts allowed.
     pub max_attempts: i32,
+}
+
+#[pymethods]
+impl ClaimedTask {
+    pub fn next_retry_in(&self) -> Duration {
+        // Increment attempt to avoid multiply by 0
+        let total_delay = self.retry_seconds as f32 * self.retry_factor.powi(self.attempt + 1);
+        let capped = total_delay.min(self.retry_max_seconds as f32);
+
+        Duration::from_secs(capped as u64)
+    }
 }
 
 /// Convert from the python module to the core struct.

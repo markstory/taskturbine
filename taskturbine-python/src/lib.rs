@@ -66,12 +66,12 @@ impl BlockingStorage {
         run_id: RunId,
         step_name: &str,
         event_name: &str,
-        timeout: Option<u64>,
+        timeout: Duration,
     ) -> Result<taskturbine_core::storage::AwaitResult, taskturbine_core::storage::TaskTurbineError>
     {
         self.rt.block_on(
             self.inner
-                .await_event(task_id, run_id, step_name, event_name, timeout),
+                .await_event(task_id, run_id, step_name, event_name, Some(timeout)),
         )
     }
 
@@ -115,6 +115,37 @@ impl BlockingStorage {
         self.rt.block_on(
             self.inner
                 .set_checkpoint(task_id, run_id, step_name, state, extend_claim),
+        )
+    }
+
+    pub fn fail_run(
+        &self,
+        run_id: RunId,
+        reason: &[u8],
+        retry_at: Option<Duration>,
+    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
+        self.rt.block_on(
+            self.inner.fail_run(run_id, reason, retry_at)
+        )
+    }
+
+    pub fn complete_run(
+        &self,
+        run_id: RunId,
+        run_result: &[u8],
+    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
+        self.rt.block_on(
+            self.inner.complete_run(run_id, run_result)
+        )
+    }
+
+    pub fn schedule_run(
+        &self,
+        run_id: RunId,
+        wait_for: Duration,
+    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
+        self.rt.block_on(
+            self.inner.schedule_run(run_id, wait_for)
         )
     }
 
@@ -220,6 +251,7 @@ impl TaskturbineApp {
         claim_timeout: Duration,
         qty: i32,
     ) -> PyResult<Vec<ClaimedTask>> {
+        // TODO refactor this away once worker is more complete.
         let channels = channels.iter().map(|chan| chan.as_ref()).collect();
         let res = self
             .storage
@@ -266,8 +298,18 @@ struct WorkerInner {
 #[pymethods]
 impl WorkerInner {
     /// Claim a collection tasks for timeout seconds.
-    fn claim_tasks(&self, timeout: Duration) -> Vec<ClaimedTask> {
-        vec![]
+    fn claim_tasks(&self, timeout: Duration) -> PyResult<Vec<ClaimedTask>> {
+        let channels: Vec<&str> = self.channels.iter()
+            .map(|c| c.as_ref())
+            .collect();
+        let claim_res = self.storage.claim_task(channels, &self.worker_id, timeout, self.claim_count);
+
+        claim_res
+            .map(|v| {
+                let mapped: Vec<ClaimedTask> = v.into_iter().map(|task| task.into()).collect();
+                mapped
+            })
+            .map_err(|e| PyValueError::new_err(format!("Could not claim tasks: {e:?}")))
     }
 
     /// Run all the cleanup operations on the database.
@@ -276,18 +318,27 @@ impl WorkerInner {
     }
 
     /// Mark a run as failed.
-    fn fail_run(&self, run_id: String, retry_at: Option<Duration>) -> PyResult<()> {
-        Ok(())
+    fn fail_run(&self, run_id: String, retry_at: Duration) -> PyResult<()> {
+        // TODO Fix panic
+        let run_id = Uuid::parse_str(&run_id).unwrap();
+        self.storage.fail_run(RunId(run_id), b"", Some(retry_at))
+            .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
     }
 
     /// Mark a run as complete.
-    fn complete_run(&self, run_id: String) -> PyResult<()> {
-        Ok(())
+    fn complete_run(&self, run_id: String, run_result: Vec<u8>) -> PyResult<()> {
+        // TODO Fix panic
+        let run_id = Uuid::parse_str(&run_id).unwrap();
+        self.storage.complete_run(RunId(run_id), &run_result)
+            .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
     }
 
     /// Re-schedule a task to run in the future.
     fn schedule_run(&self, run_id: String, wait_for: Duration) -> PyResult<()> {
-        Ok(())
+        // TODO Fix panic
+        let run_id = Uuid::parse_str(&run_id).unwrap();
+        self.storage.schedule_run(RunId(run_id), wait_for)
+            .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
     }
 
 }
@@ -355,7 +406,7 @@ impl ContextInner {
 
     /// Read the payload for an event.
     /// Will raise an exception if the read fails
-    fn get_event_payload(&self, event_name: String, timeout_secs: u64) -> PyResult<AwaitResult> {
+    fn get_event_payload(&self, event_name: String, timeout: Duration) -> PyResult<AwaitResult> {
         // TODO this is yolo. Should raise errors on invalid values.
         let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
         let run_id = Uuid::parse_str(&self.claimed_task.run_id).unwrap();
@@ -366,7 +417,7 @@ impl ContextInner {
             RunId(run_id),
             &step_name,
             event_name.as_ref(),
-            Some(timeout_secs),
+            timeout,
         );
         match payload_res {
             Ok(result) => Ok(result.into()),
