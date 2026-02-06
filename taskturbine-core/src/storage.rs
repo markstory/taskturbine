@@ -918,7 +918,7 @@ impl Storage {
     pub async fn schedule_run(
         &self,
         run_id: RunId,
-        wake_at: DateTime<Utc>,
+        wait_for: Duration,
     ) -> Result<(), TaskTurbineError> {
         let mut atomic = self
             .pool
@@ -937,7 +937,7 @@ impl Storage {
             &mut atomic,
             &run.get::<TaskId, _>("task_id"),
             &run_id,
-            wake_at,
+            wait_for,
         )
         .await?;
 
@@ -1027,7 +1027,7 @@ impl Storage {
         run_id: RunId,
         step_name: &str,
         event_name: &str,
-        timeout: Option<u64>,
+        timeout: Option<Duration>,
     ) -> Result<AwaitResult, TaskTurbineError> {
         let mut atomic = self
             .pool
@@ -1075,11 +1075,7 @@ impl Storage {
 
         // Store a wait and reschedule this run for when the timeout occurs.
         // If an event is emit before that time, we'll be woken up.
-        let timeout_ts = if let Some(timeout) = timeout {
-            Utc::now() + Duration::from_secs(timeout)
-        } else {
-            Utc::now() + Duration::from_secs(self.config.await_event_default_timeout_secs as u64)
-        };
+        let timeout = timeout.unwrap_or_else(|| Duration::from_secs(self.config.await_event_default_timeout_secs as u64));
         // Record the event wait
         self.store_wait(
             &mut atomic,
@@ -1087,12 +1083,12 @@ impl Storage {
             &run_id,
             step_name,
             event_name,
-            timeout_ts,
+            timeout,
         )
         .await?;
 
         // Suspend the current run and mark the task as sleeping
-        self.suspend_run(&mut atomic, &task_id, &run_id, timeout_ts)
+        self.suspend_run(&mut atomic, &task_id, &run_id, timeout)
             .await?;
 
         let _ = atomic.commit().await.map_err(TaskTurbineError::SqlError);
@@ -1113,8 +1109,9 @@ impl Storage {
         run_id: &RunId,
         step_name: &str,
         event_name: &str,
-        timeout: DateTime<Utc>,
+        timeout: Duration,
     ) -> Result<(), TaskTurbineError> {
+        let timeout = Utc::now() + timeout;
         let _ = sqlx::query(
             "INSERT INTO taskturbine.waits (task_id, run_id, step_name, event_name, timeout_at, created_at)
             VALUES ($1, $2, $3, $4, $5, NOW())
@@ -1199,8 +1196,9 @@ impl Storage {
         conn: &mut PgConnection,
         task_id: &TaskId,
         run_id: &RunId,
-        available_at: DateTime<Utc>,
+        available_in: Duration,
     ) -> Result<(), TaskTurbineError> {
+        let available_at = Utc::now() + available_in;
         let _ = sqlx::query(
             "WITH update_runs AS (
                 UPDATE taskturbine.runs
@@ -1816,7 +1814,7 @@ mod tests {
     async fn test_schedule_run_fail_not_running() {
         let (storage, spawned) = create_task().await.unwrap();
 
-        let later = Utc::now() + Duration::from_secs(5 * 60);
+        let later = Duration::from_secs(5 * 60);
         let res = storage.schedule_run(spawned.run_id, later).await;
         assert!(res.is_err());
         assert!(matches!(
@@ -1832,7 +1830,7 @@ mod tests {
             .set_run_state(spawned.task_id, TaskState::Running)
             .await;
 
-        let later = Utc::now() + Duration::from_secs(5 * 60);
+        let later = Duration::from_secs(5 * 60);
         let res = storage.schedule_run(spawned.run_id, later).await;
         assert!(res.is_ok());
     }

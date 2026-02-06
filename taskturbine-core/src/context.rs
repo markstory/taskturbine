@@ -250,7 +250,7 @@ impl TaskContext {
                 self.task.run_id,
                 &step_name,
                 event_name,
-                Some(wait_for.as_secs()),
+                Some(wait_for),
             )
             .await;
 

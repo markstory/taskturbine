@@ -369,9 +369,7 @@ impl Worker {
                 log::debug!("Task run suspended: run_id={}", task.run_id);
             }
             Err(FlowControl::Suspend(wait_for)) => {
-                let wake_at = Utc::now() + wait_for;
-
-                let res = storage.schedule_run(task.run_id, wake_at).await;
+                let res = storage.schedule_run(task.run_id, wait_for).await;
                 if let Err(schedule_err) = res {
                     log::error!("Failed to schedule run on suspend {schedule_err:?}");
                 }
