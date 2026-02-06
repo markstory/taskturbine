@@ -342,6 +342,8 @@ impl Worker {
         let context = TaskContext::build(task.clone(), self.app.clone());
         let taskname = &task.task_name;
         let Some(task_fn) = self.app.tasks.get(taskname) else {
+            // TODO This should probably fail the run and increment retry count.
+            // That would give an opportunity to pause workers and fix the missing task.
             log::warn!("No task named {taskname} is registered.");
             return;
         };
@@ -352,6 +354,7 @@ impl Worker {
             Err(FlowControl::Failure(msg)) => {
                 log::debug!("Task run failure: {msg}");
 
+                // TODO implement task results.
                 let retry_at = task.next_retry_at();
                 let res = self
                     .app
