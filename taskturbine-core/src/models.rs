@@ -92,12 +92,12 @@ pub struct Task {
 }
 
 impl Task {
-    /// Calculate the next retry based on retry attributes.
-    pub fn next_retry_at(&self) -> DateTime<Utc> {
-        let now = Utc::now();
+    /// Calculate the delay until the next attempt should be made
+    /// based on retry attributes.
+    pub fn next_retry_in(&self) -> Duration {
         let total_delay = self.retry_seconds as f32 * self.retry_factor.powi(self.attempts);
         let capped = total_delay.min(self.retry_max_seconds as f32);
-        now + Duration::from_secs(capped as u64)
+        Duration::from_secs(capped as u64)
     }
 }
 
@@ -129,13 +129,14 @@ pub struct ClaimedTask {
 }
 
 impl ClaimedTask {
-    /// Calculate the next retry based on retry attributes.
-    pub fn next_retry_at(&self) -> DateTime<Utc> {
-        let now = Utc::now();
+    /// Calculate the delay until the next attempt should be made
+    /// based on retry attributes.
+    pub fn next_retry_in(&self) -> Duration {
         // Increment to avoid multiply by 0
         let total_delay = self.retry_seconds as f32 * self.retry_factor.powi(self.attempt + 1);
         let capped = total_delay.min(self.retry_max_seconds as f32);
-        now + Duration::from_secs(capped as u64)
+
+        Duration::from_secs(capped as u64)
     }
 }
 

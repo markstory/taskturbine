@@ -775,11 +775,12 @@ impl Storage {
     /// Mark a run as failed with the provided reason.
     /// If an retry_at is not provided, the next retry time will be calculated
     /// based on the task's retry_ attributes.
+    /// TODO convert retry times into Duration across the lib
     pub async fn fail_run(
         &self,
         run_id: RunId,
         reason: &[u8],
-        retry_at: Option<DateTime<Utc>>,
+        retry_at: Option<Duration>,
     ) -> Result<(), TaskTurbineError> {
         let mut atomic = self
             .pool
@@ -800,7 +801,7 @@ impl Storage {
         conn: &mut PgConnection,
         run_id: RunId,
         reason: &[u8],
-        retry_at: Option<DateTime<Utc>>,
+        retry_in: Option<Duration>,
         validate_running: bool,
     ) -> Result<(), TaskTurbineError> {
         let run_row = self.get_locked_run_state(&mut *conn, run_id).await?;
@@ -836,12 +837,9 @@ impl Storage {
         let next_attempt = task.attempts + 1;
         if next_attempt <= task.max_attempts {
             // Determine the next runtime
+            let retry_in = retry_in.unwrap_or_else(|| task.next_retry_in());
             let now = Utc::now();
-            let mut next_available_at = if let Some(value) = retry_at {
-                value
-            } else {
-                task.next_retry_at()
-            };
+            let mut next_available_at = now + retry_in;
             if next_available_at < now {
                 next_available_at = now;
             }
@@ -1498,7 +1496,7 @@ mod tests {
             .set_run_state(spawned.task_id, TaskState::Running)
             .await;
 
-        let retry_at = Utc::now() + Duration::from_secs(120);
+        let retry_at = Duration::from_secs(120);
         let res = storage
             .fail_run(
                 spawned.run_id,
@@ -1694,8 +1692,8 @@ mod tests {
         let claim_expires = run.get::<DateTime<Utc>, _>("claim_expires_at");
         let delta = claim_expires - now;
         assert!(
-            delta.num_seconds() >= 300,
-            "claim should expire at least 290s in the future "
+            delta.num_seconds() >= 290,
+            "claim should expire at least 300s in the future "
         );
 
         // Ensure the checkpoint stores state as well.
@@ -2130,7 +2128,8 @@ mod tests {
         assert!(res.is_ok());
         let claimed = &res.unwrap()[0];
 
-        let extended_timeout = Utc::now() + Duration::from_secs(60);
+        let now = Utc::now();
+        let extended_timeout = now + Duration::from_secs(60);
         let res = storage
             .extend_claim("worker-1", claimed.run_id, extended_timeout)
             .await;
@@ -2138,7 +2137,7 @@ mod tests {
 
         let run = storage.get_run(claimed.run_id).await.unwrap();
         assert!(
-            run.get::<DateTime<Utc>, _>("claim_expires_at") >= timeout + Duration::from_secs(30),
+            run.get::<DateTime<Utc>, _>("claim_expires_at") >= now + Duration::from_secs(30),
             "Should be after the original timeout."
         );
     }

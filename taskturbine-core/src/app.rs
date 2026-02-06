@@ -355,7 +355,7 @@ impl Worker {
                 log::debug!("Task run failure: {msg}");
 
                 // TODO implement task results.
-                let retry_at = task.next_retry_at();
+                let retry_at = task.next_retry_in();
                 let res = self
                     .app
                     .storage
