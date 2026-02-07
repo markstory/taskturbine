@@ -1,4 +1,8 @@
-use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{
@@ -69,10 +73,13 @@ impl BlockingStorage {
         timeout: Duration,
     ) -> Result<taskturbine_core::storage::AwaitResult, taskturbine_core::storage::TaskTurbineError>
     {
-        self.rt.block_on(
-            self.inner
-                .await_event(task_id, run_id, step_name, event_name, Some(timeout)),
-        )
+        self.rt.block_on(self.inner.await_event(
+            task_id,
+            run_id,
+            step_name,
+            event_name,
+            Some(timeout),
+        ))
     }
 
     /// Make a blocking call to [`taskturbine_core::storage::Storage.claim_task()`]
@@ -124,9 +131,8 @@ impl BlockingStorage {
         reason: &[u8],
         retry_at: Option<Duration>,
     ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt.block_on(
-            self.inner.fail_run(run_id, reason, retry_at)
-        )
+        self.rt
+            .block_on(self.inner.fail_run(run_id, reason, retry_at))
     }
 
     pub fn complete_run(
@@ -134,9 +140,8 @@ impl BlockingStorage {
         run_id: RunId,
         run_result: &[u8],
     ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt.block_on(
-            self.inner.complete_run(run_id, run_result)
-        )
+        self.rt
+            .block_on(self.inner.complete_run(run_id, run_result))
     }
 
     pub fn schedule_run(
@@ -144,9 +149,7 @@ impl BlockingStorage {
         run_id: RunId,
         wait_for: Duration,
     ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt.block_on(
-            self.inner.schedule_run(run_id, wait_for)
-        )
+        self.rt.block_on(self.inner.schedule_run(run_id, wait_for))
     }
 
     /// Get the config of the application
@@ -251,13 +254,10 @@ impl TaskturbineApp {
                 "The channel `{channel}` is not registered."
             )));
         }
-        
-        let result = self.storage.spawn_task(
-            channel,
-            task_name,
-            params,
-            Some(options.into()),
-        );
+
+        let result = self
+            .storage
+            .spawn_task(channel, task_name, params, Some(options.into()));
 
         result
             .map(|v| v.into())
@@ -335,11 +335,11 @@ struct WorkerInner {
 impl WorkerInner {
     /// Claim a collection tasks for timeout seconds.
     fn claim_tasks(&self) -> PyResult<Vec<ClaimedTask>> {
-        let channels: Vec<&str> = self.channels.iter()
-            .map(|c| c.as_ref())
-            .collect();
+        let channels: Vec<&str> = self.channels.iter().map(|c| c.as_ref()).collect();
         let timeout = Duration::from_secs(self.claim_timeout_secs as u64);
-        let claim_res = self.storage.claim_task(channels, &self.worker_id, timeout, self.claim_count);
+        let claim_res =
+            self.storage
+                .claim_task(channels, &self.worker_id, timeout, self.claim_count);
 
         claim_res
             .map(|v| {
@@ -358,7 +358,8 @@ impl WorkerInner {
     fn fail_run(&self, run_id: String, retry_at: Duration) -> PyResult<()> {
         // TODO Fix panic
         let run_id = Uuid::parse_str(&run_id).unwrap();
-        self.storage.fail_run(RunId(run_id), b"", Some(retry_at))
+        self.storage
+            .fail_run(RunId(run_id), b"", Some(retry_at))
             .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
     }
 
@@ -366,7 +367,8 @@ impl WorkerInner {
     fn complete_run(&self, run_id: String, run_result: Vec<u8>) -> PyResult<()> {
         // TODO Fix panic
         let run_id = Uuid::parse_str(&run_id).unwrap();
-        self.storage.complete_run(RunId(run_id), &run_result)
+        self.storage
+            .complete_run(RunId(run_id), &run_result)
             .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
     }
 
@@ -374,10 +376,10 @@ impl WorkerInner {
     fn schedule_run(&self, run_id: String, wait_for: Duration) -> PyResult<()> {
         // TODO Fix panic
         let run_id = Uuid::parse_str(&run_id).unwrap();
-        self.storage.schedule_run(RunId(run_id), wait_for)
+        self.storage
+            .schedule_run(RunId(run_id), wait_for)
             .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
     }
-
 }
 
 /// Expose a minimal interface to the python client.
@@ -586,8 +588,6 @@ impl TaskOptions {
 #[pymodule(name = "taskturbine")]
 mod taskturbine {
     #[pymodule_export]
-    use super::WorkerInner;
-    #[pymodule_export]
     use super::ClaimedTask;
     #[pymodule_export]
     use super::Config;
@@ -601,4 +601,6 @@ mod taskturbine {
     use super::TaskOptions;
     #[pymodule_export]
     use super::TaskturbineApp;
+    #[pymodule_export]
+    use super::WorkerInner;
 }

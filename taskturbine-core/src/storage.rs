@@ -1075,7 +1075,9 @@ impl Storage {
 
         // Store a wait and reschedule this run for when the timeout occurs.
         // If an event is emit before that time, we'll be woken up.
-        let timeout = timeout.unwrap_or_else(|| Duration::from_secs(self.config.await_event_default_timeout_secs as u64));
+        let timeout = timeout.unwrap_or_else(|| {
+            Duration::from_secs(self.config.await_event_default_timeout_secs as u64)
+        });
         // Record the event wait
         self.store_wait(
             &mut atomic,
