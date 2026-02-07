@@ -4,6 +4,16 @@ import pytest
 
 from taskturbine import Config
 
+def pytest_sessionstart():
+    # Clear storage tables at the beginning of each run
+    db_url = os.getenv("TASKTURBINE_DATABASE_URL")
+    assert db_url, "Required environment variable TASKTURBINE_DATABASE_URL undefined"
+
+    connection = psycopg2.connect(db_url)
+    cursor = connection.cursor()
+    for table in ("events", "waits", "runs", "tasks"):
+        cursor.execute(f"DELETE FROM taskturbine.{table}")
+
 
 @pytest.fixture
 def channel(request):
