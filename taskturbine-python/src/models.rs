@@ -11,24 +11,43 @@ use uuid::Uuid;
 #[pyclass]
 pub struct ClaimedTask {
     /// The task id of the spawned task.
+    #[pyo3(get)]
     pub task_id: String,
+
     /// The run id of the spawned run.
+    #[pyo3(get)]
     pub run_id: String,
+
     /// The channel name the task was spawned in.
+    #[pyo3(get)]
     pub channel: String,
+
     /// The name of the task that was claimed.
+    #[pyo3(get)]
     pub task_name: String,
+
     /// The parameters of the task in bytes.
+    #[pyo3(get)]
     pub params: Vec<u8>,
+
     /// The number of seconds betwen retries.
+    #[pyo3(get)]
     pub retry_seconds: i32,
+
     /// The factor to multiple retries by attempt count.
+    #[pyo3(get)]
     pub retry_factor: f32,
+
     /// The maximum number of seconds to wait between retries.
+    #[pyo3(get)]
     pub retry_max_seconds: i32,
+
     /// The current attempt count.
+    #[pyo3(get)]
     pub attempt: i32,
+
     /// The maximum number of attempts allowed.
+    #[pyo3(get)]
     pub max_attempts: i32,
 }
 

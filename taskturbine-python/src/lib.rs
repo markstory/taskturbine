@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{
@@ -162,7 +162,7 @@ struct TaskturbineApp {
 
     /// The set of channels that have been defined.
     #[pyo3(get)]
-    channels: Vec<String>,
+    channels: HashSet<String>,
 
     /// A map of all registered tasks.
     tasks: HashMap<String, Task>,
@@ -175,7 +175,8 @@ struct TaskturbineApp {
 impl TaskturbineApp {
     #[new]
     fn py_new(config: Config) -> Self {
-        let channels = vec![config.default_channel.clone()];
+        let mut channels = HashSet::new();
+        channels.insert(config.default_channel.clone());
         let storage = BlockingStorage::new(config.clone().into());
 
         TaskturbineApp {
@@ -190,7 +191,7 @@ impl TaskturbineApp {
 
     /// Add a channel to the list of channels this application can publish and consume from.
     fn add_channel(&mut self, value: String, _py: Python<'_>) {
-        self.channels.push(value);
+        self.channels.insert(value);
     }
 
     /// Register task metadata with the rust extension
@@ -220,6 +221,39 @@ impl TaskturbineApp {
         }
         let result = self.storage.spawn_task(
             &self.config.default_channel,
+            task_name,
+            params,
+            Some(options.into()),
+        );
+
+        result
+            .map(|v| v.into())
+            .map_err(|v| PyValueError::new_err(format!("Could not spawn task: {v:?}")))
+    }
+
+    /// Spawn a task on a named channel and initialize the first run.
+    ///
+    /// An error is returned if the task name is not registered.
+    fn channel_spawn_task(
+        &self,
+        channel: &str,
+        task_name: &str,
+        params: &[u8],
+        options: TaskOptions,
+    ) -> PyResult<SpawnResult> {
+        if !self.tasks.contains_key(task_name) {
+            return Err(PyValueError::new_err(format!(
+                "The task `{task_name}` is not registered."
+            )));
+        }
+        if !self.channels.contains(channel) {
+            return Err(PyValueError::new_err(format!(
+                "The channel `{channel}` is not registered."
+            )));
+        }
+        
+        let result = self.storage.spawn_task(
+            channel,
             task_name,
             params,
             Some(options.into()),
@@ -272,6 +306,7 @@ impl TaskturbineApp {
         WorkerInner {
             storage: self.storage.clone(),
             claim_count: self.config.worker_concurrency,
+            claim_timeout_secs: self.config.worker_claim_timeout_secs,
             worker_id,
             channels,
         }
@@ -293,15 +328,17 @@ struct WorkerInner {
     channels: Vec<String>,
     worker_id: String,
     claim_count: i32,
+    claim_timeout_secs: i32,
 }
 
 #[pymethods]
 impl WorkerInner {
     /// Claim a collection tasks for timeout seconds.
-    fn claim_tasks(&self, timeout: Duration) -> PyResult<Vec<ClaimedTask>> {
+    fn claim_tasks(&self) -> PyResult<Vec<ClaimedTask>> {
         let channels: Vec<&str> = self.channels.iter()
             .map(|c| c.as_ref())
             .collect();
+        let timeout = Duration::from_secs(self.claim_timeout_secs as u64);
         let claim_res = self.storage.claim_task(channels, &self.worker_id, timeout, self.claim_count);
 
         claim_res

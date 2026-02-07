@@ -57,28 +57,57 @@ def test_context_await_event_no_event(config):
 
 def test_context_emit_event(config):
     five_min = timedelta(minutes=5)
+    channel = "context_emit_event"
     app = TaskturbineApp(config)
+    app.add_channel(channel)
 
     @app.register_task(name="first-task")
     def first_task(a: str) -> str:
         return f"called {a}"
 
-    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    app.spawn_task("first-task", {}, channel=channel)
+    claims = app.claim_task([channel], "worker-1", five_min, 1)
     context = app.create_context(claims[0])
 
-    res = app.emit_event("context_emit_event", {"status": "ok"})
+    res = context.emit_event("context_emit_event", {"status": "ok"})
     assert res is None
 
 
-def test_context_sleep_for(config) -> None:
+def test_context_emit_event_duplicate(config):
+    five_min = timedelta(minutes=5)
+    channel = "context_emit_event"
     app = TaskturbineApp(config)
+    app.add_channel(channel)
 
     @app.register_task(name="first-task")
     def first_task(a: str) -> str:
         return f"called {a}"
 
+    app.spawn_task("first-task", {}, channel=channel)
+    claims = app.claim_task([channel], "worker-1", five_min, 1)
+    context = app.create_context(claims[0])
+
+    res = context.emit_event("context_emit_event_duplicate", {"status": "ok"})
+    assert res is None
+    res = context.emit_event("context_emit_event_duplicate", {"status": "not-ok"})
+    assert res is None
+
+    event = context.await_event("context_emit_event_duplicate")
+    assert event["status"] == "not-ok", "Last event is retained"
+
+
+def test_context_sleep_for(config) -> None:
     five_min = timedelta(minutes=5)
-    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    channel = "context_sleep_for"
+    app = TaskturbineApp(config)
+    app.add_channel(channel)
+
+    @app.register_task(name="first-task")
+    def first_task(a: str) -> str:
+        return f"called {a}"
+
+    app.spawn_task("first-task", {}, channel=channel)
+    claims = app.claim_task([channel], "worker-1", five_min, 1)
     context = app.create_context(claims[0])
 
     with pytest.raises(SuspendError) as err:
@@ -88,7 +117,10 @@ def test_context_sleep_for(config) -> None:
 
 
 def test_context_step_return_result(config) -> None:
+    five_min = timedelta(minutes=5)
+    channel = "context_step_return_result"
     app = TaskturbineApp(config)
+    app.add_channel(channel)
 
     @app.register_task(name="first-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
@@ -102,8 +134,8 @@ def test_context_step_return_result(config) -> None:
 
         return step_data
 
-    five_min = timedelta(minutes=5)
-    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    app.spawn_task("first-task", {}, channel=channel)
+    claims = app.claim_task([channel], "worker-1", five_min, 1)
     context = app.create_context(claims[0])
 
     task_result = first_task(context)
@@ -117,7 +149,10 @@ def test_context_step_return_result(config) -> None:
 
 
 def test_context_step_raise_error(config) -> None:
+    five_min = timedelta(minutes=5)
+    channel = "context_step_raise_error"
     app = TaskturbineApp(config)
+    app.add_channel(channel)
 
     @app.register_task(name="first-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
@@ -130,8 +165,8 @@ def test_context_step_raise_error(config) -> None:
 
         return step_data
 
-    five_min = timedelta(minutes=5)
-    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    app.spawn_task("first-task", {}, channel=channel)
+    claims = app.claim_task([channel], "worker-1", five_min, 1)
     context = app.create_context(claims[0])
 
     with pytest.raises(StepFailed) as err:
@@ -142,7 +177,10 @@ def test_context_step_raise_error(config) -> None:
 
 
 def test_context_step_duplicate_runs(config) -> None:
+    five_min = timedelta(minutes=5)
     app = TaskturbineApp(config)
+    channel = "context_step_duplicate"
+    app.add_channel(channel)
 
     @app.register_task(name="context-step-duplicate-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
@@ -155,8 +193,8 @@ def test_context_step_duplicate_runs(config) -> None:
 
         return step_data
 
-    five_min = timedelta(minutes=5)
-    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    app.spawn_task("context-step-duplicate-task", {}, channel=channel)
+    claims = app.claim_task([channel], "worker-1", five_min, 1)
     context = app.create_context(claims[0])
 
     result = first_task(context)

@@ -11,7 +11,7 @@ from .conftest import row_factory
 def test_add_channel(config) -> None:
     app = TaskturbineApp(config)
     app.add_channel("reports")
-    assert app.channels == ["default", "reports"]
+    assert app.channels == {"default", "reports"}
 
 
 def test_register_task(config) -> None:

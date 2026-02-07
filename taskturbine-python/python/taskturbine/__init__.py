@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from functools import update_wrapper
 from typing import Any, Callable, Generic, Mapping, MutableMapping, ParamSpec, Self, TypeVar
 import json
+import logging
 
 # Import from the rust library
 from .taskturbine import Config, TaskOptions, SpawnResult, ClaimedTask
@@ -21,6 +22,8 @@ __all__ = ["Config", "TaskturbineApp"]
 
 P = ParamSpec("P")
 R = TypeVar("R")
+
+logger = logging.getLogger(__name__)
 
 
 class Task(Generic[P, R]):
@@ -61,13 +64,13 @@ class TaskContext:
         Wait for an event. Will return the event payload if the event has been emit.
         If the event has not happened, a SuspendError will be raised.
         """
-        timeout_secs = self._inner.await_event_default_timeout_secs()
-        if isinstance(timeout, float):
-            timeout_secs = timeout
-        elif isinstance(timeout, timedelta):
-            timeout_secs = timeout.total_seconds()
-        assert timeout_secs
-        wait = self._inner.get_event_payload(event_name, timeout_secs)
+        if timeout is None:
+            timeout = self._inner.await_event_default_timeout_secs()
+        if isinstance(timeout, (float, int)):
+            timeout = timedelta(seconds=timeout)
+        assert isinstance(timeout, timedelta)
+
+        wait = self._inner.get_event_payload(event_name, timeout)
         if wait.should_suspend:
             raise SuspendError()
         return json.loads(wait.payload)
@@ -151,33 +154,54 @@ class Worker:
         self,
         inner: WorkerInner,
         tasks: Mapping[str, Task],
+        context_factory: Callable[[ClaimedTask], TaskContext],
     ) -> None:
         self._inner = inner
         self._tasks = tasks
+        self._context_factory = context_factory
 
     def start(self):
         """
         Start the worker run loop
         """
         while True:
-            self.run_once()
+            self.execute_batch()
 
-    def run_once(self):
-        # claim a batch of tasks
-        # run the batch of tasks sequentially
-        # create context for task
-        # call task
-        # collect result
-        # Report the results of all tasks to _inner.
-        #
+    def execute_batch(self):
+        claimed_tasks = self._inner.claim_tasks()
+        for claimed in claimed_tasks:
+            self.execute_task(claimed)
         # Figure out how multiprocessing could work.
         # Perhaps worker sends task to child, and child
         # sends result back, and all the pg interactions happen
         # in the parent.
         # Doing multiple processes will require threads for
         # io operations.
-        ...
 
+    def execute_task(self, claimed: ClaimedTask) -> None:
+        if not claimed.task_name in self._tasks:
+            logger.warn(f"Task with {claimed.task_name} is not registered")
+            return
+
+        task_fn = self._tasks[claimed.task_name]
+        context = self._context_factory(claimed)
+        try:
+            res = task_fn(context)
+            res_bytes = b""
+            if res is not None:
+                res_bytes = context._serialize(res)
+            self._inner.complete_run(claimed.run_id, res_bytes)
+        except SuspendError as suspend:
+            duration = suspend.duration
+            if not duration:
+                logger.debug("Task suspended/waiting run_id={claimed.run_id}")
+                return
+            else:
+                logger.debug("Task suspended for {duration.total_seconds()} seconds run_id={claimed.run_id}")
+                self._inner.schedule_run(claimed.run_id, duration)
+        except (StepFailed, Exception) as fail:
+            retry_at = claimed.next_retry_in()
+            self._inner.fail_run(claimed.run_id, retry_at)
 
 
 class TaskturbineApp:
@@ -258,6 +282,7 @@ class TaskturbineApp:
         taskname: str,
         params: dict[str, Any],
         *,
+        channel: str | None = None,
         headers: dict[str, str] | None = None,
         max_attempts: int | None = None,
         retry_seconds: int | None = None,
@@ -276,9 +301,14 @@ class TaskturbineApp:
             retry_max_seconds=retry_max_seconds,
             cancellation_max_age=cancellation_max_age,
         )
-        return self._app_rs.spawn_task(
-            taskname, self.serialize_value(params), options
-        )
+        if channel:
+            return self._app_rs.channel_spawn_task(
+                channel, taskname, self.serialize_value(params), options
+            )
+        else:
+            return self._app_rs.spawn_task(
+                taskname, self.serialize_value(params), options
+            )
 
     def emit_event(
         self,
@@ -302,6 +332,7 @@ class TaskturbineApp:
    ) -> list[ClaimedTask]:
         """
         Claim one or more tasks for the provided worker_id
+        TODO refactor this away.
         """
         return self._app_rs.claim_task(channels, worker_id, claim_timeout, qty)
 
@@ -323,6 +354,7 @@ class TaskturbineApp:
         worker = Worker(
             inner=self._app_rs.create_worker(worker_id, channels),
             tasks=self._tasks,
+            context_factory=self.create_context,
         )
         return worker
 
