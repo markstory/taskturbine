@@ -6,9 +6,7 @@ from taskturbine import Config, TaskturbineApp, Task, TaskContext
 
 import pytest
 
-
-def test_claimedtask_retry_in_defaults(config):
-    channel = "claimedtask_retry_in_defaults"
+def test_claimedtask_retry_in_defaults(config, channel):
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -24,8 +22,7 @@ def test_claimedtask_retry_in_defaults(config):
     assert claim.next_retry_in() == timedelta(seconds=30)
 
 
-def test_worker_execute_batch_simple_success(config, db_connection):
-    channel = "execute_batch_simple_success"
+def test_worker_execute_batch_simple_success(config, db_connection, channel):
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -49,7 +46,7 @@ def test_worker_execute_batch_simple_success(config, db_connection):
     assert rows[0]["state"] == "completed"
     assert rows[1]["state"] == "completed"
 
-def test_worker_execute_batch_simple_failure(config, db_connection):
+def test_worker_execute_batch_simple_failure(config, db_connection, channel):
     channel = "execute_batch_simple_failure"
     app = TaskturbineApp(config)
     app.add_channel(channel)
@@ -76,7 +73,7 @@ def test_worker_execute_batch_simple_failure(config, db_connection):
 
 
 @pytest.mark.skip(reason="need to implement params")
-def test_worker_execute_batch_mixed_failure(config, db_connection):
+def test_worker_execute_batch_mixed_failure(config, db_connection, channel):
     channel = "execute_batch_mixed_failure"
     app = TaskturbineApp(config)
     app.add_channel(channel)

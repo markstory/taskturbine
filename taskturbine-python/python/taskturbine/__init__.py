@@ -166,17 +166,14 @@ class Worker:
         """
         while True:
             self.execute_batch()
+            # TODO - add cleanup operations
 
     def execute_batch(self):
         claimed_tasks = self._inner.claim_tasks()
+        # TODO - Use multiprocessing to execute tasks in parallel
+        # The number of processes should == worker_concurrency
         for claimed in claimed_tasks:
             self.execute_task(claimed)
-        # Figure out how multiprocessing could work.
-        # Perhaps worker sends task to child, and child
-        # sends result back, and all the pg interactions happen
-        # in the parent.
-        # Doing multiple processes will require threads for
-        # io operations.
 
     def execute_task(self, claimed: ClaimedTask) -> None:
         if not claimed.task_name in self._tasks:

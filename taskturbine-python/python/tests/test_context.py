@@ -55,9 +55,8 @@ def test_context_await_event_no_event(config):
     assert err.value.duration is None
 
 
-def test_context_emit_event(config):
+def test_context_emit_event(config, channel):
     five_min = timedelta(minutes=5)
-    channel = "context_emit_event"
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -73,9 +72,8 @@ def test_context_emit_event(config):
     assert res is None
 
 
-def test_context_emit_event_duplicate(config):
+def test_context_emit_event_duplicate(config, channel):
     five_min = timedelta(minutes=5)
-    channel = "context_emit_event"
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -96,9 +94,8 @@ def test_context_emit_event_duplicate(config):
     assert event["status"] == "not-ok", "Last event is retained"
 
 
-def test_context_sleep_for(config) -> None:
+def test_context_sleep_for(config, channel) -> None:
     five_min = timedelta(minutes=5)
-    channel = "context_sleep_for"
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -116,9 +113,8 @@ def test_context_sleep_for(config) -> None:
     assert err.value.duration == timedelta(minutes=3)
 
 
-def test_context_step_return_result(config) -> None:
+def test_context_step_return_result(config, channel) -> None:
     five_min = timedelta(minutes=5)
-    channel = "context_step_return_result"
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -148,9 +144,8 @@ def test_context_step_return_result(config) -> None:
     assert checkpoint.state == b'{"step": "one"}'
 
 
-def test_context_step_raise_error(config) -> None:
+def test_context_step_raise_error(config, channel) -> None:
     five_min = timedelta(minutes=5)
-    channel = "context_step_raise_error"
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -176,10 +171,9 @@ def test_context_step_raise_error(config) -> None:
         context._inner.get_checkpoint("first-step")
 
 
-def test_context_step_duplicate_runs(config) -> None:
+def test_context_step_duplicate_runs(config, channel) -> None:
     five_min = timedelta(minutes=5)
     app = TaskturbineApp(config)
-    channel = "context_step_duplicate"
     app.add_channel(channel)
 
     @app.register_task(name="context-step-duplicate-task")

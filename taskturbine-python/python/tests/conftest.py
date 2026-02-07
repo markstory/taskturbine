@@ -6,6 +6,12 @@ from taskturbine import Config
 
 
 @pytest.fixture
+def channel(request):
+    """Each test should have a unique channel name to reduce bleed through"""
+    return request.node.name
+
+
+@pytest.fixture
 def config(database_url) -> Config:
     return Config(app_module="", database_url=database_url)
 
