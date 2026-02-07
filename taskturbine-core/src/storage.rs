@@ -554,7 +554,7 @@ impl Storage {
             AND state IN ('running', 'pending', 'sleeping')
             LIMIT $1",
         )
-        .bind(&self.config.worker_cleanup_limit)
+        .bind(self.config.worker_cleanup_limit)
         .fetch_all(&mut *atomic)
         .await
         .map_err(TaskTurbineError::SqlError)?;
@@ -746,7 +746,7 @@ impl Storage {
             SELECT * FROM task_result 
             ",
         )
-        .bind(&task_id)
+        .bind(task_id)
         .fetch_one(&mut *atomic)
         .await
         .map_err(TaskTurbineError::SqlError)?;
