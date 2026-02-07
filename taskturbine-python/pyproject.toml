@@ -15,6 +15,7 @@ dev = [
     "pip",
     "pytest",
     "psycopg2-binary",
+    "types-psycopg2",
 ]
 
 [build-system]

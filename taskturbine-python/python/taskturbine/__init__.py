@@ -152,8 +152,7 @@ class TaskContext:
         try:
             step_result = func(self)
         except Exception as err:
-            # Step failed, record failure
-            raise StepFailed()
+            raise StepFailed() from err
 
         result_bytes = b""
         if step_result:
