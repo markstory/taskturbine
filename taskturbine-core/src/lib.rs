@@ -38,18 +38,18 @@
 //! # Terminology
 //!
 //! - `usecase` The client application that a task belongs to. A single taskturbine
-//!    database can be shared by multiple applications if required.
+//!   database can be shared by multiple applications if required.
 //! - `channel` Channels enable you to separate workloads within a `usecase`. For example, you may
-//!    want many workers processing high-priority tasks, and fewer processing lower priority work.
+//!   want many workers processing high-priority tasks, and fewer processing lower priority work.
 //! - `task` A workflow or task that should be executed durably.
 //! - `step` An incremental operation or side-effect that can succeed or fail. Steps
-//!    act as error and persistence boundaries for your tasks. Steps that complete are not
-//!    retried or run multiple times.
+//!   act as error and persistence boundaries for your tasks. Steps that complete are not
+//!   retried or run multiple times.
 //! - `checkpoint` As steps are completed, checkpoints are created.
 //! - `run` An attempt to execute a task. Each run can read checkpoints from previous
-//!    runs, allowing tasks to resume where they left off.
+//!   runs, allowing tasks to resume where they left off.
 //! - `event` Tasks can be suspended until named events are emit by the application. Events are
-//!    ideal for waiting on webhooks, or other tasks to complete.
+//!   ideal for waiting on webhooks, or other tasks to complete.
 //! - `wait` When a task is waiting for an event, it records a `wait`.
 //!
 //! # Defining Tasks
