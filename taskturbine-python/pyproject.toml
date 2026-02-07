@@ -10,6 +10,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "maturin[patchelf]>=1.3.0",
+    "black",
+    "mypy",
     "pip",
     "pytest",
     "psycopg2-binary",
