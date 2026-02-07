@@ -6,9 +6,19 @@ durable function framework. While all the IO operations are built
 with rust, the parts of tasks that interact directly with your code
 are in python.
 """
+
 from datetime import datetime, timedelta
 from functools import update_wrapper
-from typing import Any, Callable, Generic, Mapping, MutableMapping, ParamSpec, Self, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Mapping,
+    MutableMapping,
+    ParamSpec,
+    Self,
+    TypeVar,
+)
 import json
 import logging
 
@@ -59,7 +69,9 @@ class TaskContext:
         self._deserialize = deserialize
         self._checkpoint_counters: dict[str, int] = {}
 
-    def await_event(self, event_name: str, timeout: float|timedelta|None = None) -> dict[str, Any]:
+    def await_event(
+        self, event_name: str, timeout: float | timedelta | None = None
+    ) -> dict[str, Any]:
         """
         Wait for an event. Will return the event payload if the event has been emit.
         If the event has not happened, a SuspendError will be raised.
@@ -108,7 +120,7 @@ class TaskContext:
         checkpoint_name = self._checkpoint_name(step_name)
         try:
             self._inner.get_checkpoint(checkpoint_name)
-            return 
+            return
         except ValueError:
             # An exception here means that the checkpoint was not found.
             pass
@@ -116,7 +128,9 @@ class TaskContext:
 
         raise SuspendError(duration=duration)
 
-    def step(self, step_name: str, func: Callable[[Self], dict[str, Any] | None]) -> dict[str, Any] | None:
+    def step(
+        self, step_name: str, func: Callable[[Self], dict[str, Any] | None]
+    ) -> dict[str, Any] | None:
         """
         Run a durable step
 
@@ -194,7 +208,9 @@ class Worker:
                 logger.debug("Task suspended/waiting run_id={claimed.run_id}")
                 return
             else:
-                logger.debug("Task suspended for {duration.total_seconds()} seconds run_id={claimed.run_id}")
+                logger.debug(
+                    "Task suspended for {duration.total_seconds()} seconds run_id={claimed.run_id}"
+                )
                 self._inner.schedule_run(claimed.run_id, duration)
         except (StepFailed, Exception) as fail:
             retry_at = claimed.next_retry_in()
@@ -229,10 +245,7 @@ class TaskturbineApp:
         """Get the list of channels"""
         return self._app_rs.channels
 
-    def register_task(
-        self,
-        name: str
-    ) -> Callable[[Callable[P, R]], Task[P, R]]:
+    def register_task(self, name: str) -> Callable[[Callable[P, R]], Task[P, R]]:
         """
         Decorator to register task functions.
 
@@ -242,6 +255,7 @@ class TaskturbineApp:
         def func_name(context: TaskContext) -> str | None
         ```
         """
+
         def wrapped(func: Callable[P, R]) -> Task[P, R]:
             task = Task(name=name, func=func)
             self._tasks[name] = task
@@ -326,7 +340,7 @@ class TaskturbineApp:
         worker_id: str,
         claim_timeout: timedelta,
         qty: int,
-   ) -> list[ClaimedTask]:
+    ) -> list[ClaimedTask]:
         """
         Claim one or more tasks for the provided worker_id
         TODO refactor this away.
@@ -364,7 +378,7 @@ class SuspendError(Exception):
         self.duration = duration
 
 
-
 class StepFailed(Exception):
     """Signal that a step/task failed"""
+
     # TODO capture execution context

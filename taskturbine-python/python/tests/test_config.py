@@ -4,7 +4,7 @@ from taskturbine import Config
 def test_config_build_defaults() -> None:
     config = Config(
         app_module="examples.tasks:app",
-        database_url="postgres://app:password@localhost:5432/tests"
+        database_url="postgres://app:password@localhost:5432/tests",
     )
     assert config.app_module == "examples.tasks:app"
     assert config.database_url == "postgres://app:password@localhost:5432/tests"

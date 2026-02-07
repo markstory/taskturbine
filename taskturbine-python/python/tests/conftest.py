@@ -4,6 +4,7 @@ import pytest
 
 from taskturbine import Config
 
+
 def pytest_sessionstart():
     # Clear storage tables at the beginning of each run
     db_url = os.getenv("TASKTURBINE_DATABASE_URL")
@@ -43,4 +44,3 @@ def row_factory(cursor, row):
     for idx, col in enumerate(cursor.description):
         d[col[0]] = row[idx]
     return d
-

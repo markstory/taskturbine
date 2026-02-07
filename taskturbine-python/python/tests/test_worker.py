@@ -6,6 +6,7 @@ from taskturbine import Config, TaskturbineApp, Task, TaskContext
 
 import pytest
 
+
 def test_claimedtask_retry_in_defaults(config, channel):
     app = TaskturbineApp(config)
     app.add_channel(channel)
@@ -39,12 +40,13 @@ def test_worker_execute_batch_simple_success(config, db_connection, channel):
     cursor = db_connection.cursor()
     cursor.execute(
         "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s)",
-        [first.run_id, second.run_id]
+        [first.run_id, second.run_id],
     )
     rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
     assert len(rows) == 2
     assert rows[0]["state"] == "completed"
     assert rows[1]["state"] == "completed"
+
 
 def test_worker_execute_batch_simple_failure(config, db_connection, channel):
     channel = "execute_batch_simple_failure"
@@ -64,7 +66,7 @@ def test_worker_execute_batch_simple_failure(config, db_connection, channel):
     cursor = db_connection.cursor()
     cursor.execute(
         "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s)",
-        [first.run_id, second.run_id]
+        [first.run_id, second.run_id],
     )
     rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
     assert len(rows) == 2
@@ -93,7 +95,7 @@ def test_worker_execute_batch_mixed_failure(config, db_connection, channel):
     cursor = db_connection.cursor()
     cursor.execute(
         "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s)",
-        [first.task_id, second.task_id]
+        [first.task_id, second.task_id],
     )
     rows = list(map(lambda row: row_factory(row, cursor), cursor.fetchall()))
     assert len(rows) == 2

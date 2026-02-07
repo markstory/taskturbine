@@ -1,9 +1,37 @@
 from typing import Any
 from datetime import timedelta
 
-from taskturbine import Config, StepFailed, SuspendError, TaskturbineApp, Task, TaskContext
+from taskturbine import (
+    Config,
+    StepFailed,
+    SuspendError,
+    TaskturbineApp,
+    Task,
+    TaskContext,
+)
 
 import pytest
+
+five_min = timedelta(minutes=5)
+
+
+def test_context_attributes(config):
+    app = TaskturbineApp(config)
+
+    @app.register_task(name="first-task")
+    def first_task(a: str) -> str:
+        return f"called {a}"
+
+    res = app.spawn_task("first-task", {"str": "value", "int": 123})
+    claims = app.claim_task(["default"], "worker-1", five_min, 1)
+    assert len(claims) >= 1
+    claim = claims[0]
+    context = app.create_context(claims[0])
+
+    assert context.task_id == claim.task_id
+    assert context.run_id == claim.run_id
+    assert context.params == {"str": "value", "int": 123}
+    assert context.param_bytes == b'{"str": "value", "int": 123}'
 
 
 def test_context_await_event_event_present(config):
