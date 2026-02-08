@@ -58,6 +58,7 @@ class Config:
         self,
         app_module: str,
         database_url: str,
+        *,
         database_log_queries: bool = False,
         usecase: str = "default",
         default_channel: str = "default",

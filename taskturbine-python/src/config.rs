@@ -95,6 +95,7 @@ impl Config {
     #[pyo3(signature = (
         app_module,
         database_url,
+        *,
         database_log_queries=false,
         usecase="default",
         default_channel="default",
