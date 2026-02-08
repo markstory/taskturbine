@@ -1,20 +1,21 @@
-from typing import Any
 import psycopg2
 import pytest
 import json
 import os
 
+Connection = psycopg2._psycopg.connection
+
 from taskturbine import Config, TaskturbineApp, Task
 from .conftest import row_factory
 
 
-def test_add_channel(config) -> None:
+def test_add_channel(config: Config) -> None:
     app = TaskturbineApp(config)
     app.add_channel("reports")
     assert app.channels == {"default", "reports"}
 
 
-def test_register_task(config) -> None:
+def test_register_task(config: Config) -> None:
     app = TaskturbineApp(config)
 
     @app.register_task(name="first-task")
@@ -39,14 +40,14 @@ def test_register_task(config) -> None:
     assert task("one") == "called one"
 
 
-def test_spawn_task_unregistered(config):
+def test_spawn_task_unregistered(config: Config) -> None:
     app = TaskturbineApp(config)
     with pytest.raises(ValueError) as err:
         app.spawn_task("undefined", {})
     assert "task `undefined` is not registered" in str(err.value)
 
 
-def test_spawn_task(config):
+def test_spawn_task(config: Config) -> None:
     app = TaskturbineApp(config)
 
     @app.register_task(name="first-task")
@@ -59,7 +60,7 @@ def test_spawn_task(config):
     assert res.run_id
 
 
-def test_spawn_task_with_options(config, db_connection):
+def test_spawn_task_with_options(config: Config, db_connection: Connection) -> None:
     app = TaskturbineApp(config)
 
     @app.register_task(name="first-task")
@@ -80,7 +81,7 @@ def test_spawn_task_with_options(config, db_connection):
     assert row["max_attempts"] == 10
 
 
-def test_emit_event(config, db_connection):
+def test_emit_event(config: Config, db_connection: Connection) -> None:
     app = TaskturbineApp(config)
 
     data = {"key": "value"}

@@ -9,12 +9,15 @@ from taskturbine import (
     TaskContext,
 )
 
+import psycopg2
 import pytest
+
+Connection = psycopg2._psycopg.connection
 
 five_min = timedelta(minutes=5)
 
 
-def test_context_attributes(config, channel):
+def test_context_attributes(config: Config, channel: str) -> None:
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -34,7 +37,7 @@ def test_context_attributes(config, channel):
     assert context.params_bytes == b'{"str": "value", "int": 123}'
 
 
-def test_context_await_event_event_present(config):
+def test_context_await_event_event_present(config: Config) -> None:
     app = TaskturbineApp(config)
 
     @app.register_task(name="first-task")
@@ -58,7 +61,7 @@ def test_context_await_event_event_present(config):
     assert result["status"] == "ok"
 
 
-def test_context_await_event_no_event(config):
+def test_context_await_event_no_event(config: Config) -> None:
     app = TaskturbineApp(config)
 
     @app.register_task(name="first-task")
@@ -83,7 +86,7 @@ def test_context_await_event_no_event(config):
     assert err.value.duration is None
 
 
-def test_context_emit_event(config, channel):
+def test_context_emit_event(config: Config, channel: str) -> None:
     five_min = timedelta(minutes=5)
     app = TaskturbineApp(config)
     app.add_channel(channel)
@@ -96,11 +99,10 @@ def test_context_emit_event(config, channel):
     claims = app.claim_task([channel], "worker-1", five_min, 1)
     context = app.create_context(claims[0])
 
-    res = context.emit_event("context_emit_event", {"status": "ok"})
-    assert res is None
+    context.emit_event("context_emit_event", {"status": "ok"})
 
 
-def test_context_emit_event_duplicate(config, channel):
+def test_context_emit_event_duplicate(config: Config, channel: str) -> None:
     five_min = timedelta(minutes=5)
     app = TaskturbineApp(config)
     app.add_channel(channel)
@@ -113,16 +115,14 @@ def test_context_emit_event_duplicate(config, channel):
     claims = app.claim_task([channel], "worker-1", five_min, 1)
     context = app.create_context(claims[0])
 
-    res = context.emit_event("context_emit_event_duplicate", {"status": "ok"})
-    assert res is None
-    res = context.emit_event("context_emit_event_duplicate", {"status": "not-ok"})
-    assert res is None
+    context.emit_event("context_emit_event_duplicate", {"status": "ok"})
+    context.emit_event("context_emit_event_duplicate", {"status": "not-ok"})
 
     event = context.await_event("context_emit_event_duplicate")
     assert event["status"] == "not-ok", "Last event is retained"
 
 
-def test_context_sleep_for(config, channel) -> None:
+def test_context_sleep_for(config: Config, channel: str) -> None:
     five_min = timedelta(minutes=5)
     app = TaskturbineApp(config)
     app.add_channel(channel)
@@ -141,14 +141,14 @@ def test_context_sleep_for(config, channel) -> None:
     assert err.value.duration == timedelta(minutes=3)
 
 
-def test_context_step_return_result(config, channel) -> None:
+def test_context_step_return_result(config: Config, channel: str) -> None:
     five_min = timedelta(minutes=5)
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
     @app.register_task(name="first-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
-        def step_one(ctx) -> dict[str, Any]:
+        def step_one(ctx: TaskContext) -> dict[str, Any]:
             assert isinstance(ctx, TaskContext)
             return {"step": "one"}
 
@@ -172,14 +172,15 @@ def test_context_step_return_result(config, channel) -> None:
     assert checkpoint.state == b'{"step": "one"}'
 
 
-def test_context_step_raise_error(config, channel) -> None:
+def test_context_step_raise_error(config: Config, channel: str) -> None:
     five_min = timedelta(minutes=5)
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
     @app.register_task(name="first-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
-        def step_one(ctx) -> dict[str, Any]:
+        def step_one(ctx: TaskContext) -> None:
+            assert isinstance(ctx, TaskContext)
             raise KeyError("oh no")
 
         step_data = ctx.step("first-step", step_one)
@@ -197,18 +198,18 @@ def test_context_step_raise_error(config, channel) -> None:
     assert err.value
     assert "oh no" in str(err.value)
 
-    with pytest.raises(ValueError) as err:
+    with pytest.raises(ValueError):
         context._inner.get_checkpoint("first-step")
 
 
-def test_context_step_duplicate_runs(config, channel) -> None:
+def test_context_step_duplicate_runs(config: Config, channel: str) -> None:
     five_min = timedelta(minutes=5)
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
     @app.register_task(name="context-step-duplicate-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
-        def step_one(ctx) -> dict[str, Any]:
+        def step_one(ctx: TaskContext) -> dict[str, Any]:
             return {"step": "first"}
 
         step_data = ctx.step("first-step", step_one)
