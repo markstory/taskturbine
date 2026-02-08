@@ -230,7 +230,7 @@ class Worker:
                     "Task suspended for {duration.total_seconds()} seconds run_id={claimed.run_id}"
                 )
                 self._inner.schedule_run(claimed.run_id, duration)
-        except (StepFailed, Exception) as fail:
+        except Exception as fail:
             if self._error_handler:
                 self._error_handler(fail)
             else:
@@ -398,9 +398,3 @@ class SuspendError(Exception):
     def __init__(self, duration: timedelta | None = None) -> None:
         super().__init__("Task suspended")
         self.duration = duration
-
-
-class StepFailed(Exception):
-    """Signal that a step/task failed"""
-
-    # TODO capture execution context
