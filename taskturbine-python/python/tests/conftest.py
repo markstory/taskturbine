@@ -8,6 +8,7 @@ from taskturbine import Config
 Connection = psycopg2._psycopg.connection
 Cursor = psycopg2._psycopg.cursor
 
+
 def pytest_sessionstart() -> None:
     # Clear storage tables at the beginning of each session so that we don't
     # have cross test bleed through.

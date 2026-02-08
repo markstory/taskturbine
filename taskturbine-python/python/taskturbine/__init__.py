@@ -383,7 +383,13 @@ class TaskturbineApp:
         )
         return context
 
-    def create_worker(self, worker_id: str, channels: list[str], *, error_handler: Callable[[Exception], None] | None = None) -> Worker:
+    def create_worker(
+        self,
+        worker_id: str,
+        channels: list[str],
+        *,
+        error_handler: Callable[[Exception], None] | None = None,
+    ) -> Worker:
         """
         Create a Worker that is connected to Rust storage API.
         """

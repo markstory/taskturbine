@@ -34,3 +34,7 @@ mypy_path = "python"
 files = ["python"]
 show_error_codes = true
 strict = true
+
+[tool.black]
+line-length = 88
+include = '\.pyi?$'

@@ -7,8 +7,8 @@ from taskturbine import Config, TaskturbineApp, Task, TaskContext
 import psycopg2
 import pytest
 
-
 Connection = psycopg2._psycopg.connection
+
 
 def test_claimedtask_retry_in_defaults(config: Config, channel: str) -> None:
     app = TaskturbineApp(config)
@@ -26,7 +26,9 @@ def test_claimedtask_retry_in_defaults(config: Config, channel: str) -> None:
     assert claim.next_retry_in() == timedelta(seconds=30)
 
 
-def test_worker_execute_batch_simple_success(config: Config, db_connection: Connection, channel: str) -> None:
+def test_worker_execute_batch_simple_success(
+    config: Config, db_connection: Connection, channel: str
+) -> None:
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -51,7 +53,9 @@ def test_worker_execute_batch_simple_success(config: Config, db_connection: Conn
     assert rows[1]["state"] == "completed"
 
 
-def test_worker_execute_batch_simple_failure(config: Config, db_connection: Connection, channel: str) -> None:
+def test_worker_execute_batch_simple_failure(
+    config: Config, db_connection: Connection, channel: str
+) -> None:
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -83,6 +87,7 @@ def test_worker_execute_batch_error_handler(config: Config, channel: str) -> Non
         raise TypeError("oh no")
 
     app.spawn_task("worker-task-fail", {"oid": 123}, channel=channel)
+
     def error_handler(err: Exception) -> None:
         assert isinstance(err, Exception), "should be an exception"
         assert str(err) == "oh no", "Should have the error from the step"
@@ -91,7 +96,9 @@ def test_worker_execute_batch_error_handler(config: Config, channel: str) -> Non
     worker.execute_batch()
 
 
-def test_worker_execute_batch_mixed_failure(config: Config, db_connection: Connection, channel: str) -> None:
+def test_worker_execute_batch_mixed_failure(
+    config: Config, db_connection: Connection, channel: str
+) -> None:
     channel = "execute_batch_mixed_failure"
     app = TaskturbineApp(config)
     app.add_channel(channel)

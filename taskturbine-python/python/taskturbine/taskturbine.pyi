@@ -1,16 +1,13 @@
 from datetime import timedelta
 from typing import Self
 
-
 class AwaitResult:
     payload: bytes
     should_suspend: bool
 
-
 class SpawnResult:
     run_id: str
     task_id: str
-
 
 class Checkpoint:
     task_id: str
@@ -19,11 +16,9 @@ class Checkpoint:
     owner_run_id: str
     updated_at: int
 
-
 class Task:
     module_name: str
     task_name: str
-
 
 class ClaimedTask:
     task_id: str
@@ -38,7 +33,6 @@ class ClaimedTask:
     max_attempts: int
 
     def next_retry_in(self) -> timedelta: ...
-
 
 class Config:
     app_module: str
@@ -71,7 +65,6 @@ class Config:
         await_event_default_timeout_secs: int = 120,
     ) -> None: ...
 
-
 class TaskOptions:
     headers: dict[str, str]
     max_attempts: int
@@ -88,7 +81,6 @@ class TaskOptions:
         retry_max_seconds: int,
         cancellation_max_age: int,
     ) -> None: ...
-
     def copy_with(
         self,
         headers: dict[str, str] | None,
@@ -99,7 +91,6 @@ class TaskOptions:
         cancellation_max_age: int | None,
     ) -> Self: ...
 
-
 class WorkerInner:
     def claim_tasks(self) -> list[ClaimedTask]: ...
     def run_cleanup(self) -> None: ...
@@ -107,13 +98,14 @@ class WorkerInner:
     def complete_run(self, run_id: str, run_result: bytes) -> None: ...
     def schedule_run(self, run_id: str, wait_for: timedelta) -> None: ...
 
-
 class ContextInner:
     claimed_task: ClaimedTask
     def await_event_default_timeout_secs(self) -> int: ...
     def emit_event(self, event_name: str, payload: bytes) -> None: ...
     def get_checkpoint(self, checkpoint_name: str) -> Checkpoint: ...
-    def set_checkpoint(self, checkpoint_name: str, state: bytes, extend_claim: timedelta | None) -> None: ...
+    def set_checkpoint(
+        self, checkpoint_name: str, state: bytes, extend_claim: timedelta | None
+    ) -> None: ...
     def get_event_payload(self, event_name: str, timeout: timedelta) -> AwaitResult: ...
 
 class TaskturbineApp:
@@ -124,8 +116,12 @@ class TaskturbineApp:
     def add_channel(self, value: str) -> None: ...
     def register_task(self, task: Task) -> None: ...
     def has_task(self, name: str) -> bool: ...
-    def spawn_task(self, task_name: str, params: bytes, options: TaskOptions) -> SpawnResult: ...
-    def channel_spawn_task(self, channel: str, task_name: str, params: bytes, options: TaskOptions) -> SpawnResult: ...
+    def spawn_task(
+        self, task_name: str, params: bytes, options: TaskOptions
+    ) -> SpawnResult: ...
+    def channel_spawn_task(
+        self, channel: str, task_name: str, params: bytes, options: TaskOptions
+    ) -> SpawnResult: ...
     def emit_event(self, event_name: str, payload: bytes) -> None: ...
     def create_worker(self, worker_id: str, channels: list[str]) -> WorkerInner: ...
     def create_context(self, claimed_task: ClaimedTask) -> ContextInner: ...
