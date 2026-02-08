@@ -5,15 +5,17 @@ import pytest
 from taskturbine import Config
 
 
-def pytest_sessionstart():
+def pytest_runtestloop():
     # Clear storage tables at the beginning of each run
     db_url = os.getenv("TASKTURBINE_DATABASE_URL")
     assert db_url, "Required environment variable TASKTURBINE_DATABASE_URL undefined"
 
     connection = psycopg2.connect(db_url)
-    cursor = connection.cursor()
-    for table in ("events", "waits", "runs", "tasks"):
-        cursor.execute(f"DELETE FROM taskturbine.{table}")
+    with connection.cursor() as cursor:
+        # TODO this isn't working?!
+        for table in ("events", "waits", "runs", "tasks"):
+            query = f"TRUNCATE taskturbine.{table}"
+            cursor.execute(query, [])
 
 
 @pytest.fixture
