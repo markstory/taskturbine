@@ -1,16 +1,16 @@
-from typing import Any
 from datetime import timedelta
+from typing import Any
+
+import psycopg2
+import pytest
 
 from taskturbine import (
     Config,
     SuspendError,
-    TaskturbineApp,
     Task,
     TaskContext,
+    TaskturbineApp,
 )
-
-import psycopg2
-import pytest
 
 Connection = psycopg2._psycopg.connection
 

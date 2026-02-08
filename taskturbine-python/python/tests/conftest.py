@@ -1,5 +1,6 @@
 import os
 from typing import Any
+
 import psycopg2
 import pytest
 

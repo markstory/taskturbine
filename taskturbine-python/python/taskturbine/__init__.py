@@ -7,6 +7,8 @@ with rust, the parts of tasks that interact directly with your code
 are in python.
 """
 
+import json
+import logging
 from datetime import datetime, timedelta
 from functools import update_wrapper
 from typing import (
@@ -19,13 +21,11 @@ from typing import (
     Self,
     TypeVar,
 )
-import json
-import logging
 
 # Import from the rust library
-from .taskturbine import Config, TaskOptions, SpawnResult, ClaimedTask
+from .taskturbine import ClaimedTask, Config, ContextInner, SpawnResult, TaskOptions
 from .taskturbine import TaskturbineApp as AppRs
-from .taskturbine import ContextInner, WorkerInner
+from .taskturbine import WorkerInner
 
 __all__ = ["Config", "TaskturbineApp"]
 

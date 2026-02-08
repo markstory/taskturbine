@@ -1,11 +1,13 @@
-import psycopg2
-import pytest
 import json
 import os
 
+import psycopg2
+import pytest
+
 Connection = psycopg2._psycopg.connection
 
-from taskturbine import Config, TaskturbineApp, Task
+from taskturbine import Config, Task, TaskturbineApp
+
 from .conftest import row_factory
 
 

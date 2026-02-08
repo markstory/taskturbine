@@ -38,3 +38,8 @@ strict = true
 [tool.black]
 line-length = 88
 include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 88
+src_paths = ["python"]

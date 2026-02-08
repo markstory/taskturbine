@@ -1,11 +1,12 @@
-from typing import Any
 from datetime import timedelta
-
-from .conftest import row_factory
-from taskturbine import Config, TaskturbineApp, Task, TaskContext
+from typing import Any
 
 import psycopg2
 import pytest
+
+from taskturbine import Config, Task, TaskContext, TaskturbineApp
+
+from .conftest import row_factory
 
 Connection = psycopg2._psycopg.connection
 
