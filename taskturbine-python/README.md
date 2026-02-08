@@ -70,7 +70,7 @@ options = {"retry_seconds": 30}
 app.spawn_task("process-signup", parameters, options)
 
 # Spawn a task on a defined channel.
-app.channel("reports").spawn_task("process-signup", parameters)
+app.spawn_task("process-signup", parameters, channel="reports")
 
 # Emit an external event. Payload is expected to be bytes
 # containing the event.
