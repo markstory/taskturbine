@@ -79,12 +79,12 @@ class TaskContext:
         return self._claimed_task.run_id
 
     @property
-    def params(self) -> str:
+    def params(self) -> dict[str, Any]:
         """Get the parameters a JSON parsed value"""
         return json.loads(self._claimed_task.params)
 
     @property
-    def params_bytes(self) -> str:
+    def params_bytes(self) -> bytes:
         """Get the parameters a byte string"""
         return self._claimed_task.params
 
@@ -267,7 +267,7 @@ class TaskturbineApp:
         self._app_rs.add_channel(name)
 
     @property
-    def channels(self) -> list[str]:
+    def channels(self) -> set[str]:
         """Get the list of channels"""
         return self._app_rs.channels
 
