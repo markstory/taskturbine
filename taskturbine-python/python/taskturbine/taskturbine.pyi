@@ -37,6 +37,8 @@ class ClaimedTask:
     attempt: int
     max_attempts: int
 
+    def next_retry_in(self) -> timedelta: ...
+
 
 class Config:
     app_module: str
@@ -44,28 +46,28 @@ class Config:
     database_log_queries: bool
     usecase: str
     default_channel: str
-    worker_concurrency: int
-    worker_sleep_secs: int
-    worker_cleanup_limit: int
+    worker_claim_timeout_secs: int
     worker_cleanup_cutoff_secs: int
     worker_cleanup_inline: bool
-    worker_claim_timeout_secs: int
+    worker_cleanup_limit: int
+    worker_concurrency: int
+    worker_sleep_secs: int
     await_event_default_timeout_secs: int
 
     def __init__(
         self,
         app_module: str,
         database_url: str,
-        database_log_queries: bool,
-        usecase: str,
-        default_channel: str,
-        worker_concurrency: int,
-        worker_sleep_secs: int,
-        worker_cleanup_limit: int,
-        worker_cleanup_cutoff_secs: int,
-        worker_cleanup_inline: bool,
-        worker_claim_timeout_secs: int,
-        await_event_default_timeout_secs: int,
+        database_log_queries: bool = False,
+        usecase: str = "default",
+        default_channel: str = "default",
+        worker_claim_timeout_secs: int = 600,
+        worker_cleanup_cutoff_secs: int = 30,
+        worker_cleanup_inline: bool = True,
+        worker_cleanup_limit: int = 1000,
+        worker_concurrency: int = 3,
+        worker_sleep_secs: int = 2,
+        await_event_default_timeout_secs: int = 120,
     ) -> None: ...
 
 
