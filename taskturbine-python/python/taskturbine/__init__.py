@@ -87,10 +87,10 @@ class TaskContext:
 
     def await_event(
         self, event_name: str, timeout: float | timedelta | None = None
-    ) -> JsonData:
+    ) -> Any:
         """
-        Wait for an event. Will return the event payload if the event has been emit.
-        If the event has not happened, a SuspendError will be raised.
+        Wait for an event. Will return the event payload if the event has been
+        emit. If the event has not happened, a SuspendError will be raised.
         """
         if timeout is None:
             timeout = self._inner.await_event_default_timeout_secs()
@@ -180,7 +180,7 @@ class Worker:
     def __init__(
         self,
         inner: WorkerInner,
-        tasks: Mapping[str, Task],
+        tasks: Mapping[str, Task[..., Any]],
         context_factory: Callable[[ClaimedTask], TaskContext],
         error_handler: Callable[[Exception], None] | None = None,
     ) -> None:
@@ -243,7 +243,7 @@ class Worker:
 class TaskturbineApp:
     def __init__(self, config: Config) -> None:
         self._app_rs = AppRs(config)
-        self._tasks: MutableMapping[str, Task] = {}
+        self._tasks: MutableMapping[str, Task[..., Any]] = {}
 
         # TODO add method to set default spawn options
         # Or define options per task that is registered.
@@ -290,7 +290,7 @@ class TaskturbineApp:
         """Check if a task is defined"""
         return name in self._tasks
 
-    def get_task(self, name: str) -> Task:
+    def get_task(self, name: str) -> Task[..., Any]:
         """Get a task by name. Raises KeyError on unknown values"""
         return self._tasks[name]
 

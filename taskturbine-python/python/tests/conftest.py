@@ -27,7 +27,7 @@ def pytest_sessionstart() -> None:
 @pytest.fixture
 def channel(request: pytest.FixtureRequest) -> str:
     """Each test should have a unique channel name to reduce bleed through"""
-    return request.node.name
+    return str(request.node.name)
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def db_connection(database_url: str) -> Connection:
 
 def row_factory(cursor: Cursor, row: tuple[Any, ...] | None) -> dict[str, Any]:
     d: dict[str, Any] = {}
-    if not row:
+    if not row or not cursor.description:
         return d
     for idx, col in enumerate(cursor.description):
         d[col[0]] = row[idx]
