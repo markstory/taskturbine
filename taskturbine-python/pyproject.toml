@@ -12,6 +12,7 @@ dev = [
     "maturin[patchelf]>=1.3.0",
     "black",
     "mypy",
+    "isort",
     "pip",
     "pytest",
     "psycopg2-binary",
