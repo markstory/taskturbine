@@ -193,7 +193,7 @@ impl TaskturbineApp {
     }
 
     /// Add a channel to the list of channels this application can publish and consume from.
-    fn add_channel(&mut self, value: String, _py: Python<'_>) {
+    fn add_channel(&mut self, value: String) {
         self.channels.insert(value);
     }
 

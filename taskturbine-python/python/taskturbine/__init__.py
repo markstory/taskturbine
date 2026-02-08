@@ -81,7 +81,7 @@ class TaskContext:
         return self._claimed_task.run_id
 
     @property
-    def params(self) -> JsonData:
+    def params(self) -> Any:
         """Get the parameters a JSON parsed value"""
         return json.loads(self._claimed_task.params)
 
