@@ -28,3 +28,9 @@ python-source = "python"
 
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]
+
+[tool.mypy]
+mypy_path = "python"
+files = ["python"]
+show_error_codes = true
+strict = true
