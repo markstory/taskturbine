@@ -241,26 +241,6 @@ impl TaskturbineApp {
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
 
-    fn claim_task(
-        &self,
-        channels: Vec<String>,
-        worker_id: &str,
-        claim_timeout: Duration,
-        qty: i32,
-    ) -> PyResult<Vec<ClaimedTask>> {
-        // TODO refactor this away once worker is more complete.
-        let channels = channels.iter().map(|chan| chan.as_ref()).collect();
-        let res = self
-            .storage
-            .claim_task(channels, worker_id, claim_timeout, qty);
-
-        res.map(|v| {
-            let mapped: Vec<ClaimedTask> = v.into_iter().map(|task| task.into()).collect();
-            mapped
-        })
-        .map_err(|v| PyValueError::new_err(format!("Could not claim tasks: {v:?}")))
-    }
-
     /// Create a worker for the application tasks
     ///
     /// A worker will only claim tasks in `channels` if channels is not-empty.

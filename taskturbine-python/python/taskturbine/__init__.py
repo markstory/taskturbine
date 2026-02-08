@@ -197,6 +197,9 @@ class Worker:
             self.execute_batch()
             # TODO - add cleanup operations
 
+    def claim_tasks(self) -> list[ClaimedTask]:
+        return self._inner.claim_tasks()
+
     def execute_batch(self) -> None:
         claimed_tasks = self._inner.claim_tasks()
         # TODO - Use multiprocessing to execute tasks in parallel
@@ -358,19 +361,6 @@ class TaskturbineApp:
         can be retrieved later.
         """
         self._app_rs.emit_event(event_name, self.serialize_value(payload))
-
-    def claim_task(
-        self,
-        channels: list[str],
-        worker_id: str,
-        claim_timeout: timedelta,
-        qty: int,
-    ) -> list[ClaimedTask]:
-        """
-        Claim one or more tasks for the provided worker_id
-        TODO refactor this away.
-        """
-        return self._app_rs.claim_task(channels, worker_id, claim_timeout, qty)
 
     def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
         """
