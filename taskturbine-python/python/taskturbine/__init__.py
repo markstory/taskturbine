@@ -33,6 +33,8 @@ __all__ = ["Config", "TaskturbineApp"]
 P = ParamSpec("P")
 R = TypeVar("R")
 
+JsonData = dict[str, Any]
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,8 +63,8 @@ class TaskContext:
     def __init__(
         self,
         inner: ContextInner,
-        serialize: Callable[[dict[str, Any]], bytes],
-        deserialize: Callable[[bytes], dict[str, Any] | None],
+        serialize: Callable[[JsonData], bytes],
+        deserialize: Callable[[bytes], JsonData | None],
     ) -> None:
         self._inner = inner
         self._serialize = serialize
@@ -79,7 +81,7 @@ class TaskContext:
         return self._claimed_task.run_id
 
     @property
-    def params(self) -> dict[str, Any]:
+    def params(self) -> JsonData:
         """Get the parameters a JSON parsed value"""
         return json.loads(self._claimed_task.params)
 
@@ -90,7 +92,7 @@ class TaskContext:
 
     def await_event(
         self, event_name: str, timeout: float | timedelta | None = None
-    ) -> dict[str, Any]:
+    ) -> JsonData:
         """
         Wait for an event. Will return the event payload if the event has been emit.
         If the event has not happened, a SuspendError will be raised.
@@ -106,7 +108,7 @@ class TaskContext:
             raise SuspendError()
         return json.loads(wait.payload)
 
-    def emit_event(self, event_name: str, payload: dict[str, Any]) -> None:
+    def emit_event(self, event_name: str, payload: JsonData) -> None:
         """
         Record an external event that a task/run is waiting for.
 
@@ -129,7 +131,7 @@ class TaskContext:
             return step_name
         return f"{step_name}#{value}"
 
-    def sleep_for(self, step_name: str, duration: timedelta):
+    def sleep_for(self, step_name: str, duration: timedelta) -> None:
         """
         Pause the current task until `duration` has elapsed.
 
@@ -148,8 +150,8 @@ class TaskContext:
         raise SuspendError(duration=duration)
 
     def step(
-        self, step_name: str, func: Callable[[Self], dict[str, Any] | None]
-    ) -> dict[str, Any] | None:
+        self, step_name: str, func: Callable[[Self], JsonData | None]
+    ) -> JsonData | None:
         """
         Run a durable step
 
@@ -192,7 +194,7 @@ class Worker:
         self._context_factory = context_factory
         self._error_handler = error_handler
 
-    def start(self):
+    def start(self) -> None:
         """
         Start the worker run loop
         """
@@ -200,7 +202,7 @@ class Worker:
             self.execute_batch()
             # TODO - add cleanup operations
 
-    def execute_batch(self):
+    def execute_batch(self) -> None:
         claimed_tasks = self._inner.claim_tasks()
         # TODO - Use multiprocessing to execute tasks in parallel
         # The number of processes should == worker_concurrency
@@ -305,7 +307,7 @@ class TaskturbineApp:
         """
         return json.dumps(params).encode()
 
-    def deserialize_value(self, blob: bytes) -> dict[str, Any] | None:
+    def deserialize_value(self, blob: bytes) -> JsonData | None:
         """Convert a bytestring into a dict
 
         TODO make this a hook method so other serializers can be used.
