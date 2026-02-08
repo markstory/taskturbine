@@ -77,13 +77,13 @@ impl From<Config> for taskturbine_core::config::Config {
             database_log_queries: value.database_log_queries,
             usecase: value.usecase,
             default_channel: value.default_channel,
+            worker_claim_timeout_secs: value.worker_claim_timeout_secs,
+            worker_cleanup_cutoff_secs: value.worker_cleanup_cutoff_secs,
+            worker_cleanup_inline: value.worker_cleanup_inline,
+            worker_cleanup_interval_secs: value.worker_cleanup_interval_secs,
+            worker_cleanup_limit: value.worker_cleanup_limit,
             worker_concurrency: value.worker_concurrency,
             worker_sleep_secs: value.worker_sleep_secs,
-            worker_cleanup_limit: value.worker_cleanup_limit,
-            worker_cleanup_interval_secs: value.worker_cleanup_interval_secs,
-            worker_cleanup_inline: value.worker_cleanup_inline,
-            worker_cleanup_cutoff_secs: value.worker_cleanup_cutoff_secs,
-            worker_claim_timeout_secs: value.worker_claim_timeout_secs,
             await_event_default_timeout_secs: value.await_event_default_timeout_secs,
         }
     }
