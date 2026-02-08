@@ -341,7 +341,7 @@ impl TaskContext {
 
 #[cfg(test)]
 mod tests {
-    
+
     use uuid::Uuid;
 
     use super::*;

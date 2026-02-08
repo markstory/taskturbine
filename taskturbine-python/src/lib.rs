@@ -200,12 +200,7 @@ impl TaskturbineApp {
         params: &[u8],
         options: TaskOptions,
     ) -> PyResult<SpawnResult> {
-        self.channel_spawn_task(
-            &self.config.default_channel,
-            task_name,
-            params,
-            options
-        )
+        self.channel_spawn_task(&self.config.default_channel, task_name, params, options)
     }
 
     /// Spawn a task on a named channel and initialize the first run.
