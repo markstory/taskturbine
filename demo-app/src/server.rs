@@ -109,7 +109,7 @@ async fn verify_user<'a>(
         return Html(html);
     };
 
-    log::info!("Verifying user {} with token {}", user_id, token);
+    log::info!("Verifying user {user_id} with token {token}");
     // TODO this should have rate limiting and attempt tracking to avoid brute force attacks.
     let res = sqlx::query("SELECT * FROM users WHERE id = $1")
         .bind(user_id)

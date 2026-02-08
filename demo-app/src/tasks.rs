@@ -21,7 +21,7 @@ enum TaskError {
 /// Make the task code simpler.
 impl From<serde_json::Error> for TaskError {
     fn from(value: serde_json::Error) -> Self {
-        TaskError::Message(format!("serialization/deserialization error: {:?}", value))
+        TaskError::Message(format!("serialization/deserialization error: {value:?}"))
     }
 }
 

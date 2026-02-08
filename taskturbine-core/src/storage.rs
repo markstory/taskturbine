@@ -724,8 +724,7 @@ impl Storage {
             // as there isn't a way to interrupt the owning worker process.
             atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
             return Err(TaskTurbineError::ValidationError(format!(
-                "Cannot cancel {:?} it is currently running",
-                task_id
+                "Cannot cancel {task_id:?} it is currently running"
             )));
         }
 
