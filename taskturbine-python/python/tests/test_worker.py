@@ -110,10 +110,10 @@ def test_worker_execute_batch_mixed_failure(config: Config, db_connection: Conne
 
     cursor = db_connection.cursor()
     cursor.execute(
-        "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s)",
-        [first.task_id, second.task_id],
+        "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s) ORDER BY state",
+        [first.run_id, second.run_id],
     )
-    rows = list(map(lambda row: row_factory(row, cursor), cursor.fetchall()))
+    rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
     assert len(rows) == 2
     assert rows[0]["state"] == "completed"
     assert rows[1]["state"] == "failed"
