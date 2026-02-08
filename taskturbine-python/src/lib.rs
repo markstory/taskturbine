@@ -15,7 +15,7 @@ mod config;
 mod models;
 
 use config::Config;
-use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, Task};
+use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult};
 
 /// Internal blocking storage adapter.
 /// Bridges between the tokio based runtime of the rust library
@@ -167,9 +167,6 @@ struct TaskturbineApp {
     #[pyo3(get)]
     channels: HashSet<String>,
 
-    /// A map of all registered tasks.
-    tasks: HashMap<String, Task>,
-
     /// A blocking wrapper on taskturbine_core::storage::Storage
     storage: Arc<BlockingStorage>,
 }
@@ -185,9 +182,6 @@ impl TaskturbineApp {
         TaskturbineApp {
             config,
             channels,
-            // TODO if tasks are run in python why is this here?
-            // task registration could all be done in python.
-            tasks: HashMap::new(),
             storage: Arc::new(storage),
         }
     }
@@ -195,17 +189,6 @@ impl TaskturbineApp {
     /// Add a channel to the list of channels this application can publish and consume from.
     fn add_channel(&mut self, value: String) {
         self.channels.insert(value);
-    }
-
-    /// Register task metadata with the rust extension
-    /// Task metadata is used to generate python code that is executed by workers.
-    fn register_task(&mut self, task: Task) {
-        self.tasks.insert(task.task_name.clone(), task);
-    }
-
-    /// Check if a task has been registered.
-    fn has_task(&self, name: &str) -> bool {
-        self.tasks.contains_key(name)
     }
 
     /// Spawn a task on the default channel and initialize the first run.
@@ -217,21 +200,12 @@ impl TaskturbineApp {
         params: &[u8],
         options: TaskOptions,
     ) -> PyResult<SpawnResult> {
-        if !self.tasks.contains_key(task_name) {
-            return Err(PyValueError::new_err(format!(
-                "The task `{task_name}` is not registered."
-            )));
-        }
-        let result = self.storage.spawn_task(
+        self.channel_spawn_task(
             &self.config.default_channel,
             task_name,
             params,
-            Some(options.into()),
-        );
-
-        result
-            .map(|v| v.into())
-            .map_err(|v| PyValueError::new_err(format!("Could not spawn task: {v:?}")))
+            options
+        )
     }
 
     /// Spawn a task on a named channel and initialize the first run.
@@ -244,17 +218,6 @@ impl TaskturbineApp {
         params: &[u8],
         options: TaskOptions,
     ) -> PyResult<SpawnResult> {
-        if !self.tasks.contains_key(task_name) {
-            return Err(PyValueError::new_err(format!(
-                "The task `{task_name}` is not registered."
-            )));
-        }
-        if !self.channels.contains(channel) {
-            return Err(PyValueError::new_err(format!(
-                "The channel `{channel}` is not registered."
-            )));
-        }
-
         let result = self
             .storage
             .spawn_task(channel, task_name, params, Some(options.into()));
@@ -601,8 +564,6 @@ mod taskturbine {
     use super::ContextInner;
     #[pymodule_export]
     use super::SpawnResult;
-    #[pymodule_export]
-    use super::Task;
     #[pymodule_export]
     use super::TaskOptions;
     #[pymodule_export]

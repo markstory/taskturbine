@@ -24,7 +24,6 @@ import logging
 
 # Import from the rust library
 from .taskturbine import Config, TaskOptions, SpawnResult, ClaimedTask
-from .taskturbine import Task as TaskRs
 from .taskturbine import TaskturbineApp as AppRs
 from .taskturbine import ContextInner, WorkerInner
 
@@ -44,13 +43,9 @@ class Task(Generic[P, R]):
         name: str,
         func: Callable[P, R],
     ):
+        self.name = name
         self._func = func
-        self.task_rs = TaskRs(module_name=func.__module__, task_name=name)
         update_wrapper(self, func)
-
-    @property
-    def name(self) -> str:
-        return self.task_rs.task_name
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         """
@@ -287,14 +282,13 @@ class TaskturbineApp:
         def wrapped(func: Callable[P, R]) -> Task[P, R]:
             task = Task(name=name, func=func)
             self._tasks[name] = task
-            self._app_rs.register_task(task.task_rs)
             return task
 
         return wrapped
 
     def has_task(self, name: str) -> bool:
         """Check if a task is defined"""
-        return self._app_rs.has_task(name)
+        return name in self._tasks
 
     def get_task(self, name: str) -> Task:
         """Get a task by name. Raises KeyError on unknown values"""
@@ -307,7 +301,7 @@ class TaskturbineApp:
         """
         return json.dumps(params).encode()
 
-    def deserialize_value(self, blob: bytes) -> JsonData | None:
+    def deserialize_value(self, blob: bytes) -> Any | None:
         """Convert a bytestring into a dict
 
         TODO make this a hook method so other serializers can be used.
@@ -332,6 +326,9 @@ class TaskturbineApp:
         """
         Spawn a task to be run later by a worker.
         """
+        if taskname not in self._tasks:
+            raise ValueError(f"The task `{taskname}` is not registered.")
+
         options = self._default_spawn_options.copy_with(
             headers=headers,
             max_attempts=max_attempts,

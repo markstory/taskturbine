@@ -103,46 +103,6 @@ impl From<taskturbine_core::models::ClaimedTask> for ClaimedTask {
     }
 }
 
-/// An individual decorated python task. The expected task function signature is
-///
-/// ```
-/// def __call__(self, *args, **kwargs) -> str | None
-/// ```
-///
-/// The function bindings are held in python, and this struct enables
-/// the worker runtime to operate python tasks by using the metadata from this struct
-/// to generate code snippets of python that are executed.
-#[pyclass]
-#[derive(Debug, PartialEq, Clone)]
-pub struct Task {
-    /// The python module name of the task. This module is expected to be within
-    /// `[Config.app_module]`. This module will be imported when running the task.
-    #[pyo3(get, set)]
-    pub module_name: String,
-
-    /// The unique name of the task. Tasks having unique names helps ease refactoring
-    /// operations as module names are not persisted in task records.
-    #[pyo3(get, set)]
-    pub task_name: String,
-}
-
-/// The metadata for a task.
-///
-/// This is shared data to/from python.
-#[pymethods]
-impl Task {
-    #[pyo3(signature = (module_name, task_name))]
-    #[new]
-    fn new(module_name: &str, task_name: &str) -> PyResult<Self> {
-        let task = Task {
-            module_name: module_name.to_string(),
-            task_name: task_name.to_string(),
-        };
-
-        Ok(task)
-    }
-}
-
 /// The metadata for the result of await_event
 ///
 /// This is shared data to/from python.
