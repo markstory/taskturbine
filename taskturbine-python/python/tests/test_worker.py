@@ -49,7 +49,6 @@ def test_worker_execute_batch_simple_success(config, db_connection, channel):
 
 
 def test_worker_execute_batch_simple_failure(config, db_connection, channel):
-    channel = "execute_batch_simple_failure"
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -72,6 +71,23 @@ def test_worker_execute_batch_simple_failure(config, db_connection, channel):
     assert len(rows) == 2
     assert rows[0]["state"] == "failed"
     assert rows[1]["state"] == "failed"
+
+
+def test_worker_execute_batch_error_handler(config, db_connection, channel):
+    app = TaskturbineApp(config)
+    app.add_channel(channel)
+
+    @app.register_task(name="worker-task-fail")
+    def worker_task(ctx: TaskContext) -> dict[str, Any]:
+        raise TypeError("oh no")
+
+    app.spawn_task("worker-task-fail", {"oid": 123}, channel=channel)
+    def error_handler(err: Exception):
+        assert isinstance(err, Exception), "should be an exception"
+        assert str(err) == "oh no", "Should have the error from the step"
+
+    worker = app.create_worker("worker-1", [channel], error_handler=error_handler)
+    worker.execute_batch()
 
 
 @pytest.mark.skip(reason="need to implement params")

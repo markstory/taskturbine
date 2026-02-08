@@ -149,10 +149,8 @@ class TaskContext:
             # No checkpoint data.
             pass
 
-        try:
-            step_result = func(self)
-        except Exception as err:
-            raise StepFailed() from err
+        # Step functions may raise, but Worker.execute_task will catch
+        step_result = func(self)
 
         result_bytes = b""
         if step_result:
@@ -168,10 +166,12 @@ class Worker:
         inner: WorkerInner,
         tasks: Mapping[str, Task],
         context_factory: Callable[[ClaimedTask], TaskContext],
+        error_handler: Callable[[Exception], None] | None = None,
     ) -> None:
         self._inner = inner
         self._tasks = tasks
         self._context_factory = context_factory
+        self._error_handler = error_handler
 
     def start(self):
         """
@@ -189,8 +189,8 @@ class Worker:
             self.execute_task(claimed)
 
     def execute_task(self, claimed: ClaimedTask) -> None:
-        if not claimed.task_name in self._tasks:
-            logger.warn(f"Task with {claimed.task_name} is not registered")
+        if claimed.task_name not in self._tasks:
+            logger.warning(f"Task with {claimed.task_name} is not registered")
             return
 
         task_fn = self._tasks[claimed.task_name]
@@ -212,6 +212,14 @@ class Worker:
                 )
                 self._inner.schedule_run(claimed.run_id, duration)
         except (StepFailed, Exception) as fail:
+            if self._error_handler:
+                self._error_handler(fail)
+            else:
+                logger.error(
+                    f"Task run failed task_id={claimed.task_id} run_id={claimed.run_id}"
+                )
+                logger.exception(fail)
+
             retry_at = claimed.next_retry_in()
             self._inner.fail_run(claimed.run_id, retry_at)
 
@@ -357,7 +365,7 @@ class TaskturbineApp:
         )
         return context
 
-    def create_worker(self, worker_id: str, channels: list[str]) -> Worker:
+    def create_worker(self, worker_id: str, channels: list[str], *, error_handler: Callable[[Exception], None] | None = None) -> Worker:
         """
         Create a Worker that is connected to Rust storage API.
         """
@@ -365,6 +373,7 @@ class TaskturbineApp:
             inner=self._app_rs.create_worker(worker_id, channels),
             tasks=self._tasks,
             context_factory=self.create_context,
+            error_handler=error_handler,
         )
         return worker
 
