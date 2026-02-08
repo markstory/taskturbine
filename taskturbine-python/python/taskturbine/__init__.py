@@ -68,6 +68,25 @@ class TaskContext:
         self._serialize = serialize
         self._deserialize = deserialize
         self._checkpoint_counters: dict[str, int] = {}
+        self._claimed_task = inner.claimed_task
+
+    @property
+    def task_id(self) -> str:
+        return self._claimed_task.task_id
+
+    @property
+    def run_id(self) -> str:
+        return self._claimed_task.run_id
+
+    @property
+    def params(self) -> str:
+        """Get the parameters a JSON parsed value"""
+        return json.loads(self._claimed_task.params)
+
+    @property
+    def params_bytes(self) -> str:
+        """Get the parameters a byte string"""
+        return self._claimed_task.params
 
     def await_event(
         self, event_name: str, timeout: float | timedelta | None = None

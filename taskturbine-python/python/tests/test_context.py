@@ -3,7 +3,6 @@ from datetime import timedelta
 
 from taskturbine import (
     Config,
-    StepFailed,
     SuspendError,
     TaskturbineApp,
     Task,
@@ -31,7 +30,7 @@ def test_context_attributes(config):
     assert context.task_id == claim.task_id
     assert context.run_id == claim.run_id
     assert context.params == {"str": "value", "int": 123}
-    assert context.param_bytes == b'{"str": "value", "int": 123}'
+    assert context.params_bytes == b'{"str": "value", "int": 123}'
 
 
 def test_context_await_event_event_present(config):
@@ -192,8 +191,10 @@ def test_context_step_raise_error(config, channel) -> None:
     claims = app.claim_task([channel], "worker-1", five_min, 1)
     context = app.create_context(claims[0])
 
-    with pytest.raises(StepFailed) as err:
+    with pytest.raises(KeyError) as err:
         first_task(context)
+    assert err.value
+    assert "oh no" in str(err.value)
 
     with pytest.raises(ValueError) as err:
         context._inner.get_checkpoint("first-step")

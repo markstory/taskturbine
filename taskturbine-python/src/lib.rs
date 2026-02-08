@@ -402,6 +402,12 @@ impl ContextInner {
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
 
+    #[getter(claimed_task)]
+    fn get_claimed_task(&self) -> ClaimedTask {
+        // TODO figure out if this has to be clone
+        self.claimed_task.clone()
+    }
+
     /// Get a checkpoint by name for a task.
     /// `checkpoint_name` is expected to be a unique name.
     fn get_checkpoint(&self, checkpoint_name: String) -> PyResult<Checkpoint> {

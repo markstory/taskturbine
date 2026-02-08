@@ -64,13 +64,11 @@ def test_worker_execute_batch_simple_failure(config, db_connection, channel):
 
     cursor = db_connection.cursor()
     cursor.execute(
-        "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s)",
+        "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s) AND state = 'failed'",
         [first.run_id, second.run_id],
     )
     rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
     assert len(rows) == 2
-    assert rows[0]["state"] == "failed"
-    assert rows[1]["state"] == "failed"
 
 
 def test_worker_execute_batch_error_handler(config, db_connection, channel):
