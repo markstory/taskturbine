@@ -36,7 +36,13 @@ class ClaimedTask:
 
 class Config:
     app_module: str
+    """
+    The path to the `package.module:app_var` of the python application to work with. The worker
+    runtime will import this symbol and use it to lookup and execute tasks
+    """
+
     database_url: str
+    # TODO move rest of documentation here instead of in py03 objects
     database_log_queries: bool
     usecase: str
     default_channel: str

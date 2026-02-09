@@ -26,6 +26,7 @@ struct BlockingStorage {
     /// The Storage interface. This struct generally needs to be run
     /// in a tokio runtime.
     inner: taskturbine_core::storage::Storage,
+
     /// The tokio runtime for interacting with taskturbine_core
     /// which is tokio based.
     rt: tokio::runtime::Runtime,
