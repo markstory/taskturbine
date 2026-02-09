@@ -126,6 +126,31 @@ impl Storage {
         self.config.clone()
     }
 
+    /// Run all the cleanup operations
+    /// Meant to be run periodically to compact completed/expired data from postgres.
+    pub async fn run_cleanup(&self, older_than: Duration) -> Result<(), TaskTurbineError> {
+        // This code is tested at the Worker layer
+        let older_than = Utc::now() - older_than;
+        let cleanup_limit = self.config.worker_cleanup_limit;
+        let _ = self
+            .cleanup_events(older_than, cleanup_limit)
+            .await?;
+
+        let _ = self
+            .cleanup_tasks(older_than, cleanup_limit)
+            .await?;
+
+        let _ = self
+            .handle_expired_claims()
+            .await?;
+
+        let _ = self
+            .handle_cancellation_max_age()
+            .await?;
+
+        Ok(())
+    }
+
     /// Garbage collect events.
     ///
     /// Delete events that have created_at older than `older_than`.

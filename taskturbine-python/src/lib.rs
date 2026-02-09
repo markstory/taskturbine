@@ -18,8 +18,10 @@ use config::Config;
 use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult};
 
 /// Internal blocking storage adapter.
+///
 /// Bridges between the tokio based runtime of the rust library
-/// with sync python.
+/// with sync python. This is usually put into an Arc and shared
+/// with multiple python classes.
 struct BlockingStorage {
     /// The Storage interface. This struct generally needs to be run
     /// in a tokio runtime.
@@ -150,6 +152,10 @@ impl BlockingStorage {
         wait_for: Duration,
     ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
         self.rt.block_on(self.inner.schedule_run(run_id, wait_for))
+    }
+
+    pub fn run_cleanup(&self, older_than: Duration) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
+        self.rt.block_on(self.inner.run_cleanup(older_than))
     }
 
     /// Get the config of the application
@@ -289,7 +295,10 @@ impl WorkerInner {
 
     /// Run all the cleanup operations on the database.
     fn run_cleanup(&self) -> PyResult<()> {
-        Ok(())
+        let older_than = Duration::from_secs(self.storage.get_config().worker_cleanup_cutoff_secs as u64);
+
+        self.storage.run_cleanup(older_than)
+            .map_err(|e| PyValueError::new_err(format!("Could not run_cleanup: {e:?}")))
     }
 
     /// Mark a run as failed.

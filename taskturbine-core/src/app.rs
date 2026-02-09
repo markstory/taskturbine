@@ -6,7 +6,6 @@ use std::{
 };
 
 use async_channel::{Receiver, Sender, TrySendError};
-use chrono::{DateTime, Utc};
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::{
@@ -302,36 +301,8 @@ impl Worker {
     ///
     /// Takes a datetime of what is considered stale and can be purged.
     /// See [run_cleanup_worker](fn.run_cleanup_worker.html) for running cleanup operations.
-    pub async fn run_cleanup(&self, older_than: DateTime<Utc>) -> Result<(), WorkerError> {
-        let cleanup_limit = self.config().worker_cleanup_limit;
-        let _ = self
-            .app
-            .storage
-            .cleanup_events(older_than, cleanup_limit)
-            .await
-            .map_err(|e| WorkerError::Message(format!("{e:?}")))?;
-
-        let _ = self
-            .app
-            .storage
-            .cleanup_tasks(older_than, cleanup_limit)
-            .await
-            .map_err(|e| WorkerError::Message(format!("{e:?}")))?;
-
-        let _ = self
-            .app
-            .storage
-            .handle_expired_claims()
-            .await
-            .map_err(|e| WorkerError::Message(format!("{e:?}")))?;
-
-        let _ = self
-            .app
-            .storage
-            .handle_cancellation_max_age()
-            .await
-            .map_err(|e| WorkerError::Message(format!("{e:?}")))?;
-        Ok(())
+    pub async fn run_cleanup(&self, older_than: Duration) -> Result<(), WorkerError> {
+        self.app.storage.run_cleanup(older_than).await.map_err(|e| WorkerError::Message(format!("{e:?}")))
     }
 
     /// Execute a task function and record the execution status.
@@ -458,8 +429,8 @@ async fn run_cleanup(worker: Arc<Worker>) {
         tokio::select! {
             _ = timer.tick() => {
                 log::debug!("Running cleanup operations.");
-                let cleanup_time = Utc::now() - Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
-                match worker.run_cleanup(cleanup_time).await {
+                let cutoff = Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
+                match worker.run_cleanup(cutoff).await {
                     Ok(_) => {
                         log::info!("Cleanup operations complete");
                     },
