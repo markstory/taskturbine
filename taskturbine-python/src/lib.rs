@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use chrono::Utc;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{
     self,
@@ -278,6 +279,17 @@ struct WorkerInner {
 
 #[pymethods]
 impl WorkerInner {
+
+    #[getter(cleanup_interval_secs)]
+    pub fn worker_sleep_secs(&self) -> i32 {
+        self.storage.get_config().worker_sleep_secs
+    }
+
+    #[getter(cleanup_interval_secs)]
+    pub fn worker_cleanup_interval_secs(&self) -> i32 {
+        self.storage.get_config().worker_cleanup_interval_secs
+    }
+
     /// Claim a collection tasks for timeout seconds.
     fn claim_tasks(&self) -> PyResult<Vec<ClaimedTask>> {
         let channels: Vec<&str> = self.channels.iter().map(|c| c.as_ref()).collect();
@@ -300,6 +312,22 @@ impl WorkerInner {
 
         self.storage.run_cleanup(older_than)
             .map_err(|e| PyValueError::new_err(format!("Could not run_cleanup: {e:?}")))
+    }
+
+    // Should cleanup be run right now by a Worker?
+    // Set `config.worker_cleanup_inline` to false if you are running a dedicated
+    // cleanup worker.
+    fn should_run_cleanup(&self, timestamp: i64) -> bool {
+        let config = self.storage.get_config();
+        if !config.worker_cleanup_inline {
+            return false;
+        }
+        let now = Utc::now().timestamp();
+        let delta = now - timestamp;
+        if delta < config.worker_cleanup_interval_secs as i64 {
+            return false;
+        }
+        return true;
     }
 
     /// Mark a run as failed.

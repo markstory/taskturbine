@@ -9,6 +9,7 @@ are in python.
 
 import json
 import logging
+import time
 from datetime import datetime, timedelta
 from functools import update_wrapper
 from typing import (
@@ -189,13 +190,28 @@ class Worker:
         self._context_factory = context_factory
         self._error_handler = error_handler
 
-    def start(self) -> None:
+    def run(self) -> None:
         """
-        Start the worker run loop
+        Run the worker run loop.
         """
+        interval = self._inner.worker_sleep_secs
+        last_cleanup = time.time() - 1
+
         while True:
             self.execute_batch()
-            # TODO - add cleanup operations
+            time.sleep(interval)
+            if self._inner.should_run_cleanup(last_cleanup):
+                self._inner.run_cleanup()
+                last_cleanup = time.time()
+
+    def run_cleanup(self) -> None:
+        """
+        Run a worker cleanup loop.
+        """
+        interval = self._inner.cleanup_interval_secs
+        while True:
+            self._inner.run_cleanup()
+            time.sleep(interval)
 
     def claim_tasks(self) -> list[ClaimedTask]:
         return self._inner.claim_tasks()

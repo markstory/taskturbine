@@ -82,6 +82,6 @@ worker = app.worker("worker-812", ["reports", "default"])
 worker.run()
 
 # Run a cleanup worker
-worker = app.cleanup_worker()
-worker.run()
+worker = app.worker("worker-cleanup")
+worker.run_cleanup()
 ```
