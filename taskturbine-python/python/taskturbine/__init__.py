@@ -263,15 +263,34 @@ class TaskturbineApp:
     def __init__(self, config: Config) -> None:
         self._app_rs = AppRs(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
-
-        # TODO add method to set default spawn options
-        # Or define options per task that is registered.
         self._default_spawn_options = TaskOptions(
             max_attempts=5,
             retry_seconds=30,
             retry_factor=1.0,
             retry_max_seconds=300,
             cancellation_max_age=86400,
+        )
+
+    def set_spawn_options(
+        self,
+        *,
+        headers: dict[str, str] | None = None,
+        max_attempts: int | None = None,
+        retry_seconds: int | None = None,
+        retry_factor: float | None = None,
+        retry_max_seconds: int | None = None,
+        cancellation_max_age: int | None = None,
+    ) -> None:
+        """
+        Update the default options that are used to spawn tasks.
+        """
+        self._default_spawn_options = self._default_spawn_options.copy_with(
+            headers=headers,
+            max_attempts=max_attempts,
+            retry_seconds=retry_seconds,
+            retry_factor=retry_factor,
+            retry_max_seconds=retry_max_seconds,
+            cancellation_max_age=cancellation_max_age,
         )
 
     def add_channel(self, name: str) -> None:
@@ -299,6 +318,7 @@ class TaskturbineApp:
         """
 
         def wrapped(func: Callable[P, R]) -> Task[P, R]:
+            # TODO add task option defaults.
             task = Task(name=name, func=func)
             self._tasks[name] = task
             return task
