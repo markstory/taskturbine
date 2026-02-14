@@ -12,159 +12,12 @@ use taskturbine_core::{
 };
 use uuid::Uuid;
 
+mod blockingstorage;
 mod config;
 mod models;
 
 use config::Config;
 use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult};
-
-/// Internal blocking storage adapter.
-///
-/// Bridges between the tokio based runtime of the rust library
-/// with sync python. This is usually put into an Arc and shared
-/// with multiple python classes.
-struct BlockingStorage {
-    /// The Storage interface. This struct generally needs to be run
-    /// in a tokio runtime.
-    inner: taskturbine_core::storage::Storage,
-
-    /// The tokio runtime for interacting with taskturbine_core
-    /// which is tokio based.
-    rt: tokio::runtime::Runtime,
-}
-
-impl BlockingStorage {
-    /// Create a new BlockingStorage instance
-    pub fn new(config: taskturbine_core::config::Config) -> Self {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let inner = rt.block_on(taskturbine_core::storage::Storage::new_fut(config));
-
-        Self { inner, rt }
-    }
-
-    /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
-    pub fn spawn_task(
-        &self,
-        channel: &str,
-        task_name: &str,
-        params: &[u8],
-        options: Option<taskturbine_core::storage::TaskOptions>,
-    ) -> Result<taskturbine_core::models::SpawnResult, taskturbine_core::storage::TaskTurbineError>
-    {
-        self.rt
-            .block_on(self.inner.spawn_task(channel, task_name, params, options))
-    }
-
-    /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
-    pub fn emit_event(
-        &self,
-        event_name: &str,
-        payload: &[u8],
-    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt.block_on(self.inner.emit_event(event_name, payload))
-    }
-
-    /// Make a blocking call to [`taskturbine_core::storage::Storage.spawn_task()`]
-    pub fn await_event(
-        &self,
-        task_id: TaskId,
-        run_id: RunId,
-        step_name: &str,
-        event_name: &str,
-        timeout: Duration,
-    ) -> Result<taskturbine_core::storage::AwaitResult, taskturbine_core::storage::TaskTurbineError>
-    {
-        self.rt.block_on(self.inner.await_event(
-            task_id,
-            run_id,
-            step_name,
-            event_name,
-            Some(timeout),
-        ))
-    }
-
-    /// Make a blocking call to [`taskturbine_core::storage::Storage.claim_task()`]
-    pub fn claim_task(
-        &self,
-        channels: Vec<&str>,
-        worker_id: &str,
-        claim_timeout: Duration,
-        qty: i32,
-    ) -> Result<
-        Vec<taskturbine_core::models::ClaimedTask>,
-        taskturbine_core::storage::TaskTurbineError,
-    > {
-        self.rt.block_on(
-            self.inner
-                .claim_task(channels, worker_id, claim_timeout, qty),
-        )
-    }
-
-    pub fn get_checkpoint(
-        &self,
-        task_id: TaskId,
-        step_name: &str,
-    ) -> Result<
-        Option<taskturbine_core::models::Checkpoint>,
-        taskturbine_core::storage::TaskTurbineError,
-    > {
-        self.rt
-            .block_on(self.inner.get_checkpoint(task_id, step_name))
-    }
-
-    pub fn set_checkpoint(
-        &self,
-        task_id: TaskId,
-        run_id: RunId,
-        step_name: &str,
-        state: &[u8],
-        extend_claim: Option<Duration>,
-    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt.block_on(
-            self.inner
-                .set_checkpoint(task_id, run_id, step_name, state, extend_claim),
-        )
-    }
-
-    pub fn fail_run(
-        &self,
-        run_id: RunId,
-        reason: &[u8],
-        retry_at: Option<Duration>,
-    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt
-            .block_on(self.inner.fail_run(run_id, reason, retry_at))
-    }
-
-    pub fn complete_run(
-        &self,
-        run_id: RunId,
-        run_result: &[u8],
-    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt
-            .block_on(self.inner.complete_run(run_id, run_result))
-    }
-
-    pub fn schedule_run(
-        &self,
-        run_id: RunId,
-        wait_for: Duration,
-    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt.block_on(self.inner.schedule_run(run_id, wait_for))
-    }
-
-    pub fn run_cleanup(&self, older_than: Duration) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
-        self.rt.block_on(self.inner.run_cleanup(older_than))
-    }
-
-    /// Get the config of the application
-    pub fn get_config(&self) -> taskturbine_core::config::Config {
-        self.inner.get_config()
-    }
-}
 
 /// See taskturbine.pyi for docstrings
 #[pyclass]
@@ -177,7 +30,7 @@ struct AppInner {
     channels: HashSet<String>,
 
     /// A blocking wrapper on taskturbine_core::storage::Storage
-    storage: Arc<BlockingStorage>,
+    storage: Arc<blockingstorage::BlockingStorage>,
 }
 
 #[pymethods]
@@ -186,7 +39,7 @@ impl AppInner {
     fn py_new(config: Config) -> Self {
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
-        let storage = BlockingStorage::new(config.clone().into());
+        let storage = blockingstorage::BlockingStorage::new(config.clone().into());
 
         AppInner {
             config,
@@ -208,9 +61,6 @@ impl AppInner {
         self.channel_spawn_task(&self.config.default_channel, task_name, params, options)
     }
 
-    /// Spawn a task on a named channel and initialize the first run.
-    ///
-    /// An error is returned if the task name is not registered.
     fn channel_spawn_task(
         &self,
         channel: &str,
@@ -227,24 +77,12 @@ impl AppInner {
             .map_err(|v| PyValueError::new_err(format!("Could not spawn task: {v:?}")))
     }
 
-    /// Record an event as having completed.
-    /// Events allow you to synchronize tasks with external actions
-    /// that can be recorded as events. Events can have a Payload of bytes.
-    /// How those bytes are encoded is an application concern.
-    ///
-    /// ```rust
-    /// app.emit_event("email-verify-foo@example.com", payload.as_bytes()).await;
-    /// ```
     fn emit_event(&self, event_name: &str, payload: &[u8]) -> PyResult<()> {
         let res = self.storage.emit_event(event_name, payload);
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
 
-    /// Create a worker for the application tasks
-    ///
-    /// A worker will only claim tasks in `channels` if channels is not-empty.
-    /// If `channels` is empty, tasks in all channels will be processed.
     fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
         WorkerInner {
             storage: self.storage.clone(),
@@ -255,7 +93,6 @@ impl AppInner {
         }
     }
 
-    /// Create a ContextInner which bridges into the python client.
     fn create_context(&self, claimed_task: ClaimedTask) -> ContextInner {
         ContextInner {
             storage: self.storage.clone(),
@@ -267,7 +104,7 @@ impl AppInner {
 /// Expose the minimal worker API to be used by the python worker.
 #[pyclass]
 struct WorkerInner {
-    storage: Arc<BlockingStorage>,
+    storage: Arc<blockingstorage::BlockingStorage>,
     channels: Vec<String>,
     worker_id: String,
     claim_count: i32,
@@ -358,7 +195,7 @@ impl WorkerInner {
 /// See taskturbine.pyi for docstrings
 #[pyclass]
 struct ContextInner {
-    storage: Arc<BlockingStorage>,
+    storage: Arc<blockingstorage::BlockingStorage>,
     claimed_task: ClaimedTask,
 }
 #[pymethods]
@@ -438,27 +275,15 @@ impl ContextInner {
     }
 }
 
+/// See taskturbine.pyi for docstrings
 #[pyclass]
 #[derive(Debug, PartialEq, Clone)]
 struct TaskOptions {
-    /// Map of headers to include with the task activation
     pub headers: HashMap<String, String>,
-
-    /// The maximum number of attempts to make on this task
     pub max_attempts: i32,
-
-    /// The minimum number of seconds to wait between retries.
     pub retry_seconds: i32,
-
-    /// The multipier to apply to retry delays between attempts.
-    /// Use > 1.0 to create exponential backoff.
     pub retry_factor: f64,
-
-    /// The maximum number of seconds to wait between retries.
     pub retry_max_seconds: i32,
-
-    /// The maximum age of a task before it should not be run.
-    /// Measured in seconds from when the task was created.
     pub cancellation_max_age: i32,
 }
 
@@ -545,17 +370,9 @@ impl TaskOptions {
     }
 }
 
-/// Notes
-/// -------
-///
-/// The worker will likely need to be re-implemented as the python methods
-/// won't be callable from the rust worker, the types won't work out.
-///
-/// Should the app also be python only? Perhaps config, storage, and models are the key parts to
-/// reuse.
-/// A Python module implemented in Rust. The name of this function must match
-/// the `lib.name` setting in the `Cargo.toml`, else Python will not be able to
-/// import the module.
+// Define all of the exports that are part of the native package.
+// The mod name, pymodule name both need to align with the ext name
+// in Cargo.toml
 #[pymodule(name = "taskturbine")]
 mod taskturbine {
     #[pymodule_export]
