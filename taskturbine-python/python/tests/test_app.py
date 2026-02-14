@@ -69,7 +69,15 @@ def test_spawn_task_with_options(config: Config, db_connection: Connection) -> N
     def first_task(a: str) -> str:
         return f"called {a}"
 
-    res = app.spawn_task("first-task", {}, retry_seconds=5, max_attempts=10, retry_factor=2.0, retry_max_seconds=320, cancellation_max_age=150)
+    res = app.spawn_task(
+        "first-task",
+        {},
+        retry_seconds=5,
+        max_attempts=10,
+        retry_factor=2.0,
+        retry_max_seconds=320,
+        cancellation_max_age=150,
+    )
     assert res
     assert res.task_id
     assert res.run_id

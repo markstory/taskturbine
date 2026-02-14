@@ -126,7 +126,9 @@ def test_worker_execute_batch_mixed_failure(
     assert rows[1]["state"] == "failed"
 
 
-def test_worker_cleanup(config: Config, db_connection: Connection, channel: str) -> None:
+def test_worker_cleanup(
+    config: Config, db_connection: Connection, channel: str
+) -> None:
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -150,7 +152,7 @@ def test_worker_cleanup(config: Config, db_connection: Connection, channel: str)
             SET state = 'completed', completed_at = %s
             WHERE task_id = %s
             """,
-            [(datetime.now() - timedelta(hours=3)).isoformat(), first.task_id]
+            [(datetime.now() - timedelta(hours=3)).isoformat(), first.task_id],
         )
         cursor.execute("COMMIT")
     worker = app.create_worker("worker-1", [channel])
