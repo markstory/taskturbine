@@ -76,7 +76,6 @@ app.spawn_task("process-signup", parameters, channel="reports")
 # containing the event.
 app.emit_event("event-123", payload)
 
-
 # Run a worker consuming from two channels
 worker = app.worker("worker-812", ["reports", "default"])
 worker.run()

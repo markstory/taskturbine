@@ -2,37 +2,94 @@ from datetime import timedelta
 from typing import Self
 
 class AwaitResult:
+    """The metadata for the result of await_event"""
+
     payload: bytes
+    """
+    The event payload that was awaited upon.
+    Application logic is responsible for decoding bytes.
+    """
+
     should_suspend: bool
+    """Whether or not the runtime should suspend as we're still waiting for the event."""
 
 class SpawnResult:
+    """The result of spawning a task."""
+
     run_id: str
+    """The run_id of the spawned task"""
+
     task_id: str
+    """The task_id of the spawned task"""
 
 class Checkpoint:
-    task_id: str
-    step_name: str
-    state: bytes
-    owner_run_id: str
-    updated_at: int
+    """
+    A saved checkpoint created by either a step completing, sleep_for expiring
+    or an event await being fulfilled. Checkpoints for a task are shared by
+    all runs as each run can add checkpoints to a task's state.
+    """
 
-class Task:
-    module_name: str
-    task_name: str
+    task_id: str
+    """The task_id of the checkpoint"""
+
+    step_name: str
+    """
+    The step name of the checkpoint. Step names are made
+    unique per task to handle duplicate step names.
+    """
+
+    state: bytes
+    """
+    The payload/state of the checkpoint in bytes.
+    By default checkpoint state is JSON encoded.
+    """
+
+    owner_run_id: str
+    """The run that created this checkpoint."""
+
+    updated_at: int
+    """The timestamp the checkpoint was created or updated."""
+
 
 class ClaimedTask:
+    """
+    Entity structure for a task that has been claimed
+    by a worker for execution. This is a snapshot of the state
+    from when the claim was made.
+    """
+
     task_id: str
+    """The task id of the spawned task."""
+
     run_id: str
+    """The run id of the spawned run."""
+
     channel: str
+    """The channel name the task was spawned in."""
+
     task_name: str
+    """The name of the task that was claimed."""
+
     params: bytes
+    """The parameters of the task in bytes."""
+
     retry_seconds: int
+    """The number of seconds betwen retries."""
+
     retry_factor: float
+    """The factor to multiple retries by attempt count."""
+
     retry_max_seconds: int
+    """The maximum number of seconds to wait between retries."""
+
     attempt: int
+    """The current attempt count."""
+
     max_attempts: int
+    """The maximum number of attempts allowed."""
 
     def next_retry_in(self) -> timedelta: ...
+    """Get the timedelta between now and the next retry time."""
 
 class Config:
     """
@@ -130,12 +187,33 @@ class Config:
 
 
 class TaskOptions:
+    """
+    The runtime options used to spawn a task
+    """
+
     headers: dict[str, str]
+    """A dictionary of headers for the task"""
+
     max_attempts: int
+    """The maximum number of attempts that a task will have before it is cancelled"""
+
     retry_seconds: int
+    """The number of seconds between retries."""
+
     retry_factor: float
+    """
+    The multiplier applied to `retry_seconds` each time a retry is made.
+    Setting this to a value greater than 1.0 will provide exponential backoffs.
+    """
+
     retry_max_seconds: int
+    """The max number of seconds between retries."""
+
     cancellation_max_age: int
+    """
+    The number of seconds after creation that a
+    task is considered stale and should be cancelled.
+    """
 
     def __init__(
         self,
@@ -145,6 +223,7 @@ class TaskOptions:
         retry_max_seconds: int,
         cancellation_max_age: int,
     ) -> None: ...
+
     def copy_with(
         self,
         headers: dict[str, str] | None,
@@ -154,26 +233,65 @@ class TaskOptions:
         retry_max_seconds: int | None,
         cancellation_max_age: int | None,
     ) -> Self: ...
+    """Create a clone of TaskOptions with updated values"""
 
 class WorkerInner:
+    """
+    The python -> rust binding boundary for a Worker.
+    """
     worker_sleep_secs: int
+    """Number of seconds workers should sleep between run loops."""
+
     worker_cleanup_interval_secs: int
+    """Number of seconds between cleanup operations."""
 
     def claim_tasks(self) -> list[ClaimedTask]: ...
+    """Claim a list of tasks based on configuration"""
+
     def run_cleanup(self) -> None: ...
+    """
+    Run a cleanup operation that purges old:
+    - events
+    - tasks & runs
+    """
+
     def fail_run(self, run_id: str, retry_at: timedelta) -> None: ...
+    """Mark a run as having failed"""
+
     def complete_run(self, run_id: str, run_result: bytes) -> None: ...
+    """Mark a run as complete. The related task will also be marked complete."""
+
     def schedule_run(self, run_id: str, wait_for: timedelta) -> None: ...
+    """Schedule a run in the future."""
 
 class ContextInner:
     claimed_task: ClaimedTask
-    def await_event_default_timeout_secs(self) -> int: ...
+    """The task that was claimed for this context"""
+
+    await_event_default_timeout_secs: int
+    """The number of seconds await_event should use as a timeout by default"""
+
     def emit_event(self, event_name: str, payload: bytes) -> None: ...
+    """Record an event taking place."""
+
     def get_checkpoint(self, checkpoint_name: str) -> Checkpoint: ...
+    """
+    Get a checkpoint by name for a task.
+    `checkpoint_name` is expected to be a unique name.
+    """
+
     def set_checkpoint(
         self, checkpoint_name: str, state: bytes, extend_claim: timedelta | None
     ) -> None: ...
+    """
+    Set the state for a named checkpoint.
+    The caller is responsible for making checkpoint_names unique.
+    """
+
     def get_event_payload(self, event_name: str, timeout: timedelta) -> AwaitResult: ...
+    """
+    Read the payload for an event. Will raise an exception if the read fails
+    """
 
 class TaskturbineApp:
     config: Config

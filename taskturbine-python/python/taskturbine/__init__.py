@@ -94,7 +94,7 @@ class TaskContext:
         emit. If the event has not happened, a SuspendError will be raised.
         """
         if timeout is None:
-            timeout = self._inner.await_event_default_timeout_secs()
+            timeout = self._inner.await_event_default_timeout_secs
         if isinstance(timeout, (float, int)):
             timeout = timedelta(seconds=timeout)
         assert isinstance(timeout, timedelta)

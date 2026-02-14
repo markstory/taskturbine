@@ -4,49 +4,37 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::models::{RunId, TaskId};
 use uuid::Uuid;
 
-/// Entity structure for a task that has been claimed
-/// by a worker for execution. This is a snapshot of the state
-/// from when the claim was made.
+/// See taskturbine.pyi for docstrings
 #[derive(Clone, Debug, PartialEq)]
 #[pyclass]
 pub struct ClaimedTask {
-    /// The task id of the spawned task.
     #[pyo3(get)]
     pub task_id: String,
 
-    /// The run id of the spawned run.
     #[pyo3(get)]
     pub run_id: String,
 
-    /// The channel name the task was spawned in.
     #[pyo3(get)]
     pub channel: String,
 
-    /// The name of the task that was claimed.
     #[pyo3(get)]
     pub task_name: String,
 
-    /// The parameters of the task in bytes.
     #[pyo3(get)]
     pub params: Vec<u8>,
 
-    /// The number of seconds betwen retries.
     #[pyo3(get)]
     pub retry_seconds: i32,
 
-    /// The factor to multiple retries by attempt count.
     #[pyo3(get)]
     pub retry_factor: f32,
 
-    /// The maximum number of seconds to wait between retries.
     #[pyo3(get)]
     pub retry_max_seconds: i32,
 
-    /// The current attempt count.
     #[pyo3(get)]
     pub attempt: i32,
 
-    /// The maximum number of attempts allowed.
     #[pyo3(get)]
     pub max_attempts: i32,
 }
@@ -103,18 +91,13 @@ impl From<taskturbine_core::models::ClaimedTask> for ClaimedTask {
     }
 }
 
-/// The metadata for the result of await_event
-///
-/// This is shared data to/from python.
+/// See taskturbine.pyi for docsstrings
 #[pyclass]
 #[derive(Debug, PartialEq, Clone)]
 pub struct AwaitResult {
-    /// The event payload that was awaited upon.
-    /// Application logic is responsible for decoding bytes.
     #[pyo3(get)]
     pub payload: Vec<u8>,
 
-    /// Whether or not the runtime should suspend as we're still waiting for the event.
     #[pyo3(get)]
     pub should_suspend: bool,
 }
@@ -132,9 +115,7 @@ impl From<taskturbine_core::storage::AwaitResult> for AwaitResult {
     }
 }
 
-/// The result of spawning a task.
-///
-/// This is shared data to/from python.
+/// See taskturbine.pyi for docstrings
 #[pyclass]
 #[derive(Debug, PartialEq, Clone)]
 pub struct SpawnResult {
@@ -172,28 +153,21 @@ impl From<taskturbine_core::models::SpawnResult> for SpawnResult {
     }
 }
 
-// Python compatible version of taskturbine_core::models::Checkpoint
+/// See taskturbine.pyi for docstrings
 #[pyclass]
 pub struct Checkpoint {
-    /// The task id of the spawned task.
     #[pyo3(get)]
     pub task_id: String,
 
-    /// The step name of the checkpoint. Step names are made
-    /// unique per task to handle duplicate step names.
     #[pyo3(get)]
     pub step_name: String,
 
-    /// The payload/state of the checkpoint in bytes.
-    /// Applications are responsible for serializing/deserializing
     #[pyo3(get)]
     pub state: Vec<u8>,
 
-    /// The run that created this checkpoint.
     #[pyo3(get)]
     pub owner_run_id: String,
 
-    /// The timestamp the checkpoint was created or updated.
     #[pyo3(get)]
     pub updated_at: i64,
 }

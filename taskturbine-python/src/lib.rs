@@ -358,7 +358,7 @@ impl WorkerInner {
     }
 }
 
-/// Expose a minimal interface to the python client.
+/// See taskturbine.pyi for docstrings
 #[pyclass]
 struct ContextInner {
     storage: Arc<BlockingStorage>,
@@ -366,26 +366,22 @@ struct ContextInner {
 }
 #[pymethods]
 impl ContextInner {
-    /// Proxy to the config value.
+    #[getter(await_event_default_timeout_secs)]
     fn await_event_default_timeout_secs(&self) -> i32 {
         self.storage.get_config().await_event_default_timeout_secs
     }
 
-    /// Record an event taking place.
+    #[getter(claimed_task)]
+    fn get_claimed_task(&self) -> ClaimedTask {
+        self.claimed_task.clone()
+    }
+
     fn emit_event(&self, event_name: String, payload: &[u8]) -> PyResult<()> {
         let res = self.storage.emit_event(&event_name, payload);
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
 
-    #[getter(claimed_task)]
-    fn get_claimed_task(&self) -> ClaimedTask {
-        // TODO figure out if this has to be clone
-        self.claimed_task.clone()
-    }
-
-    /// Get a checkpoint by name for a task.
-    /// `checkpoint_name` is expected to be a unique name.
     fn get_checkpoint(&self, checkpoint_name: String) -> PyResult<Checkpoint> {
         // TODO this unwrap() is yolo
         let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
@@ -403,8 +399,6 @@ impl ContextInner {
         }
     }
 
-    /// Set the state for a named checkpoint.
-    /// The caller is responsible for making checkpoint_names unique.
     fn set_checkpoint(
         &self,
         checkpoint_name: &str,
@@ -425,8 +419,6 @@ impl ContextInner {
         res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }
 
-    /// Read the payload for an event.
-    /// Will raise an exception if the read fails
     fn get_event_payload(&self, event_name: String, timeout: Duration) -> PyResult<AwaitResult> {
         // TODO this is yolo. Should raise errors on invalid values.
         let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
