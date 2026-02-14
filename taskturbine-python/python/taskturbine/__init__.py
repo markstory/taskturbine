@@ -24,7 +24,15 @@ from typing import (
 )
 
 # Import from the rust library
-from .taskturbine import AppInner, ClaimedTask, Config, ContextInner, SpawnResult, TaskOptions, WorkerInner
+from .taskturbine import (
+    AppInner,
+    ClaimedTask,
+    Config,
+    ContextInner,
+    SpawnResult,
+    TaskOptions,
+    WorkerInner,
+)
 
 __all__ = ["Config", "TaskturbineApp", "Task", "TaskContext"]
 
