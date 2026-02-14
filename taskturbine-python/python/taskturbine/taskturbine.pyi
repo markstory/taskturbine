@@ -35,6 +35,12 @@ class ClaimedTask:
     def next_retry_in(self) -> timedelta: ...
 
 class Config:
+    """
+    Configuration for Taskturbine
+    This object contains all of the configuration settings for task creation,
+    workers and cleanup operations.
+    """
+
     app_module: str
     """
     The path to the `package.module:app_var` of the python application to work with. The worker
@@ -42,17 +48,68 @@ class Config:
     """
 
     database_url: str
-    # TODO move rest of documentation here instead of in py03 objects
+    """
+    The URI of the database your are connecting to.
+    Example: postgresql://app:password@localhost/taskturbine
+    """
+
     database_log_queries: bool
+    """Enable database logging at DEBUG level"""
+
     usecase: str
+    """
+    The application or client that is connecting.
+    Workers are bound to a specific usecase and can conditionally
+    consume from one or more channel (aka. queue/topic)
+    """
+
     default_channel: str
+    """
+    The default channel that tasks are spawned into.
+    This channel will automatically be registered into the application
+    using a config instance.
+    """
+
     worker_claim_timeout_secs: int
+    """
+    The number of seconds that workers will claim tasks for.
+    Workers are expected to complete tasks within their claim timeout.
+    After a claim timeout is exceeded, the task will be made pending again.
+    Default value is 600 (10m)
+    """
+
     worker_cleanup_cutoff_secs: int
+    """
+    The age of completed tasks and events in seconds
+    after now() that are safe to delete.
+    """
+
     worker_cleanup_inline: bool
+    """
+    Whether or not workers should run cleanup operations inline.
+    Set to false if you are going to run cleanup workers separately.
+    """
+
     worker_cleanup_limit: int
+    """
+    The maximum number of completed tasks and events
+    a worker will delete in a single cleanup operation.
+    """
+
+    worker_cleanup_interval_secs: int
+    """The minimum number of seconds between each cleanup operation."""
+
     worker_concurrency: int
+    """
+    The number of task execution slots to start.
+    More slots will enable more tasks to run concurrently.
+    """
+
     worker_sleep_secs: int
+    """The number of seconds a worker should sleep when no tasks are available."""
+
     await_event_default_timeout_secs: int
+    """The default number of seconds that events are waited on for."""
 
     def __init__(
         self,
@@ -70,6 +127,7 @@ class Config:
         worker_sleep_secs: int = 2,
         await_event_default_timeout_secs: int = 120,
     ) -> None: ...
+
 
 class TaskOptions:
     headers: dict[str, str]

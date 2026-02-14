@@ -1,70 +1,45 @@
 use pyo3::prelude::*;
 
+/// See the python type stub for docstrings
 #[pyclass(module = "taskturbine")]
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// The path to the `package.module:app_var` of the python application to work with.
-    /// The worker runtime will import this symbol and use it to lookup and execute tasks
     #[pyo3(get, set)]
     pub app_module: String,
 
-    /// The URI of the database your are connecting to.
-    /// Example: postgresql://app:password@localhost/taskturbine
     #[pyo3(get, set)]
     pub database_url: String,
 
-    /// Enable database logging at DEBUG level
     #[pyo3(get, set)]
     pub database_log_queries: bool,
 
-    /// The application or client that is connecting.
-    /// Workers are bound to a specific usecase and can conditionally
-    /// consume from one or more channel (aka. queue/topic)
     #[pyo3(get, set)]
     pub usecase: String,
 
-    /// The default channel that tasks are spawned into.
-    /// This channel will automatically be registered into the application
-    /// using a config instance.
     #[pyo3(get, set)]
     pub default_channel: String,
 
-    /// The number of task execution slots to start.
-    /// More slots will enable more tasks to run concurrently.
     #[pyo3(get, set)]
     pub worker_concurrency: i32,
 
-    /// The number of seconds a worker should sleep when no tasks are available.
     #[pyo3(get, set)]
     pub worker_sleep_secs: i32,
 
-    /// The maximum number of completed tasks and events
-    /// a worker will delete in a single cleanup operation.
     #[pyo3(get, set)]
     pub worker_cleanup_limit: i32,
 
-    /// The age of completed tasks and events in seconds
-    /// after now() that are safe to delete.
     #[pyo3(get, set)]
     pub worker_cleanup_cutoff_secs: i32,
 
-    /// The minimum number of seconds between each cleanup operation.
     #[pyo3(get, set)]
     pub worker_cleanup_interval_secs: i32,
 
-    /// Whether or not workers should run cleanup operations inline.
-    /// Set to false if you are going to run cleanup workers separately.
     #[pyo3(get, set)]
     pub worker_cleanup_inline: bool,
 
-    /// The default number of seconds that events are waited on for.
     #[pyo3(get, set)]
     pub await_event_default_timeout_secs: i32,
 
-    /// The number of seconds that workers will claim tasks for.
-    /// Workers are expected to complete tasks within their claim timeout.
-    /// After a claim timeout is exceeded, the task will be made pending again.
-    /// Default value is 600 (10m)
     #[pyo3(get, set)]
     pub worker_claim_timeout_secs: i32,
 }
