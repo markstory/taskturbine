@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import psycopg2
@@ -100,7 +100,6 @@ def test_worker_execute_batch_error_handler(config: Config, channel: str) -> Non
 def test_worker_execute_batch_mixed_failure(
     config: Config, db_connection: Connection, channel: str
 ) -> None:
-    channel = "execute_batch_mixed_failure"
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
@@ -125,3 +124,51 @@ def test_worker_execute_batch_mixed_failure(
     assert len(rows) == 2
     assert rows[0]["state"] == "completed"
     assert rows[1]["state"] == "failed"
+
+
+def test_worker_cleanup(config: Config, db_connection: Connection, channel: str) -> None:
+    app = TaskturbineApp(config)
+    app.add_channel(channel)
+
+    @app.register_task(name="worker-cleanup")
+    def worker_task(ctx: TaskContext) -> dict[str, Any]:
+        return {"ok": "ok"}
+
+    app.emit_event("cleanup-event", {"id": "event"})
+    first = app.spawn_task("worker-cleanup", {"oid": 123}, channel=channel)
+
+    # Update state to allow cleanup to make changes
+    with db_connection.cursor() as cursor:
+        cursor.execute("BEGIN")
+        cursor.execute(
+            "UPDATE taskturbine.events SET created_at = %s WHERE event_name = %s",
+            [(datetime.now() - timedelta(hours=3)).isoformat(), "cleanup-event"],
+        )
+        cursor.execute(
+            """
+            UPDATE taskturbine.tasks
+            SET state = 'completed', completed_at = %s
+            WHERE task_id = %s
+            """,
+            [(datetime.now() - timedelta(hours=3)).isoformat(), first.task_id]
+        )
+        cursor.execute("COMMIT")
+    worker = app.create_worker("worker-1", [channel])
+    worker._inner.run_cleanup()
+
+    with db_connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT COUNT(*) FROM taskturbine.events WHERE event_name = %s",
+            ["cleanup-event"],
+        )
+        row = cursor.fetchone()
+        assert row
+        assert row[0] == 0, "no events should be found"
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM taskturbine.tasks WHERE task_id = %s",
+            [first.task_id],
+        )
+        row = cursor.fetchone()
+        assert row
+        assert row[0] == 0, "no task should be found"
