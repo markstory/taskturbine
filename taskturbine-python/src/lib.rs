@@ -166,8 +166,9 @@ impl BlockingStorage {
     }
 }
 
+/// See taskturbine.pyi for docstrings
 #[pyclass]
-struct TaskturbineApp {
+struct AppInner {
     #[pyo3(get)]
     config: Config,
 
@@ -180,28 +181,24 @@ struct TaskturbineApp {
 }
 
 #[pymethods]
-impl TaskturbineApp {
+impl AppInner {
     #[new]
     fn py_new(config: Config) -> Self {
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
         let storage = BlockingStorage::new(config.clone().into());
 
-        TaskturbineApp {
+        AppInner {
             config,
             channels,
             storage: Arc::new(storage),
         }
     }
 
-    /// Add a channel to the list of channels this application can publish and consume from.
     fn add_channel(&mut self, value: String) {
         self.channels.insert(value);
     }
 
-    /// Spawn a task on the default channel and initialize the first run.
-    ///
-    /// An error is returned if the task name is not registered.
     fn spawn_task(
         &self,
         task_name: &str,
@@ -572,7 +569,7 @@ mod taskturbine {
     #[pymodule_export]
     use super::TaskOptions;
     #[pymodule_export]
-    use super::TaskturbineApp;
+    use super::AppInner;
     #[pymodule_export]
     use super::WorkerInner;
 }

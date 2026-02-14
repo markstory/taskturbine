@@ -10,7 +10,7 @@ are in python.
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from functools import update_wrapper
 from typing import (
     Any,
@@ -24,11 +24,9 @@ from typing import (
 )
 
 # Import from the rust library
-from .taskturbine import ClaimedTask, Config, ContextInner, SpawnResult, TaskOptions
-from .taskturbine import TaskturbineApp as AppRs
-from .taskturbine import WorkerInner
+from .taskturbine import AppInner, ClaimedTask, Config, ContextInner, SpawnResult, TaskOptions, WorkerInner
 
-__all__ = ["Config", "TaskturbineApp"]
+__all__ = ["Config", "TaskturbineApp", "Task", "TaskContext"]
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -261,7 +259,7 @@ class Worker:
 
 class TaskturbineApp:
     def __init__(self, config: Config) -> None:
-        self._app_rs = AppRs(config)
+        self._inner = AppInner(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
         self._default_spawn_options = TaskOptions(
             max_attempts=5,
@@ -299,12 +297,12 @@ class TaskturbineApp:
 
         Channels let you separate backlogs and worker pools
         """
-        self._app_rs.add_channel(name)
+        self._inner.add_channel(name)
 
     @property
     def channels(self) -> set[str]:
         """Get the list of channels"""
-        return self._app_rs.channels
+        return self._inner.channels
 
     def register_task(self, name: str) -> Callable[[Callable[P, R]], Task[P, R]]:
         """
@@ -377,11 +375,11 @@ class TaskturbineApp:
             cancellation_max_age=cancellation_max_age,
         )
         if channel:
-            return self._app_rs.channel_spawn_task(
+            return self._inner.channel_spawn_task(
                 channel, taskname, self.serialize_value(params), options
             )
         else:
-            return self._app_rs.spawn_task(
+            return self._inner.spawn_task(
                 taskname, self.serialize_value(params), options
             )
 
@@ -396,14 +394,14 @@ class TaskturbineApp:
         Payload can be an arbitrary JSON encodable value that
         can be retrieved later.
         """
-        self._app_rs.emit_event(event_name, self.serialize_value(payload))
+        self._inner.emit_event(event_name, self.serialize_value(payload))
 
     def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
         """
         Create a TaskContext with links to the rust context.
         """
         context = TaskContext(
-            inner=self._app_rs.create_context(claimed_task),
+            inner=self._inner.create_context(claimed_task),
             serialize=self.serialize_value,
             deserialize=self.deserialize_value,
         )
@@ -420,7 +418,7 @@ class TaskturbineApp:
         Create a Worker that is connected to Rust storage API.
         """
         worker = Worker(
-            inner=self._app_rs.create_worker(worker_id, channels),
+            inner=self._inner.create_worker(worker_id, channels),
             tasks=self._tasks,
             context_factory=self.create_context,
             error_handler=error_handler,

@@ -293,20 +293,44 @@ class ContextInner:
     Read the payload for an event. Will raise an exception if the read fails
     """
 
-class TaskturbineApp:
+class AppInner:
+    """
+    The rust/python interface. This class is wrapped by 
+    """
     config: Config
     channels: set[str]
 
     def __init__(self, config: Config) -> None: ...
     def add_channel(self, value: str) -> None: ...
+    """Add a channel to the list of channels this application can publish and consume from."""
+
     def register_task(self, task: Task) -> None: ...
     def has_task(self, name: str) -> bool: ...
     def spawn_task(
         self, task_name: str, params: bytes, options: TaskOptions
     ) -> SpawnResult: ...
+    """
+    Spawn a task on the default channel and initialize the first run.
+    An error is returned if the task name is not registered.
+    """
     def channel_spawn_task(
         self, channel: str, task_name: str, params: bytes, options: TaskOptions
     ) -> SpawnResult: ...
+    """Spawn a task on a named channel"""
+
     def emit_event(self, event_name: str, payload: bytes) -> None: ...
+    """
+    Record an event as having completed.
+    Events allow you to synchronize tasks with external actions
+    that can be recorded as events. Events can have a Payload of bytes.
+    """
+
     def create_worker(self, worker_id: str, channels: list[str]) -> WorkerInner: ...
+    """
+    Create a worker for the application tasks
+    A worker will only claim tasks in `channels` if channels is not-empty.
+    If `channels` is empty, tasks in all channels will be processed.
+    """
+
     def create_context(self, claimed_task: ClaimedTask) -> ContextInner: ...
+    """Create a ContextInner which bridges into the python client."""
