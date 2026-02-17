@@ -49,9 +49,11 @@ class Task(Generic[P, R]):
         self,
         name: str,
         func: Callable[P, R],
+        options: TaskOptions | None = None
     ):
         self.name = name
         self._func = func
+        self.options = options
         update_wrapper(self, func)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
@@ -312,7 +314,12 @@ class TaskturbineApp:
         """Get the list of channels"""
         return self._inner.channels
 
-    def register_task(self, name: str) -> Callable[[Callable[P, R]], Task[P, R]]:
+    def register_task(
+        self,
+        name: str,
+        *,
+        options: TaskOptions | None = None,
+    ) -> Callable[[Callable[P, R]], Task[P, R]]:
         """
         Decorator to register task functions.
 
@@ -325,7 +332,7 @@ class TaskturbineApp:
 
         def wrapped(func: Callable[P, R]) -> Task[P, R]:
             # TODO add task option defaults.
-            task = Task(name=name, func=func)
+            task = Task(name=name, func=func, options=options)
             self._tasks[name] = task
             return task
 
@@ -373,8 +380,12 @@ class TaskturbineApp:
         """
         if taskname not in self._tasks:
             raise ValueError(f"The task `{taskname}` is not registered.")
+        task = self._tasks[taskname]
+        base_options = self._default_spawn_options
+        if task.options:
+            base_options = task.options
 
-        options = self._default_spawn_options.copy_with(
+        options = base_options.copy_with(
             headers=headers,
             max_attempts=max_attempts,
             retry_seconds=retry_seconds,

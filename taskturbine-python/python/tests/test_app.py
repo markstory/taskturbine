@@ -3,6 +3,7 @@ import os
 
 import psycopg2
 import pytest
+from taskturbine.taskturbine import TaskOptions
 
 Connection = psycopg2._psycopg.connection
 
@@ -92,6 +93,36 @@ def test_spawn_task_with_options(config: Config, db_connection: Connection) -> N
     assert row["retry_factor"] == 2.0
     assert row["retry_max_seconds"] == 320
     assert row["cancellation_max_age"] == 150
+
+
+def test_spawn_task_uses_task_options(config: Config, db_connection: Connection) -> None:
+    app = TaskturbineApp(config)
+    options = TaskOptions(
+        retry_seconds=5,
+        max_attempts=10,
+        retry_factor=2.0,
+        retry_max_seconds=200,
+        cancellation_max_age=75,
+    )
+
+    @app.register_task(name="first-task", options=options)
+    def first_task(a: str) -> str:
+        return f"called {a}"
+
+    res = app.spawn_task("first-task", {})
+    assert res
+    assert res.task_id
+
+    cur = db_connection.cursor()
+    cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
+    row = row_factory(cur, cur.fetchone())
+    assert row
+    assert row["task_id"] == res.task_id
+    assert row["retry_seconds"] == 5
+    assert row["max_attempts"] == 10
+    assert row["retry_factor"] == 2.0
+    assert row["retry_max_seconds"] == 200
+    assert row["cancellation_max_age"] == 75
 
 
 def test_set_spawn_options(config: Config, db_connection: Connection) -> None:
