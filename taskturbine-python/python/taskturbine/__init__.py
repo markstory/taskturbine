@@ -328,7 +328,6 @@ class TaskturbineApp:
         """
 
         def wrapped(func: Callable[P, R]) -> Task[P, R]:
-            # TODO add task option defaults.
             task = Task(name=name, func=func, options=options)
             self._tasks[name] = task
             return task
