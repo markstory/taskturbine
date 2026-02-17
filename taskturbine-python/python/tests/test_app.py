@@ -95,7 +95,9 @@ def test_spawn_task_with_options(config: Config, db_connection: Connection) -> N
     assert row["cancellation_max_age"] == 150
 
 
-def test_spawn_task_uses_task_options(config: Config, db_connection: Connection) -> None:
+def test_spawn_task_uses_task_options(
+    config: Config, db_connection: Connection
+) -> None:
     app = TaskturbineApp(config)
     options = TaskOptions(
         retry_seconds=5,

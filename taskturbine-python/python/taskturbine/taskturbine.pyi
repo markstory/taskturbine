@@ -50,7 +50,6 @@ class Checkpoint:
     updated_at: int
     """The timestamp the checkpoint was created or updated."""
 
-
 class ClaimedTask:
     """
     Entity structure for a task that has been claimed
@@ -185,7 +184,6 @@ class Config:
         await_event_default_timeout_secs: int = 120,
     ) -> None: ...
 
-
 class TaskOptions:
     """
     The runtime options used to spawn a task
@@ -223,7 +221,6 @@ class TaskOptions:
         retry_max_seconds: int,
         cancellation_max_age: int,
     ) -> None: ...
-
     def copy_with(
         self,
         headers: dict[str, str] | None,
@@ -239,6 +236,7 @@ class WorkerInner:
     """
     The python -> rust binding boundary for a Worker.
     """
+
     worker_sleep_secs: int
     """Number of seconds workers should sleep between run loops."""
 
@@ -295,8 +293,9 @@ class ContextInner:
 
 class AppInner:
     """
-    The rust/python interface. This class is wrapped by 
+    The rust/python interface. This class is wrapped by
     """
+
     config: Config
     channels: set[str]
 

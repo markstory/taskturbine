@@ -46,10 +46,7 @@ logger = logging.getLogger(__name__)
 
 class Task(Generic[P, R]):
     def __init__(
-        self,
-        name: str,
-        func: Callable[P, R],
-        options: TaskOptions | None = None
+        self, name: str, func: Callable[P, R], options: TaskOptions | None = None
     ):
         self.name = name
         self._func = func
