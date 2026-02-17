@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any
 
 import psycopg2
 import pytest
@@ -61,6 +62,36 @@ def test_spawn_task(config: Config) -> None:
     assert res
     assert res.task_id
     assert res.run_id
+
+
+def test_spawn_task_uses_serialize_hooks(
+    config: Config, db_connection: Connection
+) -> None:
+    def serialize(params: dict[str, Any]) -> bytes:
+        return f"--{json.dumps(params)}--".encode()
+
+    def deserialize(blob: bytes) -> Any | None:
+        content = blob[2:-2]
+        return json.loads(content)
+
+    app = TaskturbineApp(config)
+    app.serialize_value = serialize # type:ignore[method-assign]
+    app.deserialize_value = deserialize # type:ignore[method-assign]
+
+    @app.register_task(name="first-task")
+    def first_task(a: str) -> str:
+        return f"called {a}"
+
+    res = app.spawn_task("first-task", {"a": 123})
+    assert res
+    assert res.task_id
+
+    cur = db_connection.cursor()
+    cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
+    row = row_factory(cur, cur.fetchone())
+    assert row
+    assert row["task_id"] == res.task_id
+    assert row["params"].tobytes() == b'--{"a": 123}--'
 
 
 def test_spawn_task_with_options(config: Config, db_connection: Connection) -> None:
