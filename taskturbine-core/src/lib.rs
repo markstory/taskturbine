@@ -86,7 +86,7 @@
 //!
 //! ```rust
 //! use taskturbine_core::context::{FlowControl, StepData, TaskContext};
-//! 
+//!
 //! struct Error(String);
 //!
 //! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {
@@ -217,4 +217,3 @@ pub mod config;
 pub mod context;
 pub mod models;
 pub mod storage;
-

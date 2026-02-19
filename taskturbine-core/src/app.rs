@@ -334,7 +334,11 @@ impl Worker {
     /// Takes a datetime of what is considered stale and can be purged.
     /// See [run_cleanup_worker](fn.run_cleanup_worker.html) for running cleanup operations.
     pub async fn run_cleanup(&self, older_than: Duration) -> Result<(), WorkerError> {
-        self.app.storage.run_cleanup(older_than).await.map_err(|e| WorkerError::Message(format!("{e:?}")))
+        self.app
+            .storage
+            .run_cleanup(older_than)
+            .await
+            .map_err(|e| WorkerError::Message(format!("{e:?}")))
     }
 
     /// Execute a task function and record the execution status.

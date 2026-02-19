@@ -112,7 +112,6 @@ struct WorkerInner {
 
 #[pymethods]
 impl WorkerInner {
-
     #[getter(cleanup_interval_secs)]
     pub fn worker_sleep_secs(&self) -> i32 {
         self.storage.get_config().worker_sleep_secs
@@ -141,9 +140,11 @@ impl WorkerInner {
 
     /// Run all the cleanup operations on the database.
     fn run_cleanup(&self) -> PyResult<()> {
-        let older_than = Duration::from_secs(self.storage.get_config().worker_cleanup_cutoff_secs as u64);
+        let older_than =
+            Duration::from_secs(self.storage.get_config().worker_cleanup_cutoff_secs as u64);
 
-        self.storage.run_cleanup(older_than)
+        self.storage
+            .run_cleanup(older_than)
             .map_err(|e| PyValueError::new_err(format!("Could not run_cleanup: {e:?}")))
     }
 
@@ -222,9 +223,7 @@ impl ContextInner {
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
-        let res = self
-            .storage
-            .get_checkpoint(task_id, &checkpoint_name);
+        let res = self.storage.get_checkpoint(task_id, &checkpoint_name);
 
         // TODO this is masking a storage error
         if let Ok(Some(checkpoint)) = res {
@@ -249,13 +248,9 @@ impl ContextInner {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
 
-        let res = self.storage.set_checkpoint(
-            task_id,
-            run_id,
-            checkpoint_name,
-            state,
-            extend_claim,
-        );
+        let res =
+            self.storage
+                .set_checkpoint(task_id, run_id, checkpoint_name, state, extend_claim);
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }
@@ -269,13 +264,9 @@ impl ContextInner {
         };
 
         let step_name = format!("$awaitEvent:{event_name}");
-        let payload_res = self.storage.await_event(
-            task_id,
-            run_id,
-            &step_name,
-            event_name.as_ref(),
-            timeout,
-        );
+        let payload_res =
+            self.storage
+                .await_event(task_id, run_id, &step_name, event_name.as_ref(), timeout);
         match payload_res {
             Ok(result) => Ok(result.into()),
             Err(err) => Err(PyValueError::new_err(format!(
@@ -386,6 +377,8 @@ impl TaskOptions {
 #[pymodule(name = "taskturbine")]
 mod taskturbine {
     #[pymodule_export]
+    use super::AppInner;
+    #[pymodule_export]
     use super::ClaimedTask;
     #[pymodule_export]
     use super::Config;
@@ -395,8 +388,6 @@ mod taskturbine {
     use super::SpawnResult;
     #[pymodule_export]
     use super::TaskOptions;
-    #[pymodule_export]
-    use super::AppInner;
     #[pymodule_export]
     use super::WorkerInner;
 }

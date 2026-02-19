@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use taskturbine_core::models::{RunId, TaskId};
 
-
 /// Internal blocking storage adapter.
 ///
 /// Bridges between the tokio based runtime of the rust library
@@ -141,7 +140,10 @@ impl BlockingStorage {
         self.rt.block_on(self.inner.schedule_run(run_id, wait_for))
     }
 
-    pub fn run_cleanup(&self, older_than: Duration) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
+    pub fn run_cleanup(
+        &self,
+        older_than: Duration,
+    ) -> Result<(), taskturbine_core::storage::TaskTurbineError> {
         self.rt.block_on(self.inner.run_cleanup(older_than))
     }
 

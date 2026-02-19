@@ -132,21 +132,13 @@ impl Storage {
         // This code is tested at the Worker layer
         let older_than = Utc::now() - older_than;
         let cleanup_limit = self.config.worker_cleanup_limit;
-        let _ = self
-            .cleanup_events(older_than, cleanup_limit)
-            .await?;
+        let _ = self.cleanup_events(older_than, cleanup_limit).await?;
 
-        let _ = self
-            .cleanup_tasks(older_than, cleanup_limit)
-            .await?;
+        let _ = self.cleanup_tasks(older_than, cleanup_limit).await?;
 
-        let _ = self
-            .handle_expired_claims()
-            .await?;
+        let _ = self.handle_expired_claims().await?;
 
-        let _ = self
-            .handle_cancellation_max_age()
-            .await?;
+        let _ = self.handle_cancellation_max_age().await?;
 
         Ok(())
     }
