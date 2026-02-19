@@ -166,28 +166,31 @@ impl WorkerInner {
 
     /// Mark a run as failed.
     fn fail_run(&self, run_id: String, retry_at: Duration) -> PyResult<()> {
-        // TODO Fix panic
-        let run_id = Uuid::parse_str(&run_id).unwrap();
+        let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
         self.storage
-            .fail_run(RunId(run_id), b"", Some(retry_at))
+            .fail_run(run_id, b"", Some(retry_at))
             .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
     }
 
     /// Mark a run as complete.
     fn complete_run(&self, run_id: String, run_result: Vec<u8>) -> PyResult<()> {
-        // TODO Fix panic
-        let run_id = Uuid::parse_str(&run_id).unwrap();
+        let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
         self.storage
-            .complete_run(RunId(run_id), &run_result)
+            .complete_run(run_id, &run_result)
             .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
     }
 
     /// Re-schedule a task to run in the future.
     fn schedule_run(&self, run_id: String, wait_for: Duration) -> PyResult<()> {
-        // TODO Fix panic
-        let run_id = Uuid::parse_str(&run_id).unwrap();
+        let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
         self.storage
-            .schedule_run(RunId(run_id), wait_for)
+            .schedule_run(run_id, wait_for)
             .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
     }
 }
@@ -217,11 +220,12 @@ impl ContextInner {
     }
 
     fn get_checkpoint(&self, checkpoint_name: String) -> PyResult<Checkpoint> {
-        // TODO this unwrap() is yolo
-        let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
+        let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
         let res = self
             .storage
-            .get_checkpoint(TaskId(task_id), &checkpoint_name);
+            .get_checkpoint(task_id, &checkpoint_name);
 
         // TODO this is masking a storage error
         if let Ok(Some(checkpoint)) = res {
@@ -239,12 +243,16 @@ impl ContextInner {
         state: &[u8],
         extend_claim: Option<Duration>,
     ) -> PyResult<()> {
-        let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
-        let run_id = Uuid::parse_str(&self.claimed_task.run_id).unwrap();
+        let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        let Ok(run_id) = TryInto::<RunId>::try_into(&self.claimed_task.run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
 
         let res = self.storage.set_checkpoint(
-            TaskId(task_id),
-            RunId(run_id),
+            task_id,
+            run_id,
             checkpoint_name,
             state,
             extend_claim,
@@ -254,9 +262,12 @@ impl ContextInner {
     }
 
     fn get_event_payload(&self, event_name: String, timeout: Duration) -> PyResult<AwaitResult> {
-        // TODO this is yolo. Should raise errors on invalid values.
-        let task_id = Uuid::parse_str(&self.claimed_task.task_id).unwrap();
-        let run_id = Uuid::parse_str(&self.claimed_task.run_id).unwrap();
+        let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        let Ok(run_id) = TryInto::<RunId>::try_into(&self.claimed_task.run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
 
         let step_name = format!("$awaitEvent:{event_name}");
         let payload_res = self.storage.await_event(

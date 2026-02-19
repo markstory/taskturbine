@@ -51,16 +51,20 @@ impl ClaimedTask {
 }
 
 /// Convert from the python module to the core struct.
-/// TODO convert to try_from
-impl From<ClaimedTask> for taskturbine_core::models::ClaimedTask {
-    fn from(value: ClaimedTask) -> Self {
-        // TODO: This is a bit YOLO
-        let task_id = Uuid::parse_str(&value.task_id).unwrap();
-        let run_id = Uuid::parse_str(&value.run_id).unwrap();
+impl TryFrom<ClaimedTask> for taskturbine_core::models::ClaimedTask {
+    type Error = String;
 
-        taskturbine_core::models::ClaimedTask {
-            task_id: TaskId(task_id),
-            run_id: RunId(run_id),
+    fn try_from(value: ClaimedTask) -> Result<Self, Self::Error> {
+        let Ok(task_id) = TryInto::<TaskId>::try_into(&value.task_id) else {
+            return Err("Invalid task_id".to_string());
+        };
+        let Ok(run_id) = TryInto::<RunId>::try_into(&value.task_id) else {
+            return Err("Invalid run_id".to_string());
+        };
+
+        Ok(taskturbine_core::models::ClaimedTask {
+            task_id,
+            run_id,
             channel: value.channel,
             task_name: value.task_name,
             params: value.params,
@@ -69,7 +73,7 @@ impl From<ClaimedTask> for taskturbine_core::models::ClaimedTask {
             retry_max_seconds: value.retry_max_seconds,
             attempt: value.attempt,
             max_attempts: value.max_attempts,
-        }
+        })
     }
 }
 

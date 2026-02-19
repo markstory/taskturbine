@@ -39,6 +39,26 @@ impl Display for TaskId {
         write!(f, "{}", self.0)
     }
 }
+impl TryFrom<String> for TaskId {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let Ok(uuid) = Uuid::parse_str(&value) else {
+            return Err("Invalid uuid format".to_string());
+        };
+        Ok(Self(uuid))
+    }
+}
+impl TryFrom<&String> for TaskId {
+    type Error = String;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        let Ok(uuid) = Uuid::parse_str(value) else {
+            return Err("Invalid uuid format".to_string());
+        };
+        Ok(Self(uuid))
+    }
+}
 
 /// Marker type for Run identifiers. Bare UUIDs are easy to confuse.
 #[derive(sqlx::Decode, sqlx::Encode, Clone, Copy, Debug, PartialEq)]
@@ -53,6 +73,28 @@ impl sqlx::Type<sqlx::Postgres> for RunId {
 impl Display for RunId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for RunId {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let Ok(uuid) = Uuid::parse_str(&value) else {
+            return Err("Invalid uuid format".to_string());
+        };
+        Ok(Self(uuid))
+    }
+}
+
+impl TryFrom<&String> for RunId {
+    type Error = String;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        let Ok(uuid) = Uuid::parse_str(value) else {
+            return Err("Invalid uuid format".to_string());
+        };
+        Ok(Self(uuid))
     }
 }
 
