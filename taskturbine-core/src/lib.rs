@@ -57,7 +57,7 @@
 //! Tasks are defined as async functions with a signature like:
 //!
 //! ```rust
-//! use taskturbine::context::{TaskContext, FlowControl};
+//! use taskturbine_core::context::{TaskContext, FlowControl};
 //!
 //! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {
 //!   todo!();
@@ -85,13 +85,15 @@
 //! [async_step()](context/struct.TaskContext.html#method.async_step).
 //!
 //! ```rust
-//! use taskturbine::context::{FlowControl, StepData, TaskContext};
+//! use taskturbine_core::context::{FlowControl, StepData, TaskContext};
+//! 
+//! struct Error(String);
 //!
 //! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {
 //!     // Define a sync step. `step_result` will contain the bytes returned by the step fn.
 //!     let prepared_bytes = ctx.step(
 //!         "prepare-data",
-//!         |ctx: TaskContext| -> Result<StepData, anyhow::Error> {
+//!         |ctx: TaskContext| -> Result<StepData, Error> {
 //!             todo!();
 //!         }
 //!     ).await?;
@@ -99,10 +101,12 @@
 //!     // Define an async step
 //!     let email_results = ctx.async_step(
 //!         "send-results",
-//!         async |ctx: TaskContext| -> Result<StepData, anyhow::Error> {
+//!         async |ctx: TaskContext| -> Result<StepData, Error> {
 //!             todo!();
 //!         }
 //!     ).await?;
+//!
+//!     Ok(())
 //! }
 //! ```
 //!
@@ -132,7 +136,18 @@
 //! to create a worker binary. A simple worker can look like
 //!
 //! ```rust
-//! use taskturbine_core::app::{TaskTurbineApp, run_worker};
+//! use std::env;
+//! use taskturbine_core::app::{TaskturbineApp, run_worker};
+//! use taskturbine_core::config::Config;
+//! use taskturbine_core::context::{FlowControl, TaskContext};
+//!
+//! async fn send_mail(ctx: TaskContext) -> Result<(), FlowControl> {
+//!     Ok(())
+//! }
+//!
+//! async fn register_user(ctx: TaskContext) -> Result<(), FlowControl> {
+//!     Ok(())
+//! }
 //!
 //! // Create a Task application.
 //! // Having a factory method for the task application will make
@@ -152,8 +167,7 @@
 //! }
 //!
 //! // Entry point for the worker.
-//! #[tokio::main]
-//! async fn main() {
+//! async fn worker_main() {
 //!     log::info!("Starting worker");
 //!     let app = make_task_app();
 //!
@@ -183,12 +197,16 @@
 //! to have dedicated cleanup worker to reduce contention:
 //!
 //! ```rust
-//! use taskturbine_core::app::{TaskTurbineApp, run_cleanup_worker};
-//! // From the example above
-//! let app = make_task_app();
+//! use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
+//! use taskturbine_core::config::Config;
 //!
-//! let worker = app.create_worker("cleanup-worker-1", vec![]);
-//! run_cleanup_worker(worker).await;
+//! async fn worker_main() {
+//!     let config = Config::default();
+//!     let app = TaskturbineApp::new(config);
+//!
+//!     let worker = app.create_worker("cleanup-worker-1", vec![]);
+//!     run_cleanup_worker(worker).await;
+//! }
 //! ```
 //!
 //! When running a dedicated worker you may need to tune your configuration if you were previously
@@ -199,3 +217,4 @@ pub mod config;
 pub mod context;
 pub mod models;
 pub mod storage;
+

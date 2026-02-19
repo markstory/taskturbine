@@ -77,7 +77,17 @@ impl TaskturbineApp {
     /// Get a Channel that can be used to spawn tasks.
     ///
     /// ```rust
-    /// app.channel("reports").spawn_task(...).await;
+    /// use taskturbine_core::app::TaskturbineApp;
+    /// use taskturbine_core::config::Config;
+    ///
+    /// (async || {
+    ///     let config = Config::default();
+    ///     let mut app = TaskturbineApp::new(config);
+    ///     app = app.add_channel("reports");
+    ///
+    ///     let event_payload = vec![];
+    ///     app.channel("reports").spawn_task("process-feedback", &event_payload, None).await;
+    /// })();
     /// ```
     ///
     /// Will panic if an undeclared channel is used.
@@ -118,12 +128,21 @@ impl TaskturbineApp {
     /// If `channels` is empty, tasks in all channels will be processed.
     ///
     /// ```rust
-    /// // Create a worker that consumes from all channels
-    /// // in the application.
-    /// let worker = app.create_worker("worker-1", vec![]);
+    /// use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
+    /// use taskturbine_core::config::Config;
     ///
-    /// // Create a worker that only consumes `reports` tasks.
-    /// let worker = app.create_worker("worker-1", vec!["reports"]);
+    /// (async || {
+    ///     let config = Config::default();
+    ///     let mut app = TaskturbineApp::new(config.clone());
+    ///
+    ///     // Create a worker that consumes from all channels
+    ///     // in the application.
+    ///     let worker = app.create_worker("worker-1", vec![]);
+    ///
+    ///     // Create a worker that only consumes `reports` tasks.
+    ///     let mut app = TaskturbineApp::new(config);
+    ///     let worker = app.create_worker("worker-1", vec!["reports".into()]);
+    /// })();
     /// ```
     pub fn create_worker(self, worker_id: &str, channels: Vec<String>) -> Worker {
         let arc_self = Arc::new(self);
@@ -133,6 +152,8 @@ impl TaskturbineApp {
     /// Spawn a task on the default channel and initialize the first run.
     ///
     /// An error is returned if the task name is not registered.
+    ///
+    /// TODO add an example
     pub async fn spawn_task(
         &self,
         task_name: &str,
@@ -155,7 +176,16 @@ impl TaskturbineApp {
     /// How those bytes are encoded is an application concern.
     ///
     /// ```rust
-    /// app.emit_event("email-verify-foo@example.com", payload.as_bytes()).await;
+    /// use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
+    /// use taskturbine_core::config::Config;
+    ///
+    /// (async || {
+    ///     let config = Config::default();
+    ///     let mut app = TaskturbineApp::new(config);
+    ///
+    ///     let payload = b"{\"a\":12}";
+    ///     app.emit_event("email-verify-foo@example.com", payload).await;
+    /// })();
     /// ```
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
         let res = self.storage.emit_event(event_name, payload).await;
@@ -360,8 +390,16 @@ impl Worker {
 /// Consumes the worker and runs indefinitely until the process is killed.
 ///
 /// ```rust
-/// let app = TaskturbineApp::new(config);
-/// run_worker(app.worker()).await
+/// use taskturbine_core::app::{TaskturbineApp, run_worker};
+/// use taskturbine_core::config::Config;
+///
+/// (async || {
+///     let config = Config::default();
+///     let mut app = TaskturbineApp::new(config);
+///     app = app.add_channel("reports");
+///
+///     run_worker(app.create_worker("worker-1", vec!["reports".into()])).await
+/// })();
 /// ```
 ///
 /// Use [Config](../config/struct.Config.html) to configure worker behavior.
@@ -397,8 +435,15 @@ pub async fn run_worker(worker: Worker) {
 /// Consumes the worker and runs indefinitely until the process is killed.
 ///
 /// ```rust
-/// let app = TaskturbineApp::new(config);
-/// run_cleanup_worker(app.worker()).await
+/// use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
+/// use taskturbine_core::config::Config;
+///
+/// (async || {
+///     let config = Config::default();
+///     let app = TaskturbineApp::new(config);
+///
+///     run_cleanup_worker(app.create_worker("worker-1", vec!["feedback-ingest".into()])).await
+/// })();
 /// ```
 ///
 /// Use [Config](../config/struct.Config.html) to configure worker behavior.
