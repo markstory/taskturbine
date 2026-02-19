@@ -104,6 +104,8 @@ impl TaskturbineApp {
     /// that is defined in the App. See [`TaskturbineApp::channel()`]
     ///
     /// Duplicate task names will panic at runtime.
+    ///
+    /// TODO add a few examples.
     pub fn register_task<T>(mut self, task_name: &str, task_fn: T) -> Self
     where
         T: TaskHandler<TaskContext> + Sync + Send + 'static,
