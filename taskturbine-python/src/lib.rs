@@ -10,7 +10,6 @@ use taskturbine_core::{
     self,
     models::{RunId, TaskId},
 };
-use uuid::Uuid;
 
 mod blockingstorage;
 mod config;
@@ -271,8 +270,8 @@ impl ContextInner {
 
         let step_name = format!("$awaitEvent:{event_name}");
         let payload_res = self.storage.await_event(
-            TaskId(task_id),
-            RunId(run_id),
+            task_id,
+            run_id,
             &step_name,
             event_name.as_ref(),
             timeout,

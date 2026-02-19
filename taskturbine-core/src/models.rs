@@ -40,21 +40,21 @@ impl Display for TaskId {
     }
 }
 impl TryFrom<String> for TaskId {
-    type Error = String;
+    type Error = ();
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let Ok(uuid) = Uuid::parse_str(&value) else {
-            return Err("Invalid uuid format".to_string());
+            return Err(());
         };
         Ok(Self(uuid))
     }
 }
 impl TryFrom<&String> for TaskId {
-    type Error = String;
+    type Error = ();
 
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         let Ok(uuid) = Uuid::parse_str(value) else {
-            return Err("Invalid uuid format".to_string());
+            return Err(());
         };
         Ok(Self(uuid))
     }

@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::models::{RunId, TaskId};
-use uuid::Uuid;
 
 /// See taskturbine.pyi for docstrings
 #[derive(Clone, Debug, PartialEq)]
