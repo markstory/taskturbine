@@ -203,6 +203,12 @@ class TaskContext:
 
 
 class Worker:
+    """
+    Used to operate a worker.
+
+    Workers are best created by TaskturbineApp.create_worker()
+    as Worker depends on rust internals.
+    """
     def __init__(
         self,
         inner: WorkerInner,
@@ -218,6 +224,9 @@ class Worker:
     def run(self) -> None:
         """
         Run the worker run loop.
+
+        Intended to run in a while loop that the application
+        starts. Will periodically sleep based on Config.
         """
         interval = self._inner.worker_sleep_secs
         last_cleanup = time.time() - 1
@@ -232,6 +241,9 @@ class Worker:
     def run_cleanup(self) -> None:
         """
         Run a worker cleanup loop.
+
+        Intended to run in a while loop that the application
+        starts. Will periodically sleep based on Config.
         """
         interval = self._inner.cleanup_interval_secs
         while True:
@@ -285,6 +297,22 @@ class Worker:
 
 
 class TaskturbineApp:
+    """
+    The entry point to defining and executing tasks.
+
+    Your application should create a `TaskturbineApp` instance
+    using `Config` to define preferred behavior.
+
+    Then you need to register your tasks, and include all the modules
+    that include your tasks. Your tasks define all the tasks you want to spawn.
+
+    Spawning tasks can be done with `spawn_task()`. You can run a Worker to execute tasks with
+    `create_worker()`. The worker will draw from the application config. You can run many workers
+    concurrently, to process larger workloads.
+
+    At a large enough scale, you'll want to move cleanup operations to a dedicated worker.
+    Use `Worker.run_cleanup()`.
+    """
     def __init__(self, config: Config, serializer: TaskSerializer | None = None) -> None:
         self._inner = AppInner(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
@@ -390,6 +418,20 @@ class TaskturbineApp:
     ) -> SpawnResult:
         """
         Spawn a task to be run later by a worker.
+
+        :param taskname: The name of the task to run.
+        :param channel: The channel to spawn the task on.
+        :param headers: An dict of headers to send with the task. These can be used by application logic.
+        :param max_attempts: The maximum number of attempts.
+        :param retry_seconds: The number of seconds to add between each retry.
+        :param retry_factor: The scaling factor applied to retry_seconds to grow seconds.
+        :param retry_max_seconds: The maximum number of seconds that a retry can be.
+        :param cancellation_max_age: The age after which a task is cancelled.
+        :return: Details about the spawned task.
+
+        The headers, max_attempts, retry_seconds, retry_factors, retry_max_seconds, and
+        cancellation_max_age parameters are inherited from the task default options or default task
+        options.
         """
         if taskname not in self._tasks:
             raise ValueError(f"The task `{taskname}` is not registered.")
