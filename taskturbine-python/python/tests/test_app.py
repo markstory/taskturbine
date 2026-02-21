@@ -74,7 +74,7 @@ def test_spawn_task_uses_serialize_hooks(
             content = value[2:-2]
             return json.loads(content)
 
-    app = TaskturbineApp(config, serializer_cls=Serializer)
+    app = TaskturbineApp(config, serializer=Serializer())
 
     @app.register_task(name="first-task")
     def first_task(a: str) -> str:

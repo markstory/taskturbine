@@ -285,7 +285,7 @@ class Worker:
 
 
 class TaskturbineApp:
-    def __init__(self, config: Config, serializer_cls: type[TaskSerializer] = JsonSerializer) -> None:
+    def __init__(self, config: Config, serializer: TaskSerializer | None = None) -> None:
         self._inner = AppInner(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
         self._default_spawn_options = TaskOptions(
@@ -295,7 +295,9 @@ class TaskturbineApp:
             retry_max_seconds=300,
             cancellation_max_age=86400,
         )
-        self.serializer = serializer_cls()
+        if serializer is None:
+            serializer = JsonSerializer()
+        self.serializer = serializer
 
     def set_spawn_options(
         self,
