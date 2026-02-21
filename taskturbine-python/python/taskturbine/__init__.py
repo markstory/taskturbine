@@ -19,6 +19,7 @@ from typing import (
     Mapping,
     MutableMapping,
     ParamSpec,
+    Protocol,
     Self,
     TypeVar,
 )
@@ -34,7 +35,7 @@ from .taskturbine import (
     WorkerInner,
 )
 
-__all__ = ["Config", "TaskturbineApp", "Task", "TaskContext"]
+__all__ = ["Config", "TaskturbineApp", "Task", "TaskContext", "TaskSerializer"]
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -42,6 +43,25 @@ R = TypeVar("R")
 JsonData = dict[str, Any]
 
 logger = logging.getLogger(__name__)
+
+
+class TaskSerializer(Protocol):
+    """Interface for task serialization"""
+    def serialize(self, value: Any) -> bytes: ...
+    """Convert parameter and result values into bytes"""
+
+    def deserialize(self, value: bytes) -> Any: ...
+    """Convert bytes into structures for parameters and results"""
+
+
+
+class JsonSerializer(TaskSerializer):
+    """JSON encoding TaskSerializer"""
+    def serialize(self, value: Any) -> bytes:
+        return json.dumps(value).encode()
+
+    def deserialize(self, value: bytes) -> Any:
+        return json.loads(value)
 
 
 class Task(Generic[P, R]):
@@ -265,7 +285,7 @@ class Worker:
 
 
 class TaskturbineApp:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, serializer_cls: type[TaskSerializer] = JsonSerializer) -> None:
         self._inner = AppInner(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
         self._default_spawn_options = TaskOptions(
@@ -275,6 +295,7 @@ class TaskturbineApp:
             retry_max_seconds=300,
             cancellation_max_age=86400,
         )
+        self.serializer = serializer_cls()
 
     def set_spawn_options(
         self,
@@ -343,20 +364,14 @@ class TaskturbineApp:
         return self._tasks[name]
 
     def serialize_value(self, params: dict[str, Any]) -> bytes:
-        """Convert parameters into bytes
-
-        TODO make this a hook method so other serializers can be used.
-        """
-        return json.dumps(params).encode()
+        """Convert parameters into bytes"""
+        return self.serializer.serialize(params)
 
     def deserialize_value(self, blob: bytes) -> Any | None:
-        """Convert a bytestring into a dict
-
-        TODO make this a hook method so other serializers can be used.
-        """
+        """Convert a bytestring into a decoded value"""
         if blob == b"":
             return None
-        return json.loads(blob)
+        return self.serializer.deserialize(blob)
 
     def spawn_task(
         self,

@@ -1,5 +1,4 @@
 import json
-import os
 from typing import Any
 
 import psycopg2
@@ -8,7 +7,7 @@ from taskturbine.taskturbine import TaskOptions
 
 Connection = psycopg2._psycopg.connection
 
-from taskturbine import Config, Task, TaskturbineApp
+from taskturbine import Config, Task, TaskSerializer, TaskturbineApp
 
 from .conftest import row_factory
 
@@ -67,16 +66,15 @@ def test_spawn_task(config: Config) -> None:
 def test_spawn_task_uses_serialize_hooks(
     config: Config, db_connection: Connection
 ) -> None:
-    def serialize(params: dict[str, Any]) -> bytes:
-        return f"--{json.dumps(params)}--".encode()
+    class Serializer(TaskSerializer):
+        def serialize(self, value: Any) -> bytes:
+            return f"--{json.dumps(value)}--".encode()
 
-    def deserialize(blob: bytes) -> Any | None:
-        content = blob[2:-2]
-        return json.loads(content)
+        def deserialize(self, value: bytes) -> Any | None:
+            content = value[2:-2]
+            return json.loads(content)
 
-    app = TaskturbineApp(config)
-    app.serialize_value = serialize # type:ignore[method-assign]
-    app.deserialize_value = deserialize # type:ignore[method-assign]
+    app = TaskturbineApp(config, serializer_cls=Serializer)
 
     @app.register_task(name="first-task")
     def first_task(a: str) -> str:
