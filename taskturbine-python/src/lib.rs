@@ -224,8 +224,6 @@ impl ContextInner {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
         let res = self.storage.get_checkpoint(task_id, &checkpoint_name);
-
-        // TODO this is masking a storage error
         if let Ok(Some(checkpoint)) = res {
             Ok(checkpoint.into())
         } else {
