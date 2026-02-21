@@ -6,11 +6,10 @@ import pytest
 
 from taskturbine import (
     Config,
-    SuspendError,
-    Task,
-    TaskContext,
     TaskturbineApp,
 )
+from taskturbine.context import TaskContext
+from taskturbine.models import SuspendError
 
 Connection = psycopg2._psycopg.connection
 
