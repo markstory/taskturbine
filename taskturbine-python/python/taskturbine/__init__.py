@@ -46,16 +46,19 @@ logger = logging.getLogger(__name__)
 
 class TaskSerializer(Protocol):
     """Interface for task serialization"""
+
     def serialize(self, value: Any) -> bytes: ...
+
     """Convert parameter and result values into bytes"""
 
     def deserialize(self, value: bytes) -> Any: ...
-    """Convert bytes into structures for parameters and results"""
 
+    """Convert bytes into structures for parameters and results"""
 
 
 class JsonSerializer(TaskSerializer):
     """JSON encoding TaskSerializer"""
+
     def serialize(self, value: Any) -> bytes:
         return json.dumps(value).encode()
 
@@ -80,7 +83,10 @@ class TaskturbineApp:
     At a large enough scale, you'll want to move cleanup operations to a dedicated worker.
     Use `Worker.run_cleanup()`.
     """
-    def __init__(self, config: Config, serializer: TaskSerializer | None = None) -> None:
+
+    def __init__(
+        self, config: Config, serializer: TaskSerializer | None = None
+    ) -> None:
         self._inner = AppInner(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
         self._default_spawn_options = TaskOptions(

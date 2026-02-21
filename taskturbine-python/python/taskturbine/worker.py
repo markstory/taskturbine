@@ -1,9 +1,10 @@
-from datetime import timedelta
+import time
 from typing import Any, Callable, Mapping
 
 from taskturbine.context import TaskContext
 from taskturbine.models import Task, SuspendError
 from taskturbine.taskturbine import ClaimedTask, WorkerInner
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ class Worker:
     Workers are best created by TaskturbineApp.create_worker()
     as Worker depends on rust internals.
     """
+
     def __init__(
         self,
         inner: WorkerInner,

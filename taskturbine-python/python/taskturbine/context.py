@@ -5,7 +5,9 @@ from taskturbine.models import SuspendError, Task
 from taskturbine.taskturbine import (
     ContextInner,
 )
+
 JsonData = dict[str, Any]
+
 
 class TaskContext:
     def __init__(
@@ -127,5 +129,3 @@ class TaskContext:
         self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
 
         return step_result
-
-
