@@ -232,10 +232,14 @@ class TaskOptions:
     ) -> Self: ...
     """Create a clone of TaskOptions with updated values"""
 
+
 class WorkerInner:
     """
     The python -> rust binding boundary for a Worker.
     """
+
+    worker_concurrency: int
+    """Number of child processes to spawn as task executors."""
 
     worker_sleep_secs: int
     """Number of seconds workers should sleep between run loops."""

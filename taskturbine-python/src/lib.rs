@@ -85,6 +85,8 @@ impl AppInner {
     fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
         WorkerInner {
             storage: self.storage.clone(),
+            // TODO remove these and make config a formal parameter. That will cleanup
+            // storage.get_config() too.
             claim_count: self.config.worker_concurrency,
             claim_timeout_secs: self.config.worker_claim_timeout_secs,
             worker_id,
@@ -112,14 +114,19 @@ struct WorkerInner {
 
 #[pymethods]
 impl WorkerInner {
-    #[getter(cleanup_interval_secs)]
+    #[getter(worker_sleep_secs)]
     pub fn worker_sleep_secs(&self) -> i32 {
         self.storage.get_config().worker_sleep_secs
     }
 
-    #[getter(cleanup_interval_secs)]
+    #[getter(worker_cleanup_interval_secs)]
     pub fn worker_cleanup_interval_secs(&self) -> i32 {
         self.storage.get_config().worker_cleanup_interval_secs
+    }
+
+    #[getter(worker_concurrency)]
+    pub fn worker_concurrency(&self) -> i32 {
+        self.storage.get_config().worker_concurrency
     }
 
     /// Claim a collection tasks for timeout seconds.
