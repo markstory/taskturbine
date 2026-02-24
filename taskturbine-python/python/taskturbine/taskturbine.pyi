@@ -238,6 +238,9 @@ class WorkerInner:
     The python -> rust binding boundary for a Worker.
     """
 
+    app_module: str
+    """Path to the module and variable that contain the application being run."""
+
     worker_concurrency: int
     """Number of child processes to spawn as task executors."""
 
@@ -249,6 +252,9 @@ class WorkerInner:
 
     def claim_tasks(self) -> list[ClaimedTask]: ...
     """Claim a list of tasks based on configuration"""
+
+    def should_run_cleanup(self, timestamp: int) -> bool: ...
+    """Should the current worker run a cleanup loop"""
 
     def run_cleanup(self) -> None: ...
     """

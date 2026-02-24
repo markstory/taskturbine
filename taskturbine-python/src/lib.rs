@@ -84,11 +84,8 @@ impl AppInner {
 
     fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
         WorkerInner {
+            config: self.config.clone(),
             storage: self.storage.clone(),
-            // TODO remove these and make config a formal parameter. That will cleanup
-            // storage.get_config() too.
-            claim_count: self.config.worker_concurrency,
-            claim_timeout_secs: self.config.worker_claim_timeout_secs,
             worker_id,
             channels,
         }
@@ -105,37 +102,41 @@ impl AppInner {
 /// Expose the minimal worker API to be used by the python worker.
 #[pyclass]
 struct WorkerInner {
+    config: Config,
     storage: Arc<blockingstorage::BlockingStorage>,
     channels: Vec<String>,
     worker_id: String,
-    claim_count: i32,
-    claim_timeout_secs: i32,
 }
 
 #[pymethods]
 impl WorkerInner {
+    #[getter(app_module)]
+    pub fn app_module(&self) -> String {
+        self.config.app_module.clone()
+    }
+
     #[getter(worker_sleep_secs)]
     pub fn worker_sleep_secs(&self) -> i32 {
-        self.storage.get_config().worker_sleep_secs
+        self.config.worker_sleep_secs
     }
 
     #[getter(worker_cleanup_interval_secs)]
     pub fn worker_cleanup_interval_secs(&self) -> i32 {
-        self.storage.get_config().worker_cleanup_interval_secs
+        self.config.worker_cleanup_interval_secs
     }
 
     #[getter(worker_concurrency)]
     pub fn worker_concurrency(&self) -> i32 {
-        self.storage.get_config().worker_concurrency
+        self.config.worker_concurrency
     }
 
     /// Claim a collection tasks for timeout seconds.
     fn claim_tasks(&self) -> PyResult<Vec<ClaimedTask>> {
         let channels: Vec<&str> = self.channels.iter().map(|c| c.as_ref()).collect();
-        let timeout = Duration::from_secs(self.claim_timeout_secs as u64);
+        let timeout = Duration::from_secs(self.config.worker_claim_timeout_secs as u64);
         let claim_res =
             self.storage
-                .claim_task(channels, &self.worker_id, timeout, self.claim_count);
+                .claim_task(channels, &self.worker_id, timeout, self.config.worker_concurrency);
 
         claim_res
             .map(|v| {
@@ -148,7 +149,7 @@ impl WorkerInner {
     /// Run all the cleanup operations on the database.
     fn run_cleanup(&self) -> PyResult<()> {
         let older_than =
-            Duration::from_secs(self.storage.get_config().worker_cleanup_cutoff_secs as u64);
+            Duration::from_secs(self.config.worker_cleanup_cutoff_secs as u64);
 
         self.storage
             .run_cleanup(older_than)
@@ -159,13 +160,12 @@ impl WorkerInner {
     // Set `config.worker_cleanup_inline` to false if you are running a dedicated
     // cleanup worker.
     fn should_run_cleanup(&self, timestamp: i64) -> bool {
-        let config = self.storage.get_config();
-        if !config.worker_cleanup_inline {
+        if !self.config.worker_cleanup_inline {
             return false;
         }
         let now = Utc::now().timestamp();
         let delta = now - timestamp;
-        if delta < config.worker_cleanup_interval_secs as i64 {
+        if delta < self.config.worker_cleanup_interval_secs as i64 {
             return false;
         }
         return true;

@@ -9,17 +9,12 @@ are in python.
 
 import json
 import logging
-import time
-from functools import update_wrapper
 from typing import (
     Any,
     Callable,
-    Generic,
-    Mapping,
     MutableMapping,
     ParamSpec,
     Protocol,
-    Self,
     TypeVar,
 )
 
@@ -30,13 +25,12 @@ from .taskturbine import (
     Config,
     SpawnResult,
     TaskOptions,
-    WorkerInner,
 )
 from .context import TaskContext
 from .models import Task
 from .worker import Worker
 
-__all__ = ["Config", "TaskturbineApp", "Task", "TaskContext", "TaskSerializer"]
+__all__ = ["Config", "TaskturbineApp", "Task", "TaskContext", "TaskSerializer", "Worker"]
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -268,6 +262,7 @@ class TaskturbineApp:
             inner=self._inner.create_worker(worker_id, channels),
             tasks=self._tasks,
             context_factory=self.create_context,
+            # TODO error handler needs to be on the app
             error_handler=error_handler,
         )
         return worker
