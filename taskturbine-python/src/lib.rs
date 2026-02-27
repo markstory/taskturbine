@@ -134,9 +134,12 @@ impl WorkerInner {
     fn claim_tasks(&self) -> PyResult<Vec<ClaimedTask>> {
         let channels: Vec<&str> = self.channels.iter().map(|c| c.as_ref()).collect();
         let timeout = Duration::from_secs(self.config.worker_claim_timeout_secs as u64);
-        let claim_res =
-            self.storage
-                .claim_task(channels, &self.worker_id, timeout, self.config.worker_concurrency);
+        let claim_res = self.storage.claim_task(
+            channels,
+            &self.worker_id,
+            timeout,
+            self.config.worker_concurrency,
+        );
 
         claim_res
             .map(|v| {
@@ -148,8 +151,7 @@ impl WorkerInner {
 
     /// Run all the cleanup operations on the database.
     fn run_cleanup(&self) -> PyResult<()> {
-        let older_than =
-            Duration::from_secs(self.config.worker_cleanup_cutoff_secs as u64);
+        let older_than = Duration::from_secs(self.config.worker_cleanup_cutoff_secs as u64);
 
         self.storage
             .run_cleanup(older_than)
