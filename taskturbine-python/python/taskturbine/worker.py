@@ -54,7 +54,7 @@ def load_app(app_module: str) -> TaskturbineApp:
     return app
 
 
-def worker_execute_task(app_module: str, claimed: ClaimedTask) -> TaskResult:
+def worker_execute_task(app_module: str, claimed: dict[str, Any]) -> TaskResult:
     """
     Import the application module, and then execute the task.
 
@@ -66,6 +66,7 @@ def worker_execute_task(app_module: str, claimed: ClaimedTask) -> TaskResult:
         logger.exception(f"Could not import `{app_module}`")
         return TaskResult(outcome=TaskOutcome.Fatal, run_id=claimed.run_id, payload=str(e).encode())
 
+    claimed = ClaimedTask.from_dict(claimed)
     return execute_task(app, claimed)
 
 
@@ -78,7 +79,11 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
     """
     if not app.has_task(claimed.task_name):
         logger.warning(f"Task with {claimed.task_name} is not registered")
-        return TaskResult(outcome=TaskOutcome.Missing, run_id=claimed.run_id, payload=claimed.task_name.encode())
+        return TaskResult(
+            outcome=TaskOutcome.Missing,
+            run_id=claimed.run_id,
+            payload=claimed.task_name.encode()
+        )
 
     task_fn = app.get_task(claimed.task_name)
     context = app.create_context(claimed)
@@ -148,7 +153,7 @@ class Worker:
                         continue
 
                     for claimed in claimed_tasks:
-                        fut = pool.apply_async(worker_execute_task, (app_module, claimed, ))
+                        fut = pool.apply_async(worker_execute_task, (app_module, claimed.to_dict(), ))
                         futures.append(fut)
 
                 keep: list[AsyncResult[TaskResult]] = []

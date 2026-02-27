@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 use taskturbine_core::models::{RunId, TaskId};
 
 /// See taskturbine.pyi for docstrings
@@ -46,6 +46,27 @@ impl ClaimedTask {
         let capped = total_delay.min(self.retry_max_seconds as f32);
 
         Duration::from_secs(capped as u64)
+    }
+
+    pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        Ok(dict)
+    }
+
+    #[staticmethod]
+    pub fn from_dict<'py>(dict: Bound<'py, PyAny>) -> PyResult<Self> {
+        Ok(Self {
+            task_id: dict.get_item("task_id")?.to_string(),
+            run_id: dict.get_item("run_id")?.to_string(),
+            channel: dict.get_item("channel")?.to_string(),
+            task_name: dict.get_item("task_name")?.to_string(),
+            params: vec![],
+            retry_seconds: dict.get_item("retry_seconds")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
+            retry_factor: 0.0, // dict.get_item("retry_factor")?.into(),
+            retry_max_seconds: dict.get_item("retry_max_attempts")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
+            attempt: dict.get_item("attempt")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
+            max_attempts: dict.get_item("max_attempts")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
+        })
     }
 }
 
