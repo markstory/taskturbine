@@ -52,6 +52,14 @@ impl ClaimedTask {
         let dict = PyDict::new(py);
         dict.set_item("task_id", self.task_id.clone())?;
         dict.set_item("run_id", self.run_id.clone())?;
+        dict.set_item("channel", self.channel.clone())?;
+        dict.set_item("task_name", self.task_name.clone())?;
+        dict.set_item("params", self.params.clone())?;
+        dict.set_item("retry_seconds", self.retry_seconds.clone())?;
+        dict.set_item("retry_factor", self.retry_factor.clone())?;
+        dict.set_item("retry_max_seconds", self.retry_seconds.clone())?;
+        dict.set_item("attempt", self.attempt.clone())?;
+        dict.set_item("max_attempts", self.max_attempts.clone())?;
 
         Ok(dict)
     }
@@ -65,8 +73,8 @@ impl ClaimedTask {
             task_name: dict.get_item("task_name")?.to_string(),
             params: vec![],
             retry_seconds: dict.get_item("retry_seconds")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
-            retry_factor: 0.0, // dict.get_item("retry_factor")?.into(),
-            retry_max_seconds: dict.get_item("retry_max_attempts")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
+            retry_factor: dict.get_item("retry_factor")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
+            retry_max_seconds: dict.get_item("retry_max_seconds")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
             attempt: dict.get_item("attempt")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
             max_attempts: dict.get_item("max_attempts")?.extract().map_err(|_| PyValueError::new_err("Invalid value"))?,
         })
