@@ -170,7 +170,7 @@ impl WorkerInner {
         if delta < self.config.worker_cleanup_interval_secs as i64 {
             return false;
         }
-        return true;
+        true
     }
 
     /// Mark a run as failed.

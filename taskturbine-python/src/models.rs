@@ -55,11 +55,11 @@ impl ClaimedTask {
         dict.set_item("channel", self.channel.clone())?;
         dict.set_item("task_name", self.task_name.clone())?;
         dict.set_item("params", self.params.clone())?;
-        dict.set_item("retry_seconds", self.retry_seconds.clone())?;
-        dict.set_item("retry_factor", self.retry_factor.clone())?;
-        dict.set_item("retry_max_seconds", self.retry_max_seconds.clone())?;
-        dict.set_item("attempt", self.attempt.clone())?;
-        dict.set_item("max_attempts", self.max_attempts.clone())?;
+        dict.set_item("retry_seconds", self.retry_seconds)?;
+        dict.set_item("retry_factor", self.retry_factor)?;
+        dict.set_item("retry_max_seconds", self.retry_max_seconds)?;
+        dict.set_item("attempt", self.attempt)?;
+        dict.set_item("max_attempts", self.max_attempts)?;
 
         Ok(dict)
     }
