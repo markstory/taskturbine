@@ -5,10 +5,35 @@ import psycopg2
 import pytest
 
 from taskturbine import Config, Task, TaskContext, TaskturbineApp
+from taskturbine.taskturbine import ClaimedTask
 
 from .conftest import row_factory
 
 Connection = psycopg2._psycopg.connection
+
+def test_claimedtask_dict_methods(config: Config, channel: str) -> None:
+    app = TaskturbineApp(config)
+    app.add_channel(channel)
+
+    @app.register_task(name="claim-retry")
+    def worker_task(ctx: TaskContext) -> dict[str, Any]:
+        return {"complete": "ok"}
+
+    app.spawn_task("claim-retry", {"oid": 123}, channel=channel)
+    worker = app.create_worker("worker-1", [channel])
+    claimed = worker._inner.claim_tasks()
+
+    assert len(claimed)
+    first = claimed[0]
+    res = first.to_dict()
+    assert res, "empty dict"
+    for key, value in res.items():
+        assert getattr(first, key) == value, f"Difference in {key}"
+
+    rebuild = ClaimedTask.from_dict(res)
+    assert rebuild
+    for key, value in res.items():
+        assert getattr(rebuild, key) == value, f"Difference in {key}"
 
 
 def test_claimedtask_retry_in_defaults(config: Config, channel: str) -> None:

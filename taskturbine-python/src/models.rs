@@ -50,6 +50,9 @@ impl ClaimedTask {
 
     pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
+        dict.set_item("task_id", self.task_id.clone())?;
+        dict.set_item("run_id", self.run_id.clone())?;
+
         Ok(dict)
     }
 
