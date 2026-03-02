@@ -1,12 +1,16 @@
 from datetime import timedelta
+import functools
 import json
-from typing import Any, Callable, Self
+from typing import Any, Callable, ParamSpec, Self, TypeVar
 from taskturbine.models import SuspendError, Task
 from taskturbine.taskturbine import (
     ContextInner,
 )
 
 JsonData = dict[str, Any]
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class TaskContext:
@@ -99,7 +103,47 @@ class TaskContext:
 
         raise SuspendError(duration=duration)
 
-    def step(
+    def step(self, name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
+        """
+        Decorate a function as a durable step.
+
+        Wrap a function with a decorator that makes it a durable step of the current task. The
+        decorated function can then be called by application logic as required, giving you control
+        of the parameters and return values.
+
+        If the step's name is used more than once, a suffix will be added
+        based on the call order.
+
+        If the step has been completed the captured state will be used. If the step raises an error
+        it will be considered 'failed' and a retry will be scheduled according to the task's retry
+        configuration.
+        """
+        checkpoint_name = self._checkpoint_name(name)
+        ctx = self
+        def decorator(func: Callable[P, R]) -> Callable[P, R]:
+            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                try:
+                    checkpoint = ctx._inner.get_checkpoint(checkpoint_name)
+                    return ctx._deserialize(checkpoint.state)
+                except ValueError:
+                    # No checkpoint data.
+                    pass
+
+                # Step functions may raise, but Worker.execute_task will catch
+                step_result = func(*args, **kwargs)
+
+                result_bytes = b""
+                if step_result:
+                    result_bytes = ctx._serialize(step_result)
+                ctx._inner.set_checkpoint(checkpoint_name, result_bytes, None)
+
+                return step_result
+            functools.update_wrapper(wrapper, func)
+            return wrapper
+
+        return decorator
+
+    def step_cb(
         self, step_name: str, func: Callable[[Self], JsonData | None]
     ) -> JsonData | None:
         """

@@ -142,11 +142,12 @@ def test_context_step_return_result(config: Config, channel: str) -> None:
 
     @app.register_task(name="first-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
+        @ctx.step(name="first-step")
         def step_one(ctx: TaskContext) -> dict[str, Any]:
             assert isinstance(ctx, TaskContext)
             return {"step": "one"}
 
-        step_data = ctx.step("first-step", step_one)
+        step_data = step_one(ctx)
         assert isinstance(step_data, dict)
         assert step_data["step"] == "one"
 
@@ -172,11 +173,12 @@ def test_context_step_raise_error(config: Config, channel: str) -> None:
 
     @app.register_task(name="first-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
+        @ctx.step("first-step")
         def step_one(ctx: TaskContext) -> None:
             assert isinstance(ctx, TaskContext)
             raise KeyError("oh no")
 
-        step_data = ctx.step("first-step", step_one)
+        step_data = step_one(ctx)
         assert isinstance(step_data, dict)
         assert step_data["step"] == "one"
 
@@ -201,10 +203,98 @@ def test_context_step_duplicate_runs(config: Config, channel: str) -> None:
 
     @app.register_task(name="context-step-duplicate-task")
     def first_task(ctx: TaskContext) -> dict[str, Any]:
+        @ctx.step("first-step")
         def step_one(ctx: TaskContext) -> dict[str, Any]:
             return {"step": "first"}
 
-        step_data = ctx.step("first-step", step_one)
+        step_data = step_one(ctx)
+        assert isinstance(step_data, dict)
+        assert step_data["step"] == "first"
+
+        return step_data
+
+    app.spawn_task("context-step-duplicate-task", {}, channel=channel)
+    claims = app.create_worker("worker-1", [channel]).claim_tasks()
+    context = app.create_context(claims[0])
+
+    result = first_task(context)
+    assert result == {"step": "first"}
+
+    result = first_task(context)
+    assert result == {"step": "first"}
+
+    checkpoint = context._inner.get_checkpoint("first-step")
+    assert checkpoint
+
+def test_context_step_cb_return_result(config: Config, channel: str) -> None:
+    app = TaskturbineApp(config)
+    app.add_channel(channel)
+
+    @app.register_task(name="first-task")
+    def first_task(ctx: TaskContext) -> dict[str, Any]:
+        def step_one(ctx: TaskContext) -> dict[str, Any]:
+            assert isinstance(ctx, TaskContext)
+            return {"step": "one"}
+
+        step_data = ctx.step_cb("first-step", step_one)
+        assert isinstance(step_data, dict)
+        assert step_data["step"] == "one"
+
+        return step_data
+
+    app.spawn_task("first-task", {}, channel=channel)
+    claims = app.create_worker("worker-1", [channel]).claim_tasks()
+    context = app.create_context(claims[0])
+
+    task_result = first_task(context)
+    assert task_result
+    assert task_result["step"] == "one"
+
+    checkpoint = context._inner.get_checkpoint("first-step")
+    assert checkpoint
+    assert checkpoint.step_name == "first-step"
+    assert checkpoint.state == b'{"step": "one"}'
+
+
+def test_context_step_cb_raise_error(config: Config, channel: str) -> None:
+    app = TaskturbineApp(config)
+    app.add_channel(channel)
+
+    @app.register_task(name="first-task")
+    def first_task(ctx: TaskContext) -> dict[str, Any]:
+        def step_one(ctx: TaskContext) -> None:
+            assert isinstance(ctx, TaskContext)
+            raise KeyError("oh no")
+
+        step_data = ctx.step_cb("first-step", step_one)
+        assert isinstance(step_data, dict)
+        assert step_data["step"] == "one"
+
+        return step_data
+
+    app.spawn_task("first-task", {}, channel=channel)
+    claims = app.create_worker("worker-1", [channel]).claim_tasks()
+    context = app.create_context(claims[0])
+
+    with pytest.raises(KeyError) as err:
+        first_task(context)
+    assert err.value
+    assert "oh no" in str(err.value)
+
+    with pytest.raises(ValueError):
+        context._inner.get_checkpoint("first-step")
+
+
+def test_context_step_cb_duplicate_runs(config: Config, channel: str) -> None:
+    app = TaskturbineApp(config)
+    app.add_channel(channel)
+
+    @app.register_task(name="context-step-duplicate-task")
+    def first_task(ctx: TaskContext) -> dict[str, Any]:
+        def step_one(ctx: TaskContext) -> dict[str, Any]:
+            return {"step": "first"}
+
+        step_data = ctx.step_cb("first-step", step_one)
         assert isinstance(step_data, dict)
         assert step_data["step"] == "first"
 
