@@ -20,6 +20,7 @@ app = TaskturbineApp(config)
 
 type Payload = dict[str, Any]
 
+
 @app.register_task("hello-world")
 def hello_world(ctx: TaskContext) -> None:
     print(f"Hello world! {ctx.params_bytes.decode()}")
@@ -31,7 +32,6 @@ def hello_world(ctx: TaskContext) -> None:
         # a step that does some compute/query and returns a dict value.
         params = ctx.params
         return {"name": params["name"], "id": uuid.uuid4().hex, "started": time.time()}
-
 
     # a step that fails when the context counter is at the wrong value
     #   on the second retry enough time has elapsed that it continues and returns a value.
@@ -50,7 +50,6 @@ def hello_world(ctx: TaskContext) -> None:
         user["event_id"] = event["id"]
         return user
 
-
     # Once we have defined our steps, we wire them together with control flow.
     user = compute_user_data(ctx)
     check_duration(ctx, user)
@@ -64,6 +63,7 @@ def hello_world(ctx: TaskContext) -> None:
 def main() -> None:
     worker = app.create_worker("worker-1", ["default"])
     worker.run()
+
 
 if __name__ == "__main__":
     main()

@@ -50,7 +50,9 @@ def load_app(app_module: str) -> TaskturbineApp:
     if not hasattr(module, var_name):
         raise ValueError(f"Could not access `{var_name}` in {module_name}")
     app = getattr(module, var_name)
-    assert isinstance(app, TaskturbineApp), f"`{var_name}` must be a TaskturbineApp instance"
+    assert isinstance(app, TaskturbineApp), (
+        f"`{var_name}` must be a TaskturbineApp instance"
+    )
     return app
 
 
@@ -64,7 +66,9 @@ def worker_execute_task(app_module: str, claimed: dict[str, Any]) -> TaskResult:
         app = load_app(app_module)
     except Exception as e:
         logger.exception(f"Could not import `{app_module}`")
-        return TaskResult(outcome=TaskOutcome.Fatal, run_id=claimed.run_id, payload=str(e).encode())
+        return TaskResult(
+            outcome=TaskOutcome.Fatal, run_id=claimed.run_id, payload=str(e).encode()
+        )
 
     claimed = ClaimedTask.from_dict(claimed)
     return execute_task(app, claimed)
@@ -82,7 +86,7 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
         return TaskResult(
             outcome=TaskOutcome.Missing,
             run_id=claimed.run_id,
-            payload=claimed.task_name.encode()
+            payload=claimed.task_name.encode(),
         )
 
     task_fn = app.get_task(claimed.task_name)
@@ -93,14 +97,22 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
         res_bytes = b""
         if res is not None:
             res_bytes = context._serialize(res)
-        return TaskResult(outcome=TaskOutcome.Complete, run_id=claimed.run_id, payload=res_bytes)
+        return TaskResult(
+            outcome=TaskOutcome.Complete, run_id=claimed.run_id, payload=res_bytes
+        )
     except SuspendError as suspend:
-        return TaskResult(outcome=TaskOutcome.Suspend, duration=suspend.duration, run_id=claimed.run_id)
+        return TaskResult(
+            outcome=TaskOutcome.Suspend,
+            duration=suspend.duration,
+            run_id=claimed.run_id,
+        )
     except Exception as fail:
         logger.exception("Task execution failed")
         # TODO Once we have the error handler on app, we can use it to call the error handler.
         retry_at = claimed.next_retry_in()
-        return TaskResult(outcome=TaskOutcome.Failure, duration=retry_at, run_id=claimed.run_id)
+        return TaskResult(
+            outcome=TaskOutcome.Failure, duration=retry_at, run_id=claimed.run_id
+        )
 
 
 class Worker:
@@ -136,7 +148,9 @@ class Worker:
         # TODO fix hardcoded maxtasksperchild value
         # start process pool to receive work.
         logger.debug("Starting worker processes")
-        with Pool(processes=self._inner.worker_concurrency, maxtasksperchild=1000) as pool:
+        with Pool(
+            processes=self._inner.worker_concurrency, maxtasksperchild=1000
+        ) as pool:
             futures: list[AsyncResult[TaskResult]] = []
             inflight_count = self._inner.worker_concurrency * 2
 
@@ -154,7 +168,13 @@ class Worker:
                         continue
 
                     for claimed in claimed_tasks:
-                        fut = pool.apply_async(worker_execute_task, (app_module, claimed.to_dict(), ))
+                        fut = pool.apply_async(
+                            worker_execute_task,
+                            (
+                                app_module,
+                                claimed.to_dict(),
+                            ),
+                        )
                         futures.append(fut)
 
                 keep: list[AsyncResult[TaskResult]] = []

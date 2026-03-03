@@ -30,7 +30,14 @@ from .context import TaskContext
 from .models import Task
 from .worker import Worker
 
-__all__ = ["Config", "TaskturbineApp", "Task", "TaskContext", "TaskSerializer", "Worker"]
+__all__ = [
+    "Config",
+    "TaskturbineApp",
+    "Task",
+    "TaskContext",
+    "TaskSerializer",
+    "Worker",
+]
 
 P = ParamSpec("P")
 R = TypeVar("R")

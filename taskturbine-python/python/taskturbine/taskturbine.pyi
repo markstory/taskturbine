@@ -242,7 +242,6 @@ class TaskOptions:
     ) -> Self: ...
     """Create a clone of TaskOptions with updated values"""
 
-
 class WorkerInner:
     """
     The python -> rust binding boundary for a Worker.

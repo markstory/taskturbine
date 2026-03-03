@@ -11,6 +11,7 @@ from .conftest import row_factory
 
 Connection = psycopg2._psycopg.connection
 
+
 def test_claimedtask_dict_methods(config: Config, channel: str) -> None:
     app = TaskturbineApp(config)
     app.add_channel(channel)
@@ -19,7 +20,13 @@ def test_claimedtask_dict_methods(config: Config, channel: str) -> None:
     def worker_task(ctx: TaskContext) -> dict[str, Any]:
         return {"complete": "ok"}
 
-    app.spawn_task("claim-retry", {"oid": 123}, channel=channel, retry_seconds=15, retry_max_seconds=23)
+    app.spawn_task(
+        "claim-retry",
+        {"oid": 123},
+        channel=channel,
+        retry_seconds=15,
+        retry_max_seconds=23,
+    )
     worker = app.create_worker("worker-1", [channel])
     claimed = worker._inner.claim_tasks()
 

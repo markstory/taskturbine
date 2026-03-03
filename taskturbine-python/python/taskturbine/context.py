@@ -2,7 +2,7 @@ from datetime import timedelta
 import functools
 import json
 from typing import Any, Callable, ParamSpec, Self, TypeVar
-from taskturbine.models import SuspendError, Task
+from taskturbine.models import SuspendError
 from taskturbine.taskturbine import (
     ContextInner,
 )
@@ -119,6 +119,7 @@ class TaskContext:
         configuration.
         """
         checkpoint_name = self._checkpoint_name(name)
+
         def decorator(func: Callable[P, R]) -> Callable[P, R]:
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 try:
@@ -136,6 +137,7 @@ class TaskContext:
                     result_bytes = self._serialize(step_result)
                 self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
                 return step_result
+
             functools.update_wrapper(wrapper, func)
             return wrapper
 

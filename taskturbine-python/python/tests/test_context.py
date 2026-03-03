@@ -226,6 +226,7 @@ def test_context_step_duplicate_runs(config: Config, channel: str) -> None:
     checkpoint = context._inner.get_checkpoint("first-step")
     assert checkpoint
 
+
 def test_context_step_cb_return_result(config: Config, channel: str) -> None:
     app = TaskturbineApp(config)
     app.add_channel(channel)
