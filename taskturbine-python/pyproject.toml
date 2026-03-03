@@ -30,6 +30,6 @@ testpaths = ["python/tests"]
 
 [tool.mypy]
 mypy_path = "python"
-files = ["python"]
+files = ["."]
 show_error_codes = true
 strict = true
