@@ -103,7 +103,9 @@ class TaskContext:
 
         raise SuspendError(duration=duration)
 
-    def step(self, name: str) -> Callable[[Callable[P, OptionalJsonData]], Callable[P, OptionalJsonData]]:
+    def step(
+        self, name: str
+    ) -> Callable[[Callable[P, OptionalJsonData]], Callable[P, OptionalJsonData]]:
         """
         Decorate a function as a durable step.
 
@@ -120,7 +122,9 @@ class TaskContext:
         """
         checkpoint_name = self._checkpoint_name(name)
 
-        def decorator(func: Callable[P, OptionalJsonData]) -> Callable[P, OptionalJsonData]:
+        def decorator(
+            func: Callable[P, OptionalJsonData],
+        ) -> Callable[P, OptionalJsonData]:
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> OptionalJsonData:
                 try:
                     checkpoint = self._inner.get_checkpoint(checkpoint_name)

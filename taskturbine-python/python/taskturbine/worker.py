@@ -67,7 +67,9 @@ def worker_execute_task(app_module: str, claimed: dict[str, Any]) -> TaskResult:
     except Exception as e:
         logger.exception(f"Could not import `{app_module}`")
         return TaskResult(
-            outcome=TaskOutcome.Fatal, run_id=claimed.get("run_id", "unknown"), payload=str(e).encode()
+            outcome=TaskOutcome.Fatal,
+            run_id=claimed.get("run_id", "unknown"),
+            payload=str(e).encode(),
         )
 
     claimed_task = ClaimedTask.from_dict(claimed)
