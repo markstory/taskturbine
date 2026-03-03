@@ -119,24 +119,22 @@ class TaskContext:
         configuration.
         """
         checkpoint_name = self._checkpoint_name(name)
-        ctx = self
         def decorator(func: Callable[P, R]) -> Callable[P, R]:
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 try:
-                    checkpoint = ctx._inner.get_checkpoint(checkpoint_name)
-                    return ctx._deserialize(checkpoint.state)
+                    checkpoint = self._inner.get_checkpoint(checkpoint_name)
+                    return self._deserialize(checkpoint.state)
                 except ValueError:
                     # No checkpoint data.
                     pass
 
-                # Step functions may raise, but Worker.execute_task will catch
+                # Step functions may raise, but worker.execute_task will catch
                 step_result = func(*args, **kwargs)
 
                 result_bytes = b""
                 if step_result:
-                    result_bytes = ctx._serialize(step_result)
-                ctx._inner.set_checkpoint(checkpoint_name, result_bytes, None)
-
+                    result_bytes = self._serialize(step_result)
+                self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
                 return step_result
             functools.update_wrapper(wrapper, func)
             return wrapper
@@ -164,7 +162,7 @@ class TaskContext:
             # No checkpoint data.
             pass
 
-        # Step functions may raise, but Worker.execute_task will catch
+        # Step functions may raise, but worker.execute_task will catch
         step_result = func(self)
 
         result_bytes = b""
