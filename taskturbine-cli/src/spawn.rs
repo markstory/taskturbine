@@ -101,7 +101,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
     let mut results = vec![];
     let repeat = args.repeat;
     let options: TaskOptions = args.into();
-    for _ in 1..repeat.unwrap_or(1) {
+    for _ in 0..repeat.unwrap_or(1) {
         let res = storage
             .spawn_task(
                 &channel_name,
@@ -120,7 +120,10 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
                 let task_id = spawned.task_id;
                 log::info!("Spawned task_id={task_id} run_id={run_id}");
             }
-            Err(err) => return Err(CliError::Message(format!("Failed to spawn task {err:?}"))),
+            Err(err) => {
+                log::error!("Failed to spawn task {err:?}");
+                return Err(CliError::Message("Failed to spawn task".into()));
+            }
         }
     }
 
