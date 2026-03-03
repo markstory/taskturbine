@@ -29,7 +29,7 @@ def hello_world(ctx: TaskContext) -> None:
     def compute_user_data(ctx: TaskContext) -> Payload:
         logging.info("starting compute_user_data")
         # a step that does some compute/query and returns a dict value.
-        params = ctx.params()
+        params = ctx.params
         return {"name": params["name"], "id": uuid.uuid4().hex, "started": time.time()}
 
 
@@ -49,8 +49,8 @@ def hello_world(ctx: TaskContext) -> None:
         user["complete"] = True
         user["event_id"] = event["id"]
         return user
-        
-        
+
+
     # Once we have defined our steps, we wire them together with control flow.
     user = compute_user_data(ctx)
     check_duration(ctx, user)

@@ -97,6 +97,7 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
     except SuspendError as suspend:
         return TaskResult(outcome=TaskOutcome.Suspend, duration=suspend.duration, run_id=claimed.run_id)
     except Exception as fail:
+        logger.exception("Task execution failed")
         # TODO Once we have the error handler on app, we can use it to call the error handler.
         retry_at = claimed.next_retry_in()
         return TaskResult(outcome=TaskOutcome.Failure, duration=retry_at, run_id=claimed.run_id)
