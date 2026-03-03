@@ -9,10 +9,13 @@ from taskturbine.context import TaskContext
 
 logging.basicConfig(level=logging.DEBUG)
 
+db_url = os.getenv("TASKTURBINE_DATABASE_URL")
+assert db_url, "TASKTURBINE_DATABASE_URL is required"
+
 # Setup application. This would likely be in a module imported after the application
 # is bootstrapped.
 config = Config(
-    database_url=os.getenv("TASKTURBINE_DATABASE_URL"),
+    database_url=db_url,
     app_module="testapp:app",
     worker_concurrency=4,
 )
@@ -52,6 +55,7 @@ def hello_world(ctx: TaskContext) -> None:
 
     # Once we have defined our steps, we wire them together with control flow.
     user = compute_user_data(ctx)
+    assert user, "User must exist"
     check_duration(ctx, user)
     # wait until we hear from an external workflow
     event = ctx.await_event(f"verified-{user['name']}")

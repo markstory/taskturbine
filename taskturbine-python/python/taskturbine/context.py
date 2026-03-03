@@ -1,16 +1,16 @@
 from datetime import timedelta
 import functools
 import json
-from typing import Any, Callable, ParamSpec, Self, TypeVar
+from typing import Any, Callable, ParamSpec, Self
 from taskturbine.models import SuspendError
 from taskturbine.taskturbine import (
     ContextInner,
 )
 
 JsonData = dict[str, Any]
+OptionalJsonData = JsonData | None
 
 P = ParamSpec("P")
-R = TypeVar("R")
 
 
 class TaskContext:
@@ -103,7 +103,7 @@ class TaskContext:
 
         raise SuspendError(duration=duration)
 
-    def step(self, name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    def step(self, name: str) -> Callable[[Callable[P, OptionalJsonData]], Callable[P, OptionalJsonData]]:
         """
         Decorate a function as a durable step.
 
@@ -120,8 +120,8 @@ class TaskContext:
         """
         checkpoint_name = self._checkpoint_name(name)
 
-        def decorator(func: Callable[P, R]) -> Callable[P, R]:
-            def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        def decorator(func: Callable[P, OptionalJsonData]) -> Callable[P, OptionalJsonData]:
+            def wrapper(*args: P.args, **kwargs: P.kwargs) -> OptionalJsonData:
                 try:
                     checkpoint = self._inner.get_checkpoint(checkpoint_name)
                     return self._deserialize(checkpoint.state)
@@ -133,7 +133,7 @@ class TaskContext:
                 step_result = func(*args, **kwargs)
 
                 result_bytes = b""
-                if step_result:
+                if step_result is not None:
                     result_bytes = self._serialize(step_result)
                 self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
                 return step_result

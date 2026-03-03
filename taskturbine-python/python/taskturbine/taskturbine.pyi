@@ -1,5 +1,7 @@
 from datetime import timedelta
-from typing import Any
+from typing import Any, Self
+
+from taskturbine.models import Task
 
 class AwaitResult:
     """The metadata for the result of await_event"""
@@ -322,7 +324,7 @@ class AppInner:
     def add_channel(self, value: str) -> None: ...
     """Add a channel to the list of channels this application can publish and consume from."""
 
-    def register_task(self, task: Task) -> None: ...
+    def register_task(self, task: Task[Any, Any]) -> None: ...
     def has_task(self, name: str) -> bool: ...
     def spawn_task(
         self, task_name: str, params: bytes, options: TaskOptions
