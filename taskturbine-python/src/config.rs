@@ -42,6 +42,9 @@ pub struct Config {
 
     #[pyo3(get, set)]
     pub worker_claim_timeout_secs: i32,
+
+    #[pyo3(get, set)]
+    pub worker_max_tasks_per_child: i32,
 }
 
 /// Convert from the python module to the core struct.
@@ -81,6 +84,7 @@ impl Config {
         worker_cleanup_limit=1000,
         worker_concurrency=3,
         worker_sleep_secs=2,
+        worker_max_tasks_per_child=1000,
         await_event_default_timeout_secs=120,
     ))]
     fn __new__(
@@ -96,6 +100,7 @@ impl Config {
         worker_cleanup_limit: i32,
         worker_concurrency: i32,
         worker_sleep_secs: i32,
+        worker_max_tasks_per_child: i32,
         await_event_default_timeout_secs: i32,
     ) -> Self {
         Config {
@@ -111,6 +116,7 @@ impl Config {
             worker_cleanup_inline,
             worker_cleanup_cutoff_secs,
             worker_claim_timeout_secs,
+            worker_max_tasks_per_child,
             await_event_default_timeout_secs,
         }
     }

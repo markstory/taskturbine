@@ -176,6 +176,9 @@ class Config:
     worker_sleep_secs: int
     """The number of seconds a worker should sleep when no tasks are available."""
 
+    worker_max_tasks_per_child: int
+    """The number of tasks that a child should execute before shutting down."""
+
     await_event_default_timeout_secs: int
     """The default number of seconds that events are waited on for."""
 
