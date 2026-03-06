@@ -2,13 +2,10 @@ from datetime import timedelta
 import functools
 import json
 from typing import Any, Callable, ParamSpec, Self
-from taskturbine.models import SuspendError
+from taskturbine.models import JsonData, OptionalJsonData, SuspendError
 from taskturbine.taskturbine import (
     ContextInner,
 )
-
-JsonData = dict[str, Any]
-OptionalJsonData = JsonData | None
 
 P = ParamSpec("P")
 

@@ -148,10 +148,13 @@ class TaskturbineApp:
         Tasks are expected to implement a signature of:
 
         ```
-        def func_name(context: TaskContext) -> str | None
+        def func_name(context: TaskContext) -> models.JsonData | None
         ```
-        """
 
+        The `context` parameter enables you to use :py:class:`TaskContext`
+        to define steps and then call your steps within your flow control
+        logic.
+        """
         def wrapped(func: Callable[P, R]) -> Task[P, R]:
             task = Task(name=name, func=func, options=options)
             self._tasks[name] = task

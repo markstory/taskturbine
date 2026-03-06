@@ -1,6 +1,7 @@
 from functools import update_wrapper
 from datetime import timedelta
 from typing import (
+    Any,
     Callable,
     Generic,
     ParamSpec,
@@ -10,6 +11,9 @@ from .taskturbine import TaskOptions
 
 P = ParamSpec("P")
 R = TypeVar("R")
+
+JsonData = dict[str, Any]
+OptionalJsonData = JsonData | None
 
 
 class SuspendError(Exception):

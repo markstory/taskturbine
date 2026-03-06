@@ -36,30 +36,35 @@ app = TaskturbineApp(config=config)
 # Define additional channels that tasks can be spawned on
 app.add_channel("reports")
 
-# Register a task and define steps.
+# Register a task that can be spawned
 @app.register_task("process-signup")
 def process_signup(ctx: TaskContext) -> None:
+
+    # Tasks are composed of steps that run at least once.
+    @ctx.step(name="create-user")
     def create_user(ctx: TaskContext) -> str:
         # insert user
         user_data = {...}
         return json.dumps(user_data)
 
-    user_data = ctx.step("create-user", create_user)
-
+    @ctx.step(name="send-registration-code")
     def send_registration_code(ctx: TaskContext) -> str:
         # Send registration code
         return ""
 
-    regstration_data = ctx.step("send-registration-code", send_registration_code)
-
-    # Wait for an external event.
-    payload = ctx.await_event(registration_data['event_name'], timeout=timedelta(minutes=10))
-    
+    @ctx.step(name="complete_registration")
     def complete_registration(ctx: TaskContext) -> str:
         # Provision the rest of the account
         return ""
 
-    result = ctx.step("complete_registration", complete_registration)
+    # Run the steps
+    user_data = create_user(ctx)
+    regstration_data = send_registration_code(ctx)
+
+    # Wait for an external event.
+    payload = ctx.await_event(registration_data['event_name'], timeout=timedelta(minutes=10))
+
+    result = complete_registration(ctx)
 
     return result
 
