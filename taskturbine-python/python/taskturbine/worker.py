@@ -112,6 +112,8 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
         logger.exception("Task execution failed")
         # TODO Once we have the error handler on app, we can use it to call the error handler.
         retry_at = claimed.next_retry_in()
+        if app.error_handler:
+            app.error_handler(fail)
         return TaskResult(
             outcome=TaskOutcome.Failure, duration=retry_at, run_id=claimed.run_id
         )

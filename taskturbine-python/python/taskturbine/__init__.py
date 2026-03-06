@@ -86,7 +86,10 @@ class TaskturbineApp:
     """
 
     def __init__(
-        self, config: Config, serializer: TaskSerializer | None = None
+        self,
+        config: Config,
+        serializer: TaskSerializer | None = None,
+        error_handler: Callable[[Exception], None] | None = None,
     ) -> None:
         self._inner = AppInner(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
@@ -97,6 +100,7 @@ class TaskturbineApp:
             retry_max_seconds=300,
             cancellation_max_age=86400,
         )
+        self.error_handler = error_handler
         if serializer is None:
             serializer = JsonSerializer()
         self.serializer = serializer
@@ -262,8 +266,6 @@ class TaskturbineApp:
         self,
         worker_id: str,
         channels: list[str],
-        *,
-        error_handler: Callable[[Exception], None] | None = None,
     ) -> Worker:
         """
         Create a Worker that is connected to Rust storage API.
@@ -272,7 +274,6 @@ class TaskturbineApp:
             inner=self._inner.create_worker(worker_id, channels),
             tasks=self._tasks,
             context_factory=self.create_context,
-            # TODO error handler needs to be on the app
-            error_handler=error_handler,
+            error_handler=self.error_handler,
         )
         return worker

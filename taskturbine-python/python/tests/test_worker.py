@@ -112,7 +112,11 @@ def test_worker_execute_batch_simple_failure(
 
 
 def test_worker_execute_batch_error_handler(config: Config, channel: str) -> None:
-    app = TaskturbineApp(config)
+    def error_handler(err: Exception) -> None:
+        assert isinstance(err, Exception), "should be an exception"
+        assert str(err) == "oh no", "Should have the error from the step"
+
+    app = TaskturbineApp(config, error_handler=error_handler)
     app.add_channel(channel)
 
     @app.register_task(name="worker-task-fail")
@@ -121,11 +125,7 @@ def test_worker_execute_batch_error_handler(config: Config, channel: str) -> Non
 
     app.spawn_task("worker-task-fail", {"oid": 123}, channel=channel)
 
-    def error_handler(err: Exception) -> None:
-        assert isinstance(err, Exception), "should be an exception"
-        assert str(err) == "oh no", "Should have the error from the step"
-
-    worker = app.create_worker("worker-1", [channel], error_handler=error_handler)
+    worker = app.create_worker("worker-1", [channel])
     worker.execute_batch()
 
 
