@@ -32,7 +32,7 @@ def channel(request: pytest.FixtureRequest) -> str:
 
 @pytest.fixture
 def config(database_url: str) -> Config:
-    return Config(app_module="", database_url=database_url)
+    return Config(app_module="taskturbine.demo:app", database_url=database_url)
 
 
 @pytest.fixture

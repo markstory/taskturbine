@@ -138,13 +138,17 @@ class Worker:
         self._context_factory = context_factory
         self._error_handler = error_handler
 
-    def run(self) -> None:
+    def run(self, stop_on_idle: bool = False) -> None:
         """
         Run the worker run loop.
 
         Intended to run in a while loop that the application
         starts. Will periodically sleep based on Config.
+
+        :param stop_on_idle: Set to true to have run() break its loop when
+          there are no more tasks fetched.
         """
+        idle_reached = False
         last_cleanup = time.time() - 1
         app_module = self._inner.app_module
 
@@ -158,6 +162,7 @@ class Worker:
             inflight_count = self._inner.worker_concurrency * 2
 
             while True:
+                count = 0
                 # We want to limit the inflght amount of work to avoid over-aquiring work
                 # which impacts throughput.
                 if len(futures) < inflight_count:
@@ -165,11 +170,6 @@ class Worker:
                     claimed_tasks = self._inner.claim_tasks()
                     count = len(claimed_tasks)
                     logger.debug(f"Claimed {count} tasks")
-                    if count == 0:
-                        logger.info("no tasks claimed. Sleeping.")
-                        time.sleep(self._inner.worker_sleep_secs)
-                        continue
-
                     for claimed in claimed_tasks:
                         fut = pool.apply_async(
                             worker_execute_task,
@@ -187,6 +187,15 @@ class Worker:
                     else:
                         keep.append(fut)
                 futures = keep
+
+                if len(futures) == 0 and idle_reached:
+                    logger.info("all work complete, and idle reached")
+                    break
+
+                if count == 0:
+                    idle_reached = True
+                    logger.info("no tasks claimed. Sleeping.")
+                    time.sleep(self._inner.worker_sleep_secs)
 
                 if self._inner.should_run_cleanup(int(last_cleanup)):
                     self._inner.run_cleanup()
