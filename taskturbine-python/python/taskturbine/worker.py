@@ -110,7 +110,6 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
         )
     except Exception as fail:
         logger.exception("Task execution failed")
-        # TODO Once we have the error handler on app, we can use it to call the error handler.
         retry_at = claimed.next_retry_in()
         if app.error_handler:
             app.error_handler(fail)
@@ -149,11 +148,11 @@ class Worker:
         last_cleanup = time.time() - 1
         app_module = self._inner.app_module
 
-        # TODO fix hardcoded maxtasksperchild value
         # start process pool to receive work.
         logger.debug("Starting worker processes")
         with Pool(
-            processes=self._inner.worker_concurrency, maxtasksperchild=1000
+            processes=self._inner.worker_concurrency,
+            maxtasksperchild=self._inner.worker_max_tasks_per_child,
         ) as pool:
             futures: list[AsyncResult[TaskResult]] = []
             inflight_count = self._inner.worker_concurrency * 2

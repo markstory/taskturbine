@@ -264,6 +264,9 @@ class WorkerInner:
     worker_cleanup_interval_secs: int
     """Number of seconds between cleanup operations."""
 
+    worker_max_tasks_per_child: int
+    """The number of tasks that a child should execute before shutting down."""
+
     def claim_tasks(self) -> list[ClaimedTask]: ...
     """Claim a list of tasks based on configuration"""
 
