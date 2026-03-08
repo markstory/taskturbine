@@ -188,6 +188,7 @@ class Worker:
                         keep.append(fut)
                 futures = keep
 
+                # Do this first to skip a sleep when all work is done.
                 if len(futures) == 0 and idle_reached:
                     logger.info("all work complete, and idle reached")
                     break
