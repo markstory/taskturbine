@@ -10,7 +10,7 @@ from taskturbine import TaskturbineApp, Config, TaskContext
 db_url = os.getenv("TASKTURBINE_DATABASE_URL")
 assert db_url, "Required environment variable TASKTURBINE_DATABASE_URL undefined"
 
-config = Config(app_module="taskturbine.demo:app", database_url=db_url)
+config = Config(app_module="demo:app", database_url=db_url)
 app = TaskturbineApp(config)
 
 

@@ -5,7 +5,7 @@ import psycopg2
 import pytest
 
 from taskturbine import Config, Task, TaskContext, TaskturbineApp
-from taskturbine.demo import app as demo_app
+from demo import app as demo_app
 from taskturbine.taskturbine import ClaimedTask
 
 from .conftest import row_factory
