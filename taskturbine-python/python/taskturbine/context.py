@@ -111,11 +111,11 @@ class TaskContext:
         of the parameters and return values.
 
         If the step's name is used more than once, a suffix will be added
-        based on the call order.
+        based on the order steps are defined.
 
-        If the step has been completed the captured state will be used. If the step raises an error
-        it will be considered 'failed' and a retry will be scheduled according to the task's retry
-        configuration.
+        If the step has been completed the captured state from the completed run
+        will be used. If the step raises an error the run is considered 'failed' 
+        and a retry will be scheduled according to the task's retry configuration.
         """
         checkpoint_name = self._checkpoint_name(name)
 
@@ -123,32 +123,22 @@ class TaskContext:
             func: Callable[P, OptionalJsonData],
         ) -> Callable[P, OptionalJsonData]:
             def wrapper(*args: P.args, **kwargs: P.kwargs) -> OptionalJsonData:
-                try:
-                    checkpoint = self._inner.get_checkpoint(checkpoint_name)
-                    return self._deserialize(checkpoint.state)
-                except ValueError:
-                    # No checkpoint data.
-                    pass
-
-                # Step functions may raise, but worker.execute_task will catch
-                step_result = func(*args, **kwargs)
-
-                result_bytes = b""
-                if step_result is not None:
-                    result_bytes = self._serialize(step_result)
-                self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
-                return step_result
+                return self._execute_step(checkpoint_name, func, *args, **kwargs)
 
             functools.update_wrapper(wrapper, func)
             return wrapper
 
         return decorator
 
-    def step_cb(
-        self, step_name: str, func: Callable[[Self], JsonData | None]
+    def step_run(
+        self,
+        step_name: str,
+        func: Callable[P, OptionalJsonData],
+        *args: P.args,
+        **kwargs: P.kwargs
     ) -> JsonData | None:
         """
-        Run a durable step
+        Run a function as a durable step
 
         Create a step with the given name. If a name is used multiple times, a suffix
         will be added based on call order.
@@ -158,6 +148,18 @@ class TaskContext:
         configuration.
         """
         checkpoint_name = self._checkpoint_name(step_name)
+        return self._execute_step(checkpoint_name, func, *args, **kwargs)
+
+    def _execute_step(
+        self,
+        checkpoint_name: str, 
+        func: Callable[P, OptionalJsonData],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> JsonData | None:
+        """
+        Execute a step function.
+        """
         try:
             checkpoint = self._inner.get_checkpoint(checkpoint_name)
             return self._deserialize(checkpoint.state)
@@ -166,7 +168,7 @@ class TaskContext:
             pass
 
         # Step functions may raise, but worker.execute_task will catch
-        step_result = func(self)
+        step_result = func(*args, **kwargs)
 
         result_bytes = b""
         if step_result:
