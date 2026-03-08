@@ -212,6 +212,7 @@ def test_worker_cleanup(
 def test_worker_run_simple_success(
     config: Config, db_connection: Connection, channel: str
 ) -> None:
+    # The demo_app is a bit of a wart.
     demo_app.add_channel(channel)
 
     first = demo_app.spawn_task("worker-task", {"oid": 123}, channel=channel)

@@ -194,8 +194,9 @@ class Worker:
 
                 if count == 0:
                     idle_reached = True
-                    logger.info("no tasks claimed. Sleeping.")
-                    time.sleep(self._inner.worker_sleep_secs)
+                    if len(futures) == 0:
+                        logger.info("no tasks claimed, and no futures. Sleeping.")
+                        time.sleep(self._inner.worker_sleep_secs)
 
                 if self._inner.should_run_cleanup(int(last_cleanup)):
                     self._inner.run_cleanup()
