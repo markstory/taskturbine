@@ -5,12 +5,13 @@ import os
 from typing import Any
 from taskturbine import TaskturbineApp, Config, TaskContext
 
-# TODO this is all brittle and not very extensible.
+# TODO Find a more elegant solution to this.
+# Having a demo application in a top level module isn't ideal.
 # Perhaps we can have an importable module in the test suite?
 db_url = os.getenv("TASKTURBINE_DATABASE_URL")
 assert db_url, "Required environment variable TASKTURBINE_DATABASE_URL undefined"
 
-config = Config(app_module="demo:app", database_url=db_url)
+config = Config(app_module="tests.demo:app", database_url=db_url)
 app = TaskturbineApp(config)
 
 
