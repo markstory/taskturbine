@@ -87,6 +87,7 @@
 //! ```rust
 //! use taskturbine_core::context::{FlowControl, StepData, TaskContext};
 //!
+//! #[derive(Debug)]
 //! struct Error(String);
 //!
 //! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 
 use crate::{
     app::{Channel, TaskturbineApp},
@@ -152,6 +152,7 @@ impl TaskContext {
     where
         Fut: Future<Output = Result<StepData, E>>,
         F: FnOnce(TaskContext) -> Fut,
+        E: std::fmt::Debug,
     {
         // See if the step has a completed checkpoint
         let checkpoint_name = self.checkpoint_name(name);
@@ -169,6 +170,9 @@ impl TaskContext {
         if let Some(checkpoint) = checkpoint_opt {
             return Ok(checkpoint.state);
         }
+
+        // TODO figure out if this can work like the python client where userland code
+        // calls steps. Perhaps attr macros?
 
         // Create a disposable context to avoid &mut reference and lifetime hell.
         let context = Self::build(self.task.clone(), self.app.clone());
@@ -195,8 +199,7 @@ impl TaskContext {
 
                 Ok(state as StepData)
             }
-            // TODO should propagate errors here.
-            Err(_) => Err(FlowControl::Failure("Task execution failed".to_string())),
+            Err(err) => Err(FlowControl::Failure(format!("Task execution failed: {err:?}"))),
         }
     }
 
@@ -207,6 +210,7 @@ impl TaskContext {
     pub async fn step<F, E>(&mut self, name: &str, step_fn: F) -> Result<StepData, FlowControl>
     where
         F: FnOnce(TaskContext) -> Result<StepData, E>,
+        E: std::fmt::Debug,
     {
         let async_step_fn = async |ctx: TaskContext| step_fn(ctx);
 
@@ -352,6 +356,7 @@ mod tests {
     };
     use sqlx::Row;
 
+    #[derive(Debug)]
     enum TestError {
         GenericError,
     }
