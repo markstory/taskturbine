@@ -149,8 +149,22 @@ class Worker:
           there are no more tasks fetched.
         """
         idle_reached = False
+        last_fetch = None
         last_cleanup = time.time() - 1
         app_module = self._inner.app_module
+
+        """
+        TODO split up into some threads.
+
+        fetch thread --> fetch queue
+        fetch queue -> submit to workers (store futures)
+        workers -> return result
+        fetch queue -> poll futures
+        poll future -> submit result
+
+        run workers and poll futures in main thread
+        use an event to synchronize shutdown
+        """
 
         # start process pool to receive work.
         logger.debug("Starting worker processes")
@@ -158,6 +172,7 @@ class Worker:
             processes=self._inner.worker_concurrency,
             maxtasksperchild=self._inner.worker_max_tasks_per_child,
         ) as pool:
+            current_time = time.time()
             futures: list[AsyncResult[TaskResult]] = []
             inflight_count = self._inner.worker_concurrency * 2
 
@@ -165,9 +180,10 @@ class Worker:
                 count = 0
                 # We want to limit the inflght amount of work to avoid over-aquiring work
                 # which impacts throughput.
-                if len(futures) < inflight_count:
+                if last_fetch is None or (last_fetch - current_time > 1 and len(futures) < inflight_count):
                     # Fetch a batch of tasks and send the tasks to the worker pool.
                     claimed_tasks = self._inner.claim_tasks()
+                    last_fetch = current_time
                     count = len(claimed_tasks)
                     logger.debug(f"Claimed {count} tasks")
                     for claimed in claimed_tasks:
@@ -189,7 +205,7 @@ class Worker:
                 futures = keep
 
                 # Do this first to skip a sleep when all work is done.
-                if len(futures) == 0 and idle_reached:
+                if stop_on_idle and len(futures) == 0 and idle_reached:
                     logger.info("all work complete, and idle reached")
                     break
 
@@ -207,7 +223,7 @@ class Worker:
         """
         Apply the TaskResult to the worker inner & storage layer
         """
-        logger.debug("Processing result for {task_result.run_id}")
+        logger.debug(f"Processing result for {task_result.run_id}")
         match task_result.outcome:
             case TaskOutcome.Fatal:
                 message = "unknown"
