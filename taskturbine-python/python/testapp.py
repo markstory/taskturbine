@@ -49,7 +49,7 @@ def hello_world(ctx: TaskContext) -> None:
             raise ValueError("Too soon, die and retry")
 
     @ctx.step(name="process-complete")
-    def process_complete(ctx: TaskContjjjjjjext, user: Payload, event: Payload) -> Payload:
+    def process_complete(ctx: TaskContext, user: Payload, event: Payload) -> Payload:
         logger.info("starting process_complete")
         # Do some IO
         user["complete"] = True
