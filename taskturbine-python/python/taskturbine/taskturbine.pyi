@@ -52,6 +52,8 @@ class Checkpoint:
     updated_at: int
     """The timestamp the checkpoint was created or updated."""
 
+type ClaimedTaskDict = dict[str, Any]
+
 class ClaimedTask:
     """
     Entity structure for a task that has been claimed
@@ -92,14 +94,14 @@ class ClaimedTask:
     def next_retry_in(self) -> timedelta: ...
     """Get the timedelta between now and the next retry time."""
 
-    def to_dict(self) -> dict[str, Any]: ...
+    def to_dict(self) -> ClaimedTaskDict: ...
     """
     Convert the ClaimedTask to a dict.
     This is required when sending a ClaimedTask to a child process.
     """
 
     @staticmethod
-    def from_dict(value: dict[str, Any]) -> ClaimedTask: ...
+    def from_dict(value: ClaimedTaskDict) -> ClaimedTask: ...
     """Build a ClaimedTask from a dict"""
 
 class Config:

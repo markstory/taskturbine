@@ -3,6 +3,8 @@ from __future__ import annotations
 import enum
 import dataclasses
 import importlib
+import queue
+import threading
 import time
 from datetime import timedelta
 from multiprocessing.pool import AsyncResult, Pool
@@ -13,7 +15,7 @@ from taskturbine.models import Task, SuspendError
 from taskturbine.taskturbine import ClaimedTask, WorkerInner
 
 if TYPE_CHECKING:
-    from taskturbine import TaskturbineApp
+    from taskturbine import TaskturbineApp, ClaimedTaskDict
 
 import logging
 
@@ -56,7 +58,7 @@ def load_app(app_module: str) -> TaskturbineApp:
     return app
 
 
-def worker_execute_task(app_module: str, claimed: dict[str, Any]) -> TaskResult:
+def worker_execute_task(app_module: str, claimed: ClaimedTaskDict) -> TaskResult:
     """
     Import the application module, and then execute the task.
 
@@ -137,6 +139,35 @@ class Worker:
         self._tasks = tasks
         self._context_factory = context_factory
         self._error_handler = error_handler
+        self._claimed_tasks: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=inner.worker_concurrency)
+
+    def _make_claim_thread(self) -> threading.Thread:
+        ""
+        def run_claim_thread(claim_queue: queue.Queue[ClaimedTaskDict], inner: WorkerInner):
+            last_fetch = None
+            while True:
+                if claim_queue.full():
+                    logger.debug("claim_queue full")
+                    time.sleep(0.1)
+                    continue
+                now = time.time()
+                if last_fetch and now - last_fetch < 1:
+                    logger.debug("claim last_fetch rate limit")
+                    time.sleep(0.2)
+                    continue
+
+                claimed_tasks = inner.claim_tasks()
+                last_fetch = now
+                for item in claimed_tasks:
+                    claim_queue.put(item.to_dict())
+
+        claim_thread = threading.Thread(
+            name="claim-tasks", 
+            target=run_claim_thread,
+            args=(self._claimed_tasks, self._inner),
+            daemon=True,
+        )
+        return claim_thread
 
     def run(self, stop_on_idle: bool = False) -> None:
         """
@@ -149,13 +180,14 @@ class Worker:
           there are no more tasks fetched.
         """
         idle_reached = False
-        last_fetch = None
         last_cleanup = time.time() - 1
         app_module = self._inner.app_module
 
+        self._claim_thread = self._make_claim_thread()
+        self._claim_thread.start()
+
         """
         TODO split up into some threads.
-
         fetch thread --> fetch queue
         fetch queue -> submit to workers (store futures)
         workers -> return result
@@ -172,29 +204,21 @@ class Worker:
             processes=self._inner.worker_concurrency,
             maxtasksperchild=self._inner.worker_max_tasks_per_child,
         ) as pool:
-            current_time = time.time()
             futures: list[AsyncResult[TaskResult]] = []
-            inflight_count = self._inner.worker_concurrency * 2
-
             while True:
-                count = 0
-                # We want to limit the inflght amount of work to avoid over-aquiring work
-                # which impacts throughput.
-                if last_fetch is None or (last_fetch - current_time > 1 and len(futures) < inflight_count):
-                    # Fetch a batch of tasks and send the tasks to the worker pool.
-                    claimed_tasks = self._inner.claim_tasks()
-                    last_fetch = current_time
-                    count = len(claimed_tasks)
-                    logger.debug(f"Claimed {count} tasks")
-                    for claimed in claimed_tasks:
-                        fut = pool.apply_async(
-                            worker_execute_task,
-                            (
-                                app_module,
-                                claimed.to_dict(),
-                            ),
-                        )
-                        futures.append(fut)
+                try:
+                    claimed = self._claimed_tasks.get(timeout=1.0)
+                except queue.Empty:
+                    logger.debug('claimed_tasks.get() timeout')
+                    time.sleep(1)
+                    continue
+
+                fut = pool.apply_async(
+                    worker_execute_task,
+                    (app_module, claimed),
+                )
+                futures.append(fut)
+                self._claimed_tasks.task_done()
 
                 keep: list[AsyncResult[TaskResult]] = []
                 for fut in futures:
@@ -209,11 +233,11 @@ class Worker:
                     logger.info("all work complete, and idle reached")
                     break
 
-                if count == 0:
-                    idle_reached = True
-                    if len(futures) == 0:
-                        logger.info("no tasks claimed, and no futures. Sleeping.")
-                        time.sleep(self._inner.worker_sleep_secs)
+                # if count == 0:
+                #     idle_reached = True
+                #     if len(futures) == 0:
+                #         logger.info("no tasks claimed, and no futures. Sleeping.")
+                #         time.sleep(self._inner.worker_sleep_secs)
 
                 if self._inner.should_run_cleanup(int(last_cleanup)):
                     self._inner.run_cleanup()
