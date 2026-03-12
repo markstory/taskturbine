@@ -143,7 +143,12 @@ class Worker:
         self._shutdown = threading.Event()
 
     def _make_claim_thread(self) -> threading.Thread:
-        ""
+        """
+        Create a thread that claims tasks
+
+        claimed tasks are consumed by the main thread and dispatched
+        to worker child processes.
+        """
         def run_claim_thread(shutdown: threading.Event, claim_queue: queue.Queue[ClaimedTaskDict], inner: WorkerInner):
             last_fetch = None
             while True:
@@ -192,9 +197,8 @@ class Worker:
         self._claim_thread.start()
 
         """
-        TODO split up into some threads.
-        fetch thread --> fetch queue
-        fetch queue -> submit to workers (store futures)
+        TODO extract result thread
+
         workers -> return result
         fetch queue -> poll futures
         poll future -> submit result
@@ -233,10 +237,15 @@ class Worker:
                         keep.append(fut)
                 futures = keep
 
-                # If this worker should auto-shutdown see if work is complete.
-                if stop_on_idle and len(futures) == 0:
-                    logger.info("all work complete, and idle reached")
-                    return self.shutdown()
+                # If this worker should auto-shutdown see if
+                # all inflight work is complete.
+                if len(futures) == 0:
+                    if stop_on_idle:
+                        logger.info("all work complete, and idle reached")
+                        return self.shutdown()
+
+                    if self._shutdown.is_set():
+                        break
 
                 if self._inner.should_run_cleanup(int(last_cleanup)):
                     self._inner.run_cleanup()
@@ -247,6 +256,8 @@ class Worker:
         logger.info("shutting down")
         # Trigger thread shutdown
         self._shutdown.set()
+
+        # TODO need to wait for all futures to be completed/failed
 
         logger.info("waiting for claim_thread")
         self._claim_thread.join()
