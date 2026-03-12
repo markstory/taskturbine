@@ -140,16 +140,22 @@ class Worker:
         self._context_factory = context_factory
         self._error_handler = error_handler
         self._claimed_tasks: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=inner.worker_concurrency)
+        self._shutdown = threading.Event()
 
     def _make_claim_thread(self) -> threading.Thread:
         ""
-        def run_claim_thread(claim_queue: queue.Queue[ClaimedTaskDict], inner: WorkerInner):
+        def run_claim_thread(shutdown: threading.Event, claim_queue: queue.Queue[ClaimedTaskDict], inner: WorkerInner):
             last_fetch = None
             while True:
+                if shutdown.is_set():
+                    logger.debug("claim_queue shutdown")
+                    break
+
                 if claim_queue.full():
                     logger.debug("claim_queue full")
                     time.sleep(0.1)
                     continue
+
                 now = time.time()
                 if last_fetch and now - last_fetch < 1:
                     logger.debug("claim last_fetch rate limit")
@@ -164,7 +170,7 @@ class Worker:
         claim_thread = threading.Thread(
             name="claim-tasks", 
             target=run_claim_thread,
-            args=(self._claimed_tasks, self._inner),
+            args=(self._shutdown, self._claimed_tasks, self._inner),
             daemon=True,
         )
         return claim_thread
@@ -179,7 +185,6 @@ class Worker:
         :param stop_on_idle: Set to true to have run() break its loop when
           there are no more tasks fetched.
         """
-        idle_reached = False
         last_cleanup = time.time() - 1
         app_module = self._inner.app_module
 
@@ -210,15 +215,15 @@ class Worker:
                     claimed = self._claimed_tasks.get(timeout=1.0)
                 except queue.Empty:
                     logger.debug('claimed_tasks.get() timeout')
-                    time.sleep(1)
-                    continue
+                    claimed = None
 
-                fut = pool.apply_async(
-                    worker_execute_task,
-                    (app_module, claimed),
-                )
-                futures.append(fut)
-                self._claimed_tasks.task_done()
+                if claimed:
+                    fut = pool.apply_async(
+                        worker_execute_task,
+                        (app_module, claimed),
+                    )
+                    futures.append(fut)
+                    self._claimed_tasks.task_done()
 
                 keep: list[AsyncResult[TaskResult]] = []
                 for fut in futures:
@@ -228,20 +233,23 @@ class Worker:
                         keep.append(fut)
                 futures = keep
 
-                # Do this first to skip a sleep when all work is done.
-                if stop_on_idle and len(futures) == 0 and idle_reached:
+                # If this worker should auto-shutdown see if work is complete.
+                if stop_on_idle and len(futures) == 0:
                     logger.info("all work complete, and idle reached")
-                    break
-
-                # if count == 0:
-                #     idle_reached = True
-                #     if len(futures) == 0:
-                #         logger.info("no tasks claimed, and no futures. Sleeping.")
-                #         time.sleep(self._inner.worker_sleep_secs)
+                    return self.shutdown()
 
                 if self._inner.should_run_cleanup(int(last_cleanup)):
                     self._inner.run_cleanup()
                     last_cleanup = time.time()
+
+
+    def shutdown(self) -> None:
+        logger.info("shutting down")
+        # Trigger thread shutdown
+        self._shutdown.set()
+
+        logger.info("waiting for claim_thread")
+        self._claim_thread.join()
 
     def _process_result(self, task_result: TaskResult) -> None:
         """

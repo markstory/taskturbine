@@ -1,3 +1,4 @@
+import atexit
 import functools
 import logging
 import os
@@ -112,8 +113,11 @@ def loop_step(ctx: TaskContext) -> None:
 
 def main() -> None:
     worker = app.create_worker("worker-1", ["default"])
-    worker.run()
+    def shutdown() -> None:
+        worker.shutdown()
 
+    atexit.register(shutdown)
+    worker.run()
 
 if __name__ == "__main__":
     main()
