@@ -142,6 +142,7 @@ class Worker:
         self._claimed_tasks: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=inner.worker_concurrency)
         self._task_results: queue.Queue[TaskResult] = queue.Queue(maxsize=inner.worker_concurrency)
         self._shutdown = threading.Event()
+        self._inflight: list[AsyncResult[TaskResult]] = []
 
     def _make_claim_thread(self) -> threading.Thread:
         """
@@ -278,20 +279,14 @@ class Worker:
                         worker_execute_task,
                         (app_module, claimed),
                     )
-                    futures.append(fut)
+                    self._inflight.append(fut)
                     self._claimed_tasks.task_done()
 
-                keep: list[AsyncResult[TaskResult]] = []
-                for fut in futures:
-                    if fut.ready():
-                        self._task_results.put(fut.get())
-                    else:
-                        keep.append(fut)
-                futures = keep
+                self._poll_inflight()
 
                 # If this worker should auto-shutdown see if
                 # all inflight work is complete.
-                if len(futures) == 0:
+                if len(self._inflight) == 0:
                     if stop_on_idle:
                         logger.info("all work complete, and idle reached")
                         return self.shutdown()
@@ -303,16 +298,32 @@ class Worker:
                     self._inner.run_cleanup()
                     last_cleanup = time.time()
 
+    def _poll_inflight(self) -> None:
+        keep: list[AsyncResult[TaskResult]] = []
+        for fut in self._inflight:
+            if fut.ready():
+                self._task_results.put(fut.get())
+            else:
+                keep.append(fut)
+        self._inflight = keep
 
     def shutdown(self) -> None:
         logger.info("shutting down")
         # Trigger thread shutdown
         self._shutdown.set()
-
         # TODO need to wait for all futures to be completed/failed
 
         logger.debug("waiting for claim_thread")
         self._claim_thread.join()
+
+        while True:
+            waiting = len(self._inflight)
+            if waiting > 0:
+                logger.info("Waiting on {waiting} inflight tasks")
+                self._poll_inflight()
+                time.sleep(0.5)
+            else:
+                break
 
         logger.debug("waiting for result_thread")
         self._result_thread.join()
