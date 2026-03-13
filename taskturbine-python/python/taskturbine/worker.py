@@ -140,6 +140,7 @@ class Worker:
         self._context_factory = context_factory
         self._error_handler = error_handler
         self._claimed_tasks: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=inner.worker_concurrency)
+        self._task_results: queue.Queue[TaskResult] = queue.Queue(maxsize=inner.worker_concurrency)
         self._shutdown = threading.Event()
 
     def _make_claim_thread(self) -> threading.Thread:
@@ -152,6 +153,8 @@ class Worker:
         def run_claim_thread(shutdown: threading.Event, claim_queue: queue.Queue[ClaimedTaskDict], inner: WorkerInner):
             last_fetch = None
             while True:
+                # During graceful shutdown we want to immediately
+                # stop claiming tasks so that inflight work can drain out.
                 if shutdown.is_set():
                     logger.debug("claim_queue shutdown")
                     break
@@ -180,6 +183,63 @@ class Worker:
         )
         return claim_thread
 
+    def _make_result_thread(self) -> threading.Thread:
+        """
+        Create a thread that commits results from the child process worker pool.
+
+        results are read from the queue and commit.
+        """
+        def run_result_thread(shutdown: threading.Event, result_queue: queue.Queue[TaskResult], inner: WorkerInner):
+            while True:
+                try:
+                    task_result = result_queue.get(timeout=1.0)
+                except queue.Empty:
+                    # Graceful shutdown drains all results.
+                    if shutdown.is_set():
+                        logger.debug("result-tasks shutdown")
+                        break
+                    logger.info("result_queue.get timeout")
+                    time.sleep(0.2)
+                    continue
+
+                logger.debug(f"Processing result for {task_result.run_id}")
+                match task_result.outcome:
+                    case TaskOutcome.Fatal:
+                        message = "unknown"
+                        if task_result.payload:
+                            message = task_result.payload.decode()
+                        logger.warning(f"Worker crashed with: {message}")
+                        inner.fail_run(task_result.run_id, None)
+                    case TaskOutcome.Missing:
+                        message = "unknown"
+                        if task_result.payload:
+                            message = task_result.payload.decode()
+                        logger.warning(f"Task with name {message} was not registered")
+                        inner.fail_run(task_result.run_id, None)
+                    case TaskOutcome.Complete:
+                        inner.complete_run(task_result.run_id, task_result.payload or b"")
+                    case TaskOutcome.Suspend:
+                        duration = task_result.duration
+                        if not duration:
+                            logger.debug("Task suspended/waiting run_id={task_result.run_id}")
+                        else:
+                            logger.debug(
+                                "Task suspended for {duration.total_seconds()} seconds run_id={task_result.run_id}"
+                            )
+                            inner.schedule_run(task_result.run_id, duration)
+                    case TaskOutcome.Failure:
+                        inner.fail_run(task_result.run_id, task_result.duration)
+
+                result_queue.task_done()
+
+        result_thread = threading.Thread(
+            name="result-tasks", 
+            target=run_result_thread,
+            args=(self._shutdown, self._task_results, self._inner),
+            daemon=True,
+        )
+        return result_thread
+
     def run(self, stop_on_idle: bool = False) -> None:
         """
         Run the worker run loop.
@@ -196,16 +256,8 @@ class Worker:
         self._claim_thread = self._make_claim_thread()
         self._claim_thread.start()
 
-        """
-        TODO extract result thread
-
-        workers -> return result
-        fetch queue -> poll futures
-        poll future -> submit result
-
-        run workers and poll futures in main thread
-        use an event to synchronize shutdown
-        """
+        self._result_thread = self._make_result_thread()
+        self._result_thread.start()
 
         # start process pool to receive work.
         logger.debug("Starting worker processes")
@@ -232,7 +284,7 @@ class Worker:
                 keep: list[AsyncResult[TaskResult]] = []
                 for fut in futures:
                     if fut.ready():
-                        self._process_result(fut.get())
+                        self._task_results.put(fut.get())
                     else:
                         keep.append(fut)
                 futures = keep
@@ -259,8 +311,11 @@ class Worker:
 
         # TODO need to wait for all futures to be completed/failed
 
-        logger.info("waiting for claim_thread")
+        logger.debug("waiting for claim_thread")
         self._claim_thread.join()
+
+        logger.debug("waiting for result_thread")
+        self._result_thread.join()
 
     def _process_result(self, task_result: TaskResult) -> None:
         """
