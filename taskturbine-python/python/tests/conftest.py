@@ -1,6 +1,7 @@
 import os
 from typing import Any
 
+import logging
 import psycopg2
 import pytest
 
@@ -11,6 +12,8 @@ Cursor = psycopg2._psycopg.cursor
 
 
 def pytest_sessionstart() -> None:
+    logging.basicConfig()
+
     # Clear storage tables at the beginning of each session so that we don't
     # have cross test bleed through.
     db_url = os.getenv("TASKTURBINE_DATABASE_URL")
