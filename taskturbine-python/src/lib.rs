@@ -179,12 +179,13 @@ impl WorkerInner {
     }
 
     /// Mark a run as failed.
-    fn fail_run(&self, run_id: String, retry_at: Duration) -> PyResult<()> {
+    #[pyo3(signature = (run_id, retry_at = None))]
+    fn fail_run(&self, run_id: String, retry_at: Option<Duration>) -> PyResult<()> {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
         self.storage
-            .fail_run(run_id, b"", Some(retry_at))
+            .fail_run(run_id, b"", retry_at)
             .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
     }
 
