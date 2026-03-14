@@ -157,7 +157,7 @@ class Worker:
                 # During graceful shutdown we want to immediately
                 # stop claiming tasks so that inflight work can drain out.
                 if shutdown.is_set():
-                    logger.debug("claim_queue shutdown")
+                    logger.debug("claim_queue receive shutdown")
                     break
 
                 if claim_queue.full():
@@ -172,6 +172,7 @@ class Worker:
                     continue
 
                 claimed_tasks = inner.claim_tasks()
+                logger.debug(f"claimed {len(claimed_tasks)} tasks")
                 last_fetch = now
                 for item in claimed_tasks:
                     claim_queue.put(item.to_dict())
@@ -197,9 +198,9 @@ class Worker:
                 except queue.Empty:
                     # Graceful shutdown drains all results.
                     if shutdown.is_set():
-                        logger.debug("result-tasks shutdown")
+                        logger.debug("result-tasks receive shutdown")
                         break
-                    logger.info("result_queue.get timeout")
+                    logger.info("result_queue.get empty timeout")
                     time.sleep(0.2)
                     continue
 
@@ -266,12 +267,11 @@ class Worker:
             processes=self._inner.worker_concurrency,
             maxtasksperchild=self._inner.worker_max_tasks_per_child,
         ) as pool:
-            futures: list[AsyncResult[TaskResult]] = []
             while True:
                 try:
                     claimed = self._claimed_tasks.get(timeout=1.0)
                 except queue.Empty:
-                    logger.debug('claimed_tasks.get() timeout')
+                    logger.debug('claimed_tasks.get() empty timeout')
                     claimed = None
 
                 if claimed:
@@ -282,11 +282,11 @@ class Worker:
                     self._inflight.append(fut)
                     self._claimed_tasks.task_done()
 
-                self._poll_inflight()
+                remaining = self._poll_inflight()
 
-                # If this worker should auto-shutdown see if
+                # If this worker is shutting down wait until
                 # all inflight work is complete.
-                if len(self._inflight) == 0:
+                if remaining == 0:
                     if stop_on_idle:
                         logger.info("all work complete, and idle reached")
                         return self.shutdown()
@@ -294,11 +294,12 @@ class Worker:
                     if self._shutdown.is_set():
                         break
 
-                if self._inner.should_run_cleanup(int(last_cleanup)):
+                if not self._shutdown.is_set() and self._inner.should_run_cleanup(int(last_cleanup)):
+                    logger.debug('run_cleanup start')
                     self._inner.run_cleanup()
                     last_cleanup = time.time()
 
-    def _poll_inflight(self) -> None:
+    def _poll_inflight(self) -> int:
         keep: list[AsyncResult[TaskResult]] = []
         for fut in self._inflight:
             if fut.ready():
@@ -307,25 +308,26 @@ class Worker:
                 keep.append(fut)
         self._inflight = keep
 
+        return len(keep)
+
     def shutdown(self) -> None:
         logger.info("shutting down")
+
         # Trigger thread shutdown
         self._shutdown.set()
-        # TODO need to wait for all futures to be completed/failed
 
-        logger.debug("waiting for claim_thread")
+        logger.debug("waiting for claim-thread shutdown")
         self._claim_thread.join()
 
         while True:
-            waiting = len(self._inflight)
+            waiting = self._poll_inflight()
+            logger.debug(f"Waiting on {waiting} inflight tasks")
             if waiting > 0:
-                logger.info("Waiting on {waiting} inflight tasks")
-                self._poll_inflight()
                 time.sleep(0.5)
             else:
                 break
 
-        logger.debug("waiting for result_thread")
+        logger.debug("waiting for result-thread shutdown")
         self._result_thread.join()
 
     def _process_result(self, task_result: TaskResult) -> None:
