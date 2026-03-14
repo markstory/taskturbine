@@ -812,6 +812,7 @@ impl Storage {
     }
 
     /// Internal method to fail a run. Can be used within an existing transaction.
+    /// If the task has remaining retries, a new run will be initialized.
     async fn do_fail_run(
         &self,
         conn: &mut PgConnection,
