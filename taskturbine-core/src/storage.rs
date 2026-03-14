@@ -583,6 +583,7 @@ impl Storage {
             self.do_fail_run(&mut atomic, run_id, failure_reason, None, false)
                 .await?;
         }
+        atomic.commit().await.map_err(TaskTurbineError::SqlError)?;
 
         Ok(res.len() as i64)
     }
