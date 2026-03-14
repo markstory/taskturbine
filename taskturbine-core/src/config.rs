@@ -62,7 +62,7 @@ impl Default for Config {
             worker_concurrency: 3,
             worker_sleep_secs: 2,
             worker_cleanup_inline: true,
-            worker_cleanup_interval_secs: 30,
+            worker_cleanup_interval_secs: 10,
             worker_cleanup_cutoff_secs: 60 * 10,
             worker_cleanup_limit: 1000,
             worker_claim_timeout_secs: 60 * 10,

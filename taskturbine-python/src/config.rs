@@ -80,7 +80,7 @@ impl Config {
         worker_claim_timeout_secs=600,
         worker_cleanup_cutoff_secs=600,
         worker_cleanup_inline=true,
-        worker_cleanup_interval_secs=30,
+        worker_cleanup_interval_secs=10,
         worker_cleanup_limit=1000,
         worker_concurrency=3,
         worker_sleep_secs=2,
