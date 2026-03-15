@@ -195,6 +195,7 @@ class Config:
         worker_claim_timeout_secs: int = 600,
         worker_cleanup_cutoff_secs: int = 30,
         worker_cleanup_inline: bool = True,
+        worker_cleanup_interval_secs: int = 10,
         worker_cleanup_limit: int = 1000,
         worker_concurrency: int = 3,
         worker_sleep_secs: int = 2,
