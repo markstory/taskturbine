@@ -1,3 +1,8 @@
+-- Copyright 2025 earendil-works
+-- Copyright 2026 Mark Story
+--
+-- Derived from https://github.com/earendil-works/absurd/blob/main/sql/absurd.sql
+-- Schema modified from absurd and adapted for taskturbine.
 CREATE TABLE taskturbine.tasks (
     task_id uuid primary key,
     usecase text not null,
