@@ -7,8 +7,7 @@ import random
 from typing import Any
 import uuid
 
-from taskturbine import TaskturbineApp, Config
-from taskturbine.context import TaskContext
+from taskturbine import TaskturbineApp, Config, TaskContext
 
 logging.basicConfig(level=logging.DEBUG)
 
