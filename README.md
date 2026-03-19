@@ -131,9 +131,25 @@ With taskturbine-cli you can:
 - Clear all stored tasks + events.
 - Create schema
 
+### Installing the command line tool
+
+You can build and install the CLI tool with:
+
+```bash
+cargo build -p taskturbine-cli
+
+# Assuming that ~/.local/bin is on $PATH
+mv ./target/release/taskturbine-cli ~/.local/bin/
+```
+
 ## Comparisons
 
-TODO
+- [Absurd](https://github.com/earendil-works/absurd/) Directly inspired this
+  library. The schema used in taskturbine was derived from absurd's, as was the naming of the core storage interface.
+- [Cadence](https://github.com/cadence-workflow/cadence) One of the original projects in durable execution. It has inspired many systems since then. 
+- [Temporal](https://temporal.io) in addition to durable execution, temporal integrates deeply with the runtime environment to help build detemerministic workflows.
+- [Inngest](https://www.inngest.com) a self-hostable event driven workflow system. It's self-hostable, can be run locally.
+- [DBOS](https://docs.dbos.dev) A more mature implementation of durable workflows on top of Postgres.
 
 ## Project History
 
