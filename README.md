@@ -54,8 +54,10 @@ def hello_world(ctx: TaskContext) -> None:
     print("Completed:", completed)
 ```
 
-Taskturbine provides a simple durable cross-platform task framework for Rust, and
-Python.
+Taskturbine provides a simple durable cross-platform task framework for Rust,
+and Python. Using postgres as both a queue and state storage allows taskturbine
+to be operationally simple yet provide powerful features like retries,
+scheduling, workload separation, external synchronization and more.
 
 ## Installation
 
@@ -73,15 +75,54 @@ cargo add taskturbine
 
 ## Concepts
 
-TODO
+Application logic is defined as _tasks_. Tasks are functions that are composed of multiple
+operations or _steps_. Tasks execute their steps in the order they are defined, and the result
+of each step is stored. Should a task or step fail for any reason, a subsequent _run_ can be
+scheduled. When the subsequent run is started, the application state is reconstructed from
+stored _checkpoints_, and any completed steps are skipped. Tasks can also _sleep_ for a period
+of time, or wait for an _event_ to be emit elsewhere in your application logic. Event payloads
+are also stored allowing you to build race free synchronization logic and workflows.
 
-## Getting started
+As an application grows, you'll likely want to isolate different workloads from each
+other. To facilitate this, tasks can be _spawned_ into a named _channel_. Workers
+claim and execute tasks from one or more channels. This enables you to have different
+groups of workers for different workloads or customers.
 
-TODO
+## Glossary
+
+- `usecase` The client application that a task belongs to. A single taskturbine
+  database can be shared by multiple applications if required.
+- `channel` Channels enable you to separate workloads within a `usecase`. For example, you may
+  want many workers processing high-priority tasks, and fewer processing lower priority work.
+- `task` A workflow or task that should be executed durably.
+- `step` An incremental operation or side-effect that can succeed or fail. Steps
+  act as error and persistence boundaries for your tasks. Steps that complete are not
+  retried or run multiple times.
+- `checkpoint` As steps are completed, checkpoints are created.
+- `run` An attempt to execute a task. Each run can read checkpoints from previous
+  runs, allowing tasks to resume where they left off.
+- `event` Tasks can be suspended until named events are emit by the application. Events are
+  ideal for waiting on webhooks, or other tasks to complete.
+- `wait` When a task is waiting for an event, it records a `wait`.
+
+This diagram connects each of the concepts and glossary terms together
+
+```mermaid
+erDiagram
+  Usecase ||--|{ Task : "contains many"
+  Usecase ||--|{ Channel : "contains many"
+  Task ||--o{ Run : "has many"
+  Task ||--|| Channel : "spawned on"
+  Worker ||--|{ Channel : "consumes from"
+  Task ||--o{ Step : "zero or more"
+  Step ||--o| Checkpoint : "one or none" 
+  Task ||--o| Wait : "wait for event"
+  Event ||--o{ Wait : "arrived event"
+```
 
 ## Command line tools
 
-TODO
+The `taskturbine-cli` package provides a command line tool for managing and interacting with a taskturbine application.
 
 ## Comparisons
 
