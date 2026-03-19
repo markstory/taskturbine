@@ -140,7 +140,14 @@ cargo build -p taskturbine-cli
 
 # Assuming that ~/.local/bin is on $PATH
 mv ./target/release/taskturbine-cli ~/.local/bin/
+
+# You need to set TASKTURBINE_DATABASE_URL to a DSN for postgres
+# Emit help
+taskturbine-cli -h
 ```
+
+The CLI tool provides a simple interface for spawning tasks, emitting events, cancel tasks and perform cleanup operations.
+You can also use the CLI tool to create schema with `migrate`, clear all state with `clear`.
 
 ## Comparisons
 
