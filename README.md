@@ -127,8 +127,8 @@ With taskturbine-cli you can:
 
 - Spawn tasks
 - Emit events
-- Perform cleanup operations.
-- Clear all stored tasks + events.
+- Perform cleanup operations
+- Clear all stored tasks + events
 - Create schema
 
 ### Installing the command line tool
@@ -151,7 +151,7 @@ You can also use the CLI tool to create schema with `migrate`, clear all state w
 
 ## Comparisons
 
-- [Absurd](https://github.com/earendil-works/absurd/) Directly inspired this
+- [Absurd](https://github.com/earendil-works/absurd/) Directly inspired this.
   library. The schema used in taskturbine was derived from absurd's, as was the naming of the core storage interface.
 - [Cadence](https://github.com/cadence-workflow/cadence) One of the original projects in durable execution. It has inspired many systems since then. 
 - [Temporal](https://temporal.io) in addition to durable execution, temporal integrates deeply with the runtime environment to help build detemerministic workflows.
