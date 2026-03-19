@@ -105,7 +105,7 @@ groups of workers for different workloads or customers.
   ideal for waiting on webhooks, or other tasks to complete.
 - `wait` When a task is waiting for an event, it records a `wait`.
 
-This diagram connects each of the concepts and glossary terms together
+This diagram connects each of the concepts and glossary terms together:
 
 ```mermaid
 erDiagram
@@ -123,6 +123,13 @@ erDiagram
 ## Command line tools
 
 The `taskturbine-cli` package provides a command line tool for managing and interacting with a taskturbine application.
+With taskturbine-cli you can:
+
+- Spawn tasks
+- Emit events
+- Perform cleanup operations.
+- Clear all stored tasks + events.
+- Create schema
 
 ## Comparisons
 

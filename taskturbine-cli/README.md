@@ -6,5 +6,5 @@ This crate provides CLI tools for interacting with a taskturbine application's d
 - Emit events
 - Perform cleanup operations.
 - Clear all stored tasks + events.
-- Create schema (coming soon)
+- Create schema (coming soon) TODO implement schema creation and upgrades
 
