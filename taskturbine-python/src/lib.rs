@@ -18,7 +18,9 @@ mod models;
 use config::Config;
 use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult};
 
-/// See taskturbine.pyi for docstrings
+///! See taskturbine.pyi for docstrings
+
+// Container for configuration, storage and tokio runtime.
 #[pyclass]
 struct AppInner {
     #[pyo3(get)]
@@ -40,13 +42,14 @@ impl AppInner {
     fn py_new(config: Config) -> Self {
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
-        // let storage = blockingstorage::BlockingStorage::new(config.clone().into());
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
 
-        let storage = runtime.block_on(Storage::new_fut(config.clone().into()));
+        let storage = runtime.block_on(async {
+            Storage::new(config.clone().into())
+        });
 
         AppInner {
             config,
