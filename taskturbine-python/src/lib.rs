@@ -12,7 +12,6 @@ use taskturbine_core::{
     storage::Storage,
 };
 
-mod blockingstorage;
 mod config;
 mod models;
 
@@ -282,9 +281,9 @@ impl ContextInner {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
 
-        let res =
-            self.storage
-                .set_checkpoint(task_id, run_id, checkpoint_name, state, extend_claim);
+        let res = self.runtime.block_on(
+            self.storage.set_checkpoint(task_id, run_id, checkpoint_name, state, extend_claim)
+        );
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }
@@ -298,9 +297,9 @@ impl ContextInner {
         };
 
         let step_name = format!("$awaitEvent:{event_name}");
-        let payload_res =
-            self.storage
-                .await_event(task_id, run_id, &step_name, event_name.as_ref(), timeout);
+        let payload_res = self.runtime.block_on(
+            self.storage.await_event(task_id, run_id, &step_name, event_name.as_ref(), Some(timeout))
+        );
         match payload_res {
             Ok(result) => Ok(result.into()),
             Err(err) => Err(PyValueError::new_err(format!(
