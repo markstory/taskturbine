@@ -603,9 +603,10 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 mod tests {
     use std::time::Duration;
 
+    use sqlx::Row;
     use uuid::Uuid;
 
-    use crate::{config::Config, storage::TaskTurbineError};
+    use crate::{config::Config, models::TaskState, storage::TaskTurbineError};
 
     use super::TaskturbineApp;
 
@@ -621,6 +622,14 @@ mod tests {
         let app = TaskturbineApp::new(config);
         app.storage.update_schema().await.unwrap();
 
+        app
+    }
+
+    async fn create_app_with_task(channel: &str) -> TaskturbineApp {
+        let app = create_app()
+            .await
+            .add_channel(&channel)
+            .register_task("first-task", |_ctx| async { Ok(()) });
         app
     }
 
@@ -695,28 +704,49 @@ mod tests {
         let uuid = Uuid::now_v7();
         let event_id = format!("event-{uuid}");
         let res = app.emit_event(&event_id, b"payload data").await;
-        assert!(res.is_ok());
+        assert!(res.is_ok(), "failed to emit event");
     }
 
     #[tokio::test]
     async fn worker_claim_tasks() {
         let channel = "worker_claim_tasks";
-        let app = create_app()
-            .await
-            .add_channel(&channel)
-            .register_task("first-task", |_ctx| async { Ok(()) });
+        let app = create_app_with_task(channel).await;
+
         let res = app.channel(&channel).spawn_task("first-task", b"", None).await;
-        assert!(res.is_ok());
+        assert!(res.is_ok(), "failed to spawn task");
+        let spawned = res.unwrap();
 
         let worker = app.create_worker("worker-1", vec![channel.to_string()]);
         let timeout = Duration::from_secs(300);
         let res = worker.claim_tasks(timeout).await;
-        assert!(res.is_ok());
+        assert!(res.is_ok(), "failed to claim tasks");
+
         let claimed = res.unwrap();
         assert_eq!(claimed.len(), 1);
+
+        let claim = &claimed[0];
+        assert_eq!(claim.task_id, spawned.task_id);
     }
 
     #[tokio::test]
     async fn worker_execute_task() {
+        let channel = "worker_execute_tasks";
+        let app = create_app_with_task(channel).await;
+
+        let res = app.channel(&channel).spawn_task("first-task", b"", None).await;
+        assert!(res.is_ok(), "failed to spawn task");
+
+        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let timeout = Duration::from_secs(300);
+        let res = worker.claim_tasks(timeout).await;
+        assert!(res.is_ok(), "failed to claim tasks");
+
+        for task in res.unwrap().into_iter() {
+            let run_id = task.run_id.clone();
+            worker.execute_task(task).await;
+
+            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Completed, task_data.get::<TaskState, _>("state"));
+        }
     }
 }
