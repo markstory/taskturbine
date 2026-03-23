@@ -109,13 +109,15 @@ impl TaskturbineApp {
     /// use taskturbine_core::app::TaskturbineApp;
     /// use taskturbine_core::config::Config;
     ///
-    /// let config = Config::default();
-    /// let mut app = TaskturbineApp::new(config);
+    /// (async || {
+    ///     let config = Config::default();
+    ///     let mut app = TaskturbineApp::new(config);
     ///
-    /// app.register_task("process-feedback", |ctx| async {
-    ///     // Do some IO
-    ///     Ok(())
-    /// });
+    ///     app.register_task("process-feedback", |ctx| async {
+    ///         // Do some IO
+    ///         Ok(())
+    ///     });
+    /// })();
     /// ```
     pub fn register_task<T>(mut self, task_name: &str, task_fn: T) -> Self
     where
@@ -174,7 +176,7 @@ impl TaskturbineApp {
     ///     let config = Config::default();
     ///     let mut app = TaskturbineApp::new(config.clone());
     ///
-    ///     app.spawn_task("process-feedback", b"{\"user_id\":123}").await;
+    ///     app.spawn_task("process-feedback", b"{\"user_id\":123}", None).await;
     /// })();
     /// ```
     pub async fn spawn_task(
@@ -599,6 +601,8 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use uuid::Uuid;
 
     use crate::{config::Config, storage::TaskTurbineError};
@@ -692,5 +696,27 @@ mod tests {
         let event_id = format!("event-{uuid}");
         let res = app.emit_event(&event_id, b"payload data").await;
         assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn worker_claim_tasks() {
+        let channel = "worker_claim_tasks";
+        let app = create_app()
+            .await
+            .add_channel(&channel)
+            .register_task("first-task", |_ctx| async { Ok(()) });
+        let res = app.channel(&channel).spawn_task("first-task", b"", None).await;
+        assert!(res.is_ok());
+
+        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let timeout = Duration::from_secs(300);
+        let res = worker.claim_tasks(timeout).await;
+        assert!(res.is_ok());
+        let claimed = res.unwrap();
+        assert_eq!(claimed.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn worker_execute_task() {
     }
 }
