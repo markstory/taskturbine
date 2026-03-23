@@ -749,4 +749,24 @@ mod tests {
             assert_eq!(TaskState::Completed, task_data.get::<TaskState, _>("state"));
         }
     }
+
+    #[tokio::test]
+    async fn worker_execute_task_invalid_value() {
+        todo!();
+    }
+
+    #[tokio::test]
+    async fn worker_execute_task_suspended() {
+        todo!();
+    }
+
+    #[tokio::test]
+    async fn worker_execute_task_suspend_with_duration() {
+        todo!();
+    }
+
+    #[tokio::test]
+    async fn worker_execute_task_undefined_task() {
+        todo!();
+    }
 }
