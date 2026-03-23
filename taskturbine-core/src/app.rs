@@ -105,7 +105,18 @@ impl TaskturbineApp {
     ///
     /// Duplicate task names will panic at runtime.
     ///
-    /// TODO add a few examples.
+    /// ```rust
+    /// use taskturbine_core::app::TaskturbineApp;
+    /// use taskturbine_core::config::Config;
+    ///
+    /// let config = Config::default();
+    /// let mut app = TaskturbineApp::new(config);
+    ///
+    /// app.register_task("process-feedback", |ctx| async {
+    ///     // Do some IO
+    ///     Ok(())
+    /// });
+    /// ```
     pub fn register_task<T>(mut self, task_name: &str, task_fn: T) -> Self
     where
         T: TaskHandler<TaskContext> + Sync + Send + 'static,
@@ -155,7 +166,17 @@ impl TaskturbineApp {
     ///
     /// An error is returned if the task name is not registered.
     ///
-    /// TODO add an example
+    /// ```rust
+    /// use taskturbine_core::app::TaskturbineApp;
+    /// use taskturbine_core::config::Config;
+    ///
+    /// (async || {
+    ///     let config = Config::default();
+    ///     let mut app = TaskturbineApp::new(config.clone());
+    ///
+    ///     app.spawn_task("process-feedback", b"{\"user_id\":123}").await;
+    /// })();
+    /// ```
     pub async fn spawn_task(
         &self,
         task_name: &str,
@@ -349,9 +370,19 @@ impl Worker {
         let context = TaskContext::build(task.clone(), self.app.clone());
         let taskname = &task.task_name;
         let Some(task_fn) = self.app.tasks.get(taskname) else {
-            // TODO This should probably fail the run and increment retry count.
-            // That would give an opportunity to pause workers and fix the missing task.
             log::warn!("No task named {taskname} is registered.");
+            // Fail the run.
+            // We could be in a cross deploy situation, and following
+            // the retry schedule of the task allows for recovery on the next
+            // attempt.
+            let res = self
+                .app
+                .storage
+                .fail_run(task.run_id, b"", None)
+                .await;
+            if let Err(schedule_err) = res {
+                log::error!("Unable to fail run {schedule_err:?}");
+            }
             return;
         };
 
