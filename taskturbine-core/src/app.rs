@@ -1,8 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    pin::Pin,
-    sync::Arc,
-    time::Duration,
+    collections::{HashMap, HashSet}, pin::Pin, sync::Arc, time::Duration
 };
 
 use async_channel::{Receiver, Sender, TrySendError};
@@ -390,20 +387,13 @@ impl Worker {
 
         let storage = &self.app.storage;
         match task_fn.call(context).await {
-            Err(FlowControl::InvalidValue(msg)) => log::warn!("Invalid value {msg}"),
+            Err(FlowControl::InvalidValue(msg)) => {
+                log::warn!("Invalid value {msg}");
+                self.fail_run(task).await;
+            },
             Err(FlowControl::Failure(msg)) => {
                 log::debug!("Task run failure: {msg}");
-
-                // TODO implement task results.
-                let retry_at = task.next_retry_in();
-                let res = self
-                    .app
-                    .storage
-                    .fail_run(task.run_id, b"", Some(retry_at))
-                    .await;
-                if let Err(schedule_err) = res {
-                    log::error!("Failed to fail run {schedule_err:?}");
-                }
+                self.fail_run(task).await;
             }
             Err(FlowControl::Suspended) => {
                 log::debug!("Task run suspended: run_id={}", task.run_id);
@@ -421,6 +411,20 @@ impl Worker {
                     log::error!("Failed to complete run {msg:?}");
                 }
             }
+        }
+    }
+
+    /// Helper method to fail a run and log an error
+    /// if recording the failure also fails.
+    async fn fail_run(&self, task: ClaimedTask) {
+        let retry_at = task.next_retry_in();
+        let res = self
+            .app
+            .storage
+            .fail_run(task.run_id, b"", Some(retry_at))
+            .await;
+        if let Err(schedule_err) = res {
+            log::error!("Failed to fail run {schedule_err:?}");
         }
     }
 }
@@ -606,7 +610,7 @@ mod tests {
     use sqlx::Row;
     use uuid::Uuid;
 
-    use crate::{config::Config, models::TaskState, storage::TaskTurbineError};
+    use crate::{config::Config, context::{FlowControl, TaskContext}, models::TaskState, storage::TaskTurbineError};
 
     use super::TaskturbineApp;
 
@@ -752,7 +756,27 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task_invalid_value() {
-        todo!();
+        let channel = "worker_execute_tasks";
+        let mut app = create_app_with_task(channel).await;
+        app = app.register_task("second-task", async |_ctx: TaskContext| {
+            Err(FlowControl::InvalidValue("something invalid was passed".to_string()))
+        });
+
+        let res = app.channel(&channel).spawn_task("second-task", b"", None).await;
+        assert!(res.is_ok(), "failed to spawn task");
+
+        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let timeout = Duration::from_secs(300);
+        let res = worker.claim_tasks(timeout).await;
+        assert!(res.is_ok(), "failed to claim tasks");
+
+        for task in res.unwrap().into_iter() {
+            let run_id = task.run_id.clone();
+            worker.execute_task(task).await;
+
+            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Failed, task_data.get::<TaskState, _>("state"));
+        }
     }
 
     #[tokio::test]
