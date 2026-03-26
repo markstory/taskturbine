@@ -77,11 +77,11 @@ impl Display for RunId {
 }
 
 impl TryFrom<String> for RunId {
-    type Error = String;
+    type Error = ();
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let Ok(uuid) = Uuid::parse_str(&value) else {
-            return Err("Invalid uuid format".to_string());
+            return Err(());
         };
         Ok(Self(uuid))
     }
@@ -219,4 +219,35 @@ pub struct Checkpoint {
 pub struct Event {
     pub event_name: String,
     pub payload: Vec<u8>,
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use crate::models::{RunId, TaskId};
+
+    #[test]
+    fn task_id_from_string() {
+        let res: Result<TaskId, ()> = "bad-value".to_string().try_into();
+        assert!(res.is_err());
+
+        let uuid = Uuid::now_v7();
+        let res: Result<TaskId, ()> = uuid.to_string().try_into();
+        assert!(res.is_ok());
+        let task_id = res.unwrap();
+        assert_eq!(task_id.0.to_string(), uuid.to_string(), "string values should be the same");
+    }
+
+    #[test]
+    fn run_id_from_string() {
+        let res: Result<RunId, ()> = "bad-value".to_string().try_into();
+        assert!(res.is_err());
+
+        let uuid = Uuid::now_v7();
+        let res: Result<RunId, ()> = uuid.to_string().try_into();
+        assert!(res.is_ok());
+        let run_id = res.unwrap();
+        assert_eq!(run_id.0.to_string(), uuid.to_string(), "string values should be the same");
+    }
 }
