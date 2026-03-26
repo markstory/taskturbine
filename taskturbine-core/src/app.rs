@@ -605,12 +605,12 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use sqlx::Row;
     use uuid::Uuid;
 
-    use crate::{config::Config, context::{FlowControl, TaskContext}, models::TaskState, storage::TaskTurbineError};
+    use crate::{config::Config, context::{FlowControl, TaskContext}, models::TaskState, storage::{TaskOptions, TaskTurbineError}};
 
     use super::TaskturbineApp;
 
@@ -635,6 +635,10 @@ mod tests {
             .add_channel(&channel)
             .register_task("first-task", |_ctx| async { Ok(()) });
         app
+    }
+    
+    fn now() -> u64 {
+        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
     }
 
     #[tokio::test]
@@ -734,7 +738,7 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task() {
-        let channel = "worker_execute_tasks";
+        let channel = "worker_execute_task";
         let app = create_app_with_task(channel).await;
 
         let res = app.channel(&channel).spawn_task("first-task", b"", None).await;
@@ -756,7 +760,7 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task_invalid_value() {
-        let channel = "worker_execute_tasks";
+        let channel = "worker_execute_task_invalid_value";
         let mut app = create_app_with_task(channel).await;
         app = app.register_task("second-task", async |_ctx: TaskContext| {
             Err(FlowControl::InvalidValue("something invalid was passed".to_string()))
@@ -780,17 +784,81 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_execute_task_suspended() {
-        todo!();
+    async fn worker_execute_task_suspend_with_duration() {
+        // Include a timestamp to isolate test runs as we leave state behind
+        let channel = format!("worker_execute_task_suspended_{}", now());
+        let mut app = create_app_with_task(&channel).await;
+        app = app.register_task("sleep-task", async |mut ctx: TaskContext| {
+            let _ = ctx.sleep_for("sleep-time", Duration::from_secs(30)).await?;
+            Ok(())
+        });
+
+        let options = TaskOptions {
+            max_attempts: 1,
+            ..TaskOptions::default()
+        };
+        let res = app.channel(&channel).spawn_task("sleep-task", b"", Some(options)).await;
+        assert!(res.is_ok(), "failed to spawn task");
+
+        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let timeout = Duration::from_secs(300);
+        let res = worker.claim_tasks(timeout).await;
+        assert!(res.is_ok(), "failed to claim tasks");
+
+        for task in res.unwrap().into_iter() {
+            let run_id = task.run_id.clone();
+            worker.execute_task(task).await;
+
+            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(task_data.get::<TaskState, _>("state"), TaskState::Sleeping);
+            assert_eq!(
+                task_data.get::<Option<String>, _>("claimed_by"), 
+                None,
+                "claim should be released on suspension"
+            );
+            assert_eq!(
+                task_data.get::<Option<String>, _>("claim_expires_at"), 
+                None,
+                "claim expiry should be cleared on suspension"
+            );
+        }
     }
 
     #[tokio::test]
-    async fn worker_execute_task_suspend_with_duration() {
-        todo!();
+    async fn worker_execute_task_suspend() {
+        // Include a timestamp to isolate test runs as we leave state behind
+        let channel = format!("worker_execute_task_suspend_{}", now());
+        let mut app = create_app_with_task(&channel).await;
+        app = app.register_task("sleep-task", async |ctx: TaskContext| {
+            let _event = ctx.await_event("sleep-time", None).await?;
+            Ok(())
+        });
+
+        let res = app.channel(&channel).spawn_task("sleep-task", b"", None).await;
+        assert!(res.is_ok(), "failed to spawn task");
+
+        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let timeout = Duration::from_secs(300);
+        let res = worker.claim_tasks(timeout).await;
+        assert!(res.is_ok(), "failed to claim tasks");
+
+        for task in res.unwrap().into_iter() {
+            let run_id = task.run_id.clone();
+            worker.execute_task(task).await;
+
+            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Sleeping, task_data.get::<TaskState, _>("state"));
+        }
     }
 
     #[tokio::test]
     async fn worker_execute_task_undefined_task() {
-        todo!();
+        let channel = "worker_execute_task_undefined_task";
+        let app = create_app_with_task(channel).await;
+
+        let res = app.channel(&channel).spawn_task("undefined", b"", None).await;
+        assert!(res.is_err(), "undefined task should fail");
+        let err = res.err().unwrap();
+        assert!(matches!(err, TaskTurbineError::ValidationError(..)));
     }
 }
