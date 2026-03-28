@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import dataclasses
 import importlib
+import logging
 import queue
 import threading
 import time
@@ -17,7 +18,6 @@ from taskturbine.taskturbine import ClaimedTask, WorkerInner
 if TYPE_CHECKING:
     from taskturbine import TaskturbineApp, ClaimedTaskDict
 
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +139,12 @@ class Worker:
         self._tasks = tasks
         self._context_factory = context_factory
         self._error_handler = error_handler
-        self._claimed_tasks: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=inner.worker_concurrency)
-        self._task_results: queue.Queue[TaskResult] = queue.Queue(maxsize=inner.worker_concurrency)
+        self._claimed_tasks: queue.Queue[dict[str, Any]] = queue.Queue(
+            maxsize=inner.worker_concurrency
+        )
+        self._task_results: queue.Queue[TaskResult] = queue.Queue(
+            maxsize=inner.worker_concurrency
+        )
         self._shutdown = threading.Event()
         self._inflight: list[AsyncResult[TaskResult]] = []
 
@@ -151,7 +155,12 @@ class Worker:
         claimed tasks are consumed by the main thread and dispatched
         to worker child processes.
         """
-        def run_claim_thread(shutdown: threading.Event, claim_queue: queue.Queue[ClaimedTaskDict], inner: WorkerInner):
+
+        def run_claim_thread(
+            shutdown: threading.Event,
+            claim_queue: queue.Queue[ClaimedTaskDict],
+            inner: WorkerInner,
+        ):
             last_fetch = None
             while True:
                 # During graceful shutdown we want to immediately
@@ -178,7 +187,7 @@ class Worker:
                     claim_queue.put(item.to_dict())
 
         claim_thread = threading.Thread(
-            name="claim-tasks", 
+            name="claim-tasks",
             target=run_claim_thread,
             args=(self._shutdown, self._claimed_tasks, self._inner),
             daemon=True,
@@ -191,7 +200,12 @@ class Worker:
 
         results are read from the queue and commit.
         """
-        def run_result_thread(shutdown: threading.Event, result_queue: queue.Queue[TaskResult], inner: WorkerInner):
+
+        def run_result_thread(
+            shutdown: threading.Event,
+            result_queue: queue.Queue[TaskResult],
+            inner: WorkerInner,
+        ):
             while True:
                 try:
                     task_result = result_queue.get(timeout=1.0)
@@ -219,11 +233,15 @@ class Worker:
                         logger.warning(f"Task with name {message} was not registered")
                         inner.fail_run(task_result.run_id, None)
                     case TaskOutcome.Complete:
-                        inner.complete_run(task_result.run_id, task_result.payload or b"")
+                        inner.complete_run(
+                            task_result.run_id, task_result.payload or b""
+                        )
                     case TaskOutcome.Suspend:
                         duration = task_result.duration
                         if not duration:
-                            logger.debug("Task suspended/waiting run_id={task_result.run_id}")
+                            logger.debug(
+                                "Task suspended/waiting run_id={task_result.run_id}"
+                            )
                         else:
                             logger.debug(
                                 "Task suspended for {duration.total_seconds()} seconds run_id={task_result.run_id}"
@@ -235,7 +253,7 @@ class Worker:
                 result_queue.task_done()
 
         result_thread = threading.Thread(
-            name="result-tasks", 
+            name="result-tasks",
             target=run_result_thread,
             args=(self._shutdown, self._task_results, self._inner),
             daemon=True,
@@ -271,7 +289,7 @@ class Worker:
                 try:
                     claimed = self._claimed_tasks.get(timeout=1.0)
                 except queue.Empty:
-                    logger.debug('claimed_tasks.get() empty timeout')
+                    logger.debug("claimed_tasks.get() empty timeout")
                     claimed = None
 
                 if claimed:
@@ -294,8 +312,10 @@ class Worker:
                     if self._shutdown.is_set():
                         break
 
-                if not self._shutdown.is_set() and self._inner.should_run_cleanup(int(last_cleanup)):
-                    logger.debug('run_cleanup start')
+                if not self._shutdown.is_set() and self._inner.should_run_cleanup(
+                    int(last_cleanup)
+                ):
+                    logger.debug("run_cleanup start")
                     self._inner.run_cleanup()
                     last_cleanup = time.time()
 

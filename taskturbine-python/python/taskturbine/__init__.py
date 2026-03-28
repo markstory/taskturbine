@@ -159,6 +159,7 @@ class TaskturbineApp:
         to define steps and then call your steps within your flow control
         logic.
         """
+
         def wrapped(func: Callable[P, R]) -> Task[P, R]:
             task = Task(name=name, func=func, options=options)
             self._tasks[name] = task

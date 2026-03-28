@@ -114,7 +114,7 @@ class TaskContext:
         based on the order steps are defined.
 
         If the step has been completed the captured state from the completed run
-        will be used. If the step raises an error the run is considered 'failed' 
+        will be used. If the step raises an error the run is considered 'failed'
         and a retry will be scheduled according to the task's retry configuration.
         """
         checkpoint_name = self._checkpoint_name(name)
@@ -135,7 +135,7 @@ class TaskContext:
         step_name: str,
         func: Callable[P, OptionalJsonData],
         *args: P.args,
-        **kwargs: P.kwargs
+        **kwargs: P.kwargs,
     ) -> JsonData | None:
         """
         Run a function as a durable step
@@ -152,7 +152,7 @@ class TaskContext:
 
     def _execute_step(
         self,
-        checkpoint_name: str, 
+        checkpoint_name: str,
         func: Callable[P, OptionalJsonData],
         *args: P.args,
         **kwargs: P.kwargs,

@@ -1,6 +1,7 @@
 """
 A simple demo app used for integration testing.
 """
+
 import os
 from typing import Any
 from taskturbine import TaskturbineApp, Config, TaskContext

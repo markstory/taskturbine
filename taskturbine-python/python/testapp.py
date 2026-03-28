@@ -27,6 +27,7 @@ app = TaskturbineApp(config)
 
 type Payload = dict[str, Any]
 
+
 @app.register_task("hello-world")
 def hello_world(ctx: TaskContext) -> None:
     logger.info(f"Hello world! {ctx.params_bytes.decode()}")
@@ -109,14 +110,15 @@ def loop_step(ctx: TaskContext) -> None:
 # - build task that does a fan out. Make a loop with 100 steps.
 
 
-
 def main() -> None:
     worker = app.create_worker("worker-1", ["default"])
+
     def shutdown() -> None:
         worker.shutdown()
 
     atexit.register(shutdown)
     worker.run()
+
 
 if __name__ == "__main__":
     main()
