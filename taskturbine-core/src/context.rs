@@ -176,9 +176,7 @@ impl TaskContext {
 
         // Create a disposable context to avoid &mut reference and lifetime hell.
         let context = Self::build(self.task.clone(), self.app.clone());
-        let res = step_fn(context).await;
-
-        match res {
+        match step_fn(context).await {
             Ok(state) => {
                 let res = self
                     .app
@@ -566,6 +564,22 @@ mod tests {
         let context = TaskContext::build(claim.clone(), arc_app.clone());
 
         let res = context
+            .spawn_task("hello-world", b"payload data", None)
+            .await;
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn channel_spawn_task() {
+        let mut app = create_app().await.register_task("hello-world", hello_world);
+        app = app.add_channel("other");
+        let arc_app = Arc::new(app);
+
+        let claim = claim_task(&arc_app.storage, "hello-world").await;
+        let context = TaskContext::build(claim.clone(), arc_app.clone());
+
+        let res = context
+            .channel("other")
             .spawn_task("hello-world", b"payload data", None)
             .await;
         assert!(res.is_ok());
