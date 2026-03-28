@@ -45,13 +45,6 @@ impl TaskturbineApp {
         }
     }
 
-    /// Update the storage instance used.
-    pub fn with_storage(&mut self, storage: Storage) -> &mut Self {
-        self.storage = storage;
-
-        self
-    }
-
     /// Define a channel that tasks can be consumed on.
     ///
     /// Channels allow you to have dedicated workers for specific
