@@ -716,6 +716,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn worker_config() {
+        let channel = "worker_config";
+        let app = create_app_with_task(channel).await;
+
+        let worker = app.create_worker("worker-1", vec![]);
+        let config = worker.config();
+        assert_eq!(config.default_channel, "channel-one");
+    }
+
+    #[tokio::test]
     async fn worker_claim_tasks() {
         let channel = "worker_claim_tasks";
         let app = create_app_with_task(channel).await;
@@ -755,6 +765,31 @@ mod tests {
 
             let task_data = worker.app.storage.get_run(run_id).await.unwrap();
             assert_eq!(TaskState::Completed, task_data.get::<TaskState, _>("state"));
+        }
+    }
+
+    #[tokio::test]
+    async fn worker_execute_task_failure() {
+        let channel = "worker_execute_task_failure";
+        let mut app = create_app_with_task(channel).await;
+        app = app.register_task("fail-task", async |_ctx: TaskContext| {
+            Err(FlowControl::Failure("failure".to_string()))
+        });
+
+        let res = app.channel(&channel).spawn_task("fail-task", b"", None).await;
+        assert!(res.is_ok(), "failed to spawn task");
+
+        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let timeout = Duration::from_secs(300);
+        let res = worker.claim_tasks(timeout).await;
+        assert!(res.is_ok(), "failed to claim tasks");
+
+        for task in res.unwrap().into_iter() {
+            let run_id = task.run_id.clone();
+            worker.execute_task(task).await;
+
+            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Failed, task_data.get::<TaskState, _>("state"));
         }
     }
 
@@ -860,5 +895,16 @@ mod tests {
         assert!(res.is_err(), "undefined task should fail");
         let err = res.err().unwrap();
         assert!(matches!(err, TaskTurbineError::ValidationError(..)));
+    }
+
+    #[tokio::test]
+    async fn worker_run_cleanup() {
+        let channel = "worker_run_cleanup";
+        let app = create_app_with_task(channel).await;
+
+        let worker = app.create_worker("worker-1", vec![]);
+        let older_than = Duration::from_secs(30);
+        let res = worker.run_cleanup(older_than).await;
+        assert!(res.is_ok());
     }
 }
