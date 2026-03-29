@@ -69,6 +69,7 @@ impl From<Config> for taskturbine_core::config::Config {
 
 #[pymethods]
 impl Config {
+    #[allow(clippy::too_many_arguments)]
     #[new]
     #[pyo3(signature = (
         app_module,

@@ -14,6 +14,8 @@ use crate::db::{SALT, create_db};
 
 pub type HmacSha256 = Hmac<Sha256>;
 
+#[allow(dead_code)]
+#[derive(Debug)]
 enum TaskError {
     Message(String),
 }
