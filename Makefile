@@ -1,24 +1,45 @@
 # Linting and style
 
-style: ## Run style checking tools (cargo-fmt)
-	@rustup component add rustfmt 2> /dev/null
-	cargo fmt --all --check
+style: style-rs style-py ## Run style checking tools for all packages
 .PHONY: style
 
-lint: ## Run linting tools (cargo-clippy)
-	@rustup component add clippy 2> /dev/null
-	cargo clippy --workspace --all-targets --all-features --no-deps -- -D warnings
+style-rs: ## Run cargo fmt --check
+	@rustup component add rustfmt 2> /dev/null
+	cargo fmt --all --check
+.PHONY: style-rs
+
+style-py: ## Run ruff format check on python code
+	uv run ruff format --check ./taskturbine-python
+.PHONY: style-rs
+
+lint: lint-rs lint-py ## Run linting tools for all packages
 .PHONY: lint
 
-format: ## Run autofix mode for formatting and lint
+lint-rs: ## Run clippy for rust
+	@rustup component add clippy 2> /dev/null
+	cargo clippy --workspace --all-targets --all-features --no-deps --fix --allow-dirty --allow-staged -- -D warnings
+.PHONY: lint-rs
+
+lint-py:
+	uv run ruff check --fix ./taskturbine-python
+.PHONY: lint-py
+
+format: format-rs format-py ## Run style + lint autofixing for all packages
+.PHONY: format
+
+format-rs: ## Run style and lint fixing for rust (clippy, fmt)
 	@rustup component add clippy 2> /dev/null
 	@rustup component add rustfmt 2> /dev/null
 	cargo fmt --all
 	cargo clippy --workspace --all-targets --all-features --no-deps --fix --allow-dirty --allow-staged -- -D warnings
-.PHONY: format
+.PHONY: format-rs
+
+format-py: ## Run style fixing for py (ruff --fix)
+	uv run ruff format ./taskturbine-python
+.PHONY: format-rs
 
 
 # Help
 help: ## this help
-	@ awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-10s\033[0m\t%s\n", $$1, $$2 }' $(MAKEFILE_LIST) | column -s$$'\t' -t
+	@ awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-10s\033[0m\t%s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 .PHONY: help
