@@ -1,3 +1,26 @@
+
+# Install and setup
+
+install-py: ## Install python dependencies with uv
+	cd ./taskturbine-python && uv sync --all-packages --all-groups --frozen
+.PHONY: install-py
+
+install-rs: ## Install deps for rust
+	cargo install
+.PHONY: install-rs
+
+# Running tests
+
+test: test-rs test-py ## Run all tests
+.PHONY: test
+
+test-rs: ## Run rust tests
+	cargo t
+.PHONY: test-rs
+
+test-py: install-py ## Run python tests
+	cd ./taskturbine-python && uv run pytest
+
 # Linting and style
 
 style: style-rs style-py ## Run style checking tools for all packages
@@ -20,7 +43,7 @@ lint-rs: ## Run clippy for rust
 	cargo clippy --workspace --all-targets --all-features --no-deps --fix --allow-dirty --allow-staged -- -D warnings
 .PHONY: lint-rs
 
-lint-py:
+lint-py: install-py
 	uv run ruff check --fix ./taskturbine-python
 .PHONY: lint-py
 
@@ -34,7 +57,7 @@ format-rs: ## Run style and lint fixing for rust (clippy, fmt)
 	cargo clippy --workspace --all-targets --all-features --no-deps --fix --allow-dirty --allow-staged -- -D warnings
 .PHONY: format-rs
 
-format-py: ## Run style fixing for py (ruff --fix)
+format-py: install-py ## Run style fixing for py (ruff --fix)
 	uv run ruff format ./taskturbine-python
 .PHONY: format-rs
 
