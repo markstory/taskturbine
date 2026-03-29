@@ -15,12 +15,6 @@ def test_add_channel(config: Config) -> None:
     assert app.channels == {"default", "reports"}
 
 
-def test_run(config: Config) -> None:
-    app = TaskturbineApp(config)
-    worker = app.create_worker("worker-1", ["default"])
-    # worker.run()
-
-
 def test_register_task(config: Config) -> None:
     app = TaskturbineApp(config)
 
