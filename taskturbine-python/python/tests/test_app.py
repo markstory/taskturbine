@@ -1,15 +1,14 @@
 import json
 from typing import Any
-
 import psycopg2
 import pytest
-from taskturbine.taskturbine import TaskOptions
+from taskturbine import Config, Task, TaskSerializer, TaskturbineApp, TaskOptions
+
+from .conftest import row_factory
 
 Connection = psycopg2._psycopg.connection
 
-from taskturbine import Config, Task, TaskSerializer, TaskturbineApp
 
-from .conftest import row_factory
 
 
 def test_add_channel(config: Config) -> None:
