@@ -9,8 +9,6 @@ from .conftest import row_factory
 Connection = psycopg2._psycopg.connection
 
 
-
-
 def test_add_channel(config: Config) -> None:
     app = TaskturbineApp(config)
     app.add_channel("reports")
