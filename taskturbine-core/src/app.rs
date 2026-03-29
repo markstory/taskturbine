@@ -1,5 +1,8 @@
 use std::{
-    collections::{HashMap, HashSet}, pin::Pin, sync::Arc, time::Duration
+    collections::{HashMap, HashSet},
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
 };
 
 use async_channel::{Receiver, Sender, TrySendError};
@@ -367,11 +370,7 @@ impl Worker {
             // We could be in a cross deploy situation, and following
             // the retry schedule of the task allows for recovery on the next
             // attempt.
-            let res = self
-                .app
-                .storage
-                .fail_run(task.run_id, b"", None)
-                .await;
+            let res = self.app.storage.fail_run(task.run_id, b"", None).await;
             if let Err(schedule_err) = res {
                 log::error!("Unable to fail run {schedule_err:?}");
             }
@@ -383,7 +382,7 @@ impl Worker {
             Err(FlowControl::InvalidValue(msg)) => {
                 log::warn!("Invalid value {msg}");
                 self.fail_run(task).await;
-            },
+            }
             Err(FlowControl::Failure(msg)) => {
                 log::debug!("Task run failure: {msg}");
                 self.fail_run(task).await;
@@ -603,7 +602,12 @@ mod tests {
     use sqlx::Row;
     use uuid::Uuid;
 
-    use crate::{config::Config, context::{FlowControl, TaskContext}, models::TaskState, storage::{TaskOptions, TaskTurbineError}};
+    use crate::{
+        config::Config,
+        context::{FlowControl, TaskContext},
+        models::TaskState,
+        storage::{TaskOptions, TaskTurbineError},
+    };
 
     use super::TaskturbineApp;
 
@@ -623,15 +627,17 @@ mod tests {
     }
 
     async fn create_app_with_task(channel: &str) -> TaskturbineApp {
-        let app = create_app()
+        create_app()
             .await
-            .add_channel(&channel)
-            .register_task("first-task", |_ctx| async { Ok(()) });
-        app
+            .add_channel(channel)
+            .register_task("first-task", |_ctx| async { Ok(()) })
     }
-    
+
     fn now() -> u64 {
-        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
     }
 
     #[tokio::test]
@@ -723,7 +729,10 @@ mod tests {
         let channel = "worker_claim_tasks";
         let app = create_app_with_task(channel).await;
 
-        let res = app.channel(&channel).spawn_task("first-task", b"", None).await;
+        let res = app
+            .channel(channel)
+            .spawn_task("first-task", b"", None)
+            .await;
         assert!(res.is_ok(), "failed to spawn task");
         let spawned = res.unwrap();
 
@@ -744,7 +753,10 @@ mod tests {
         let channel = "worker_execute_task";
         let app = create_app_with_task(channel).await;
 
-        let res = app.channel(&channel).spawn_task("first-task", b"", None).await;
+        let res = app
+            .channel(channel)
+            .spawn_task("first-task", b"", None)
+            .await;
         assert!(res.is_ok(), "failed to spawn task");
 
         let worker = app.create_worker("worker-1", vec![channel.to_string()]);
@@ -753,7 +765,7 @@ mod tests {
         assert!(res.is_ok(), "failed to claim tasks");
 
         for task in res.unwrap().into_iter() {
-            let run_id = task.run_id.clone();
+            let run_id = task.run_id;
             worker.execute_task(task).await;
 
             let task_data = worker.app.storage.get_run(run_id).await.unwrap();
@@ -769,7 +781,10 @@ mod tests {
             Err(FlowControl::Failure("failure".to_string()))
         });
 
-        let res = app.channel(&channel).spawn_task("fail-task", b"", None).await;
+        let res = app
+            .channel(channel)
+            .spawn_task("fail-task", b"", None)
+            .await;
         assert!(res.is_ok(), "failed to spawn task");
 
         let worker = app.create_worker("worker-1", vec![channel.to_string()]);
@@ -778,7 +793,7 @@ mod tests {
         assert!(res.is_ok(), "failed to claim tasks");
 
         for task in res.unwrap().into_iter() {
-            let run_id = task.run_id.clone();
+            let run_id = task.run_id;
             worker.execute_task(task).await;
 
             let task_data = worker.app.storage.get_run(run_id).await.unwrap();
@@ -791,10 +806,15 @@ mod tests {
         let channel = "worker_execute_task_invalid_value";
         let mut app = create_app_with_task(channel).await;
         app = app.register_task("second-task", async |_ctx: TaskContext| {
-            Err(FlowControl::InvalidValue("something invalid was passed".to_string()))
+            Err(FlowControl::InvalidValue(
+                "something invalid was passed".to_string(),
+            ))
         });
 
-        let res = app.channel(&channel).spawn_task("second-task", b"", None).await;
+        let res = app
+            .channel(channel)
+            .spawn_task("second-task", b"", None)
+            .await;
         assert!(res.is_ok(), "failed to spawn task");
 
         let worker = app.create_worker("worker-1", vec![channel.to_string()]);
@@ -803,7 +823,7 @@ mod tests {
         assert!(res.is_ok(), "failed to claim tasks");
 
         for task in res.unwrap().into_iter() {
-            let run_id = task.run_id.clone();
+            let run_id = task.run_id;
             worker.execute_task(task).await;
 
             let task_data = worker.app.storage.get_run(run_id).await.unwrap();
@@ -817,7 +837,7 @@ mod tests {
         let channel = format!("worker_execute_task_suspended_{}", now());
         let mut app = create_app_with_task(&channel).await;
         app = app.register_task("sleep-task", async |mut ctx: TaskContext| {
-            let _ = ctx.sleep_for("sleep-time", Duration::from_secs(30)).await?;
+            ctx.sleep_for("sleep-time", Duration::from_secs(30)).await?;
             Ok(())
         });
 
@@ -825,7 +845,10 @@ mod tests {
             max_attempts: 1,
             ..TaskOptions::default()
         };
-        let res = app.channel(&channel).spawn_task("sleep-task", b"", Some(options)).await;
+        let res = app
+            .channel(&channel)
+            .spawn_task("sleep-task", b"", Some(options))
+            .await;
         assert!(res.is_ok(), "failed to spawn task");
 
         let worker = app.create_worker("worker-1", vec![channel.to_string()]);
@@ -834,18 +857,18 @@ mod tests {
         assert!(res.is_ok(), "failed to claim tasks");
 
         for task in res.unwrap().into_iter() {
-            let run_id = task.run_id.clone();
+            let run_id = task.run_id;
             worker.execute_task(task).await;
 
             let task_data = worker.app.storage.get_run(run_id).await.unwrap();
             assert_eq!(task_data.get::<TaskState, _>("state"), TaskState::Sleeping);
             assert_eq!(
-                task_data.get::<Option<String>, _>("claimed_by"), 
+                task_data.get::<Option<String>, _>("claimed_by"),
                 None,
                 "claim should be released on suspension"
             );
             assert_eq!(
-                task_data.get::<Option<String>, _>("claim_expires_at"), 
+                task_data.get::<Option<String>, _>("claim_expires_at"),
                 None,
                 "claim expiry should be cleared on suspension"
             );
@@ -862,7 +885,10 @@ mod tests {
             Ok(())
         });
 
-        let res = app.channel(&channel).spawn_task("sleep-task", b"", None).await;
+        let res = app
+            .channel(&channel)
+            .spawn_task("sleep-task", b"", None)
+            .await;
         assert!(res.is_ok(), "failed to spawn task");
 
         let worker = app.create_worker("worker-1", vec![channel.to_string()]);
@@ -871,7 +897,7 @@ mod tests {
         assert!(res.is_ok(), "failed to claim tasks");
 
         for task in res.unwrap().into_iter() {
-            let run_id = task.run_id.clone();
+            let run_id = task.run_id;
             worker.execute_task(task).await;
 
             let task_data = worker.app.storage.get_run(run_id).await.unwrap();
@@ -884,7 +910,10 @@ mod tests {
         let channel = "worker_execute_task_undefined_task";
         let app = create_app_with_task(channel).await;
 
-        let res = app.channel(&channel).spawn_task("undefined", b"", None).await;
+        let res = app
+            .channel(channel)
+            .spawn_task("undefined", b"", None)
+            .await;
         assert!(res.is_err(), "undefined task should fail");
         let err = res.err().unwrap();
         assert!(matches!(err, TaskTurbineError::ValidationError(..)));

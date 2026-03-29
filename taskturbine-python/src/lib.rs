@@ -47,9 +47,7 @@ impl AppInner {
             .build()
             .unwrap();
 
-        let storage = runtime.block_on(async {
-            Storage::new(config.clone().into())
-        });
+        let storage = runtime.block_on(async { Storage::new(config.clone().into()) });
 
         AppInner {
             config,
@@ -79,18 +77,21 @@ impl AppInner {
         params: &[u8],
         options: TaskOptions,
     ) -> PyResult<SpawnResult> {
-        let result = self.runtime.block_on(
-            self.storage.spawn_task(channel, task_name, params, Some(options.into()))
-        );
+        let result = self.runtime.block_on(self.storage.spawn_task(
+            channel,
+            task_name,
+            params,
+            Some(options.into()),
+        ));
         result
             .map(|v| v.into())
             .map_err(|v| PyValueError::new_err(format!("Could not spawn task: {v:?}")))
     }
 
     fn emit_event(&self, event_name: &str, payload: &[u8]) -> PyResult<()> {
-        let res = self.runtime.block_on(
-            self.storage.emit_event(event_name, payload)
-        );
+        let res = self
+            .runtime
+            .block_on(self.storage.emit_event(event_name, payload));
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
@@ -155,14 +156,12 @@ impl WorkerInner {
     fn claim_tasks(&self) -> PyResult<Vec<ClaimedTask>> {
         let channels: Vec<&str> = self.channels.iter().map(|c| c.as_ref()).collect();
         let timeout = Duration::from_secs(self.config.worker_claim_timeout_secs as u64);
-        let claim_res = self.runtime.block_on(
-            self.storage.claim_task(
-                channels,
-                &self.worker_id,
-                timeout,
-                self.config.worker_concurrency,
-            )
-        );
+        let claim_res = self.runtime.block_on(self.storage.claim_task(
+            channels,
+            &self.worker_id,
+            timeout,
+            self.config.worker_concurrency,
+        ));
 
         claim_res
             .map(|v| {
@@ -176,9 +175,9 @@ impl WorkerInner {
     fn run_cleanup(&self) -> PyResult<()> {
         let older_than = Duration::from_secs(self.config.worker_cleanup_cutoff_secs as u64);
 
-        self.runtime.block_on(
-            self.storage.run_cleanup(older_than)
-        ).map_err(|e| PyValueError::new_err(format!("Could not run_cleanup: {e:?}")))
+        self.runtime
+            .block_on(self.storage.run_cleanup(older_than))
+            .map_err(|e| PyValueError::new_err(format!("Could not run_cleanup: {e:?}")))
     }
 
     // Should cleanup be run right now by a Worker?
@@ -202,9 +201,9 @@ impl WorkerInner {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
-        self.runtime.block_on(
-            self.storage.fail_run(run_id, b"", retry_at)
-        ).map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
+        self.runtime
+            .block_on(self.storage.fail_run(run_id, b"", retry_at))
+            .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
     }
 
     /// Mark a run as complete.
@@ -212,9 +211,9 @@ impl WorkerInner {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
-        self.runtime.block_on(
-            self.storage.complete_run(run_id, &run_result)
-        ).map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
+        self.runtime
+            .block_on(self.storage.complete_run(run_id, &run_result))
+            .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
     }
 
     /// Re-schedule a task to run in the future.
@@ -222,9 +221,9 @@ impl WorkerInner {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
-        self.runtime.block_on(
-            self.storage.schedule_run(run_id, wait_for)
-        ).map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
+        self.runtime
+            .block_on(self.storage.schedule_run(run_id, wait_for))
+            .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
     }
 }
 
@@ -248,9 +247,9 @@ impl ContextInner {
     }
 
     fn emit_event(&self, event_name: String, payload: &[u8]) -> PyResult<()> {
-        let res = self.runtime.block_on(
-            self.storage.emit_event(&event_name, payload)
-        );
+        let res = self
+            .runtime
+            .block_on(self.storage.emit_event(&event_name, payload));
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
@@ -259,9 +258,9 @@ impl ContextInner {
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
-        let res = self.runtime.block_on(
-            self.storage.get_checkpoint(task_id, &checkpoint_name)
-        );
+        let res = self
+            .runtime
+            .block_on(self.storage.get_checkpoint(task_id, &checkpoint_name));
         if let Ok(Some(checkpoint)) = res {
             Ok(checkpoint.into())
         } else {
@@ -284,9 +283,13 @@ impl ContextInner {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
 
-        let res = self.runtime.block_on(
-            self.storage.set_checkpoint(task_id, run_id, checkpoint_name, state, extend_claim)
-        );
+        let res = self.runtime.block_on(self.storage.set_checkpoint(
+            task_id,
+            run_id,
+            checkpoint_name,
+            state,
+            extend_claim,
+        ));
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }
@@ -300,9 +303,13 @@ impl ContextInner {
         };
 
         let step_name = format!("$awaitEvent:{event_name}");
-        let payload_res = self.runtime.block_on(
-            self.storage.await_event(task_id, run_id, &step_name, event_name.as_ref(), Some(timeout))
-        );
+        let payload_res = self.runtime.block_on(self.storage.await_event(
+            task_id,
+            run_id,
+            &step_name,
+            event_name.as_ref(),
+            Some(timeout),
+        ));
         match payload_res {
             Ok(result) => Ok(result.into()),
             Err(err) => Err(PyValueError::new_err(format!(

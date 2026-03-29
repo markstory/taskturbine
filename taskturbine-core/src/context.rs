@@ -197,7 +197,9 @@ impl TaskContext {
 
                 Ok(state as StepData)
             }
-            Err(err) => Err(FlowControl::Failure(format!("Task execution failed: {err:?}"))),
+            Err(err) => Err(FlowControl::Failure(format!(
+                "Task execution failed: {err:?}"
+            ))),
         }
     }
 

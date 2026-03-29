@@ -241,7 +241,11 @@ mod tests {
         let res: Result<TaskId, ()> = uuid_string.try_into();
         assert!(res.is_ok());
         let task_id = res.unwrap();
-        assert_eq!(task_id.0.to_string(), uuid.to_string(), "string values should be the same");
+        assert_eq!(
+            task_id.0.to_string(),
+            uuid.to_string(),
+            "string values should be the same"
+        );
     }
 
     #[test]
@@ -257,6 +261,10 @@ mod tests {
         let res: Result<RunId, ()> = uuid_string.try_into();
         assert!(res.is_ok());
         let run_id = res.unwrap();
-        assert_eq!(run_id.0.to_string(), uuid.to_string(), "string values should be the same");
+        assert_eq!(
+            run_id.0.to_string(),
+            uuid.to_string(),
+            "string values should be the same"
+        );
     }
 }
