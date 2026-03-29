@@ -1,7 +1,7 @@
 from datetime import timedelta
 import functools
 import json
-from typing import Any, Callable, ParamSpec, Self
+from typing import Any, Callable, ParamSpec
 from taskturbine.models import JsonData, OptionalJsonData, SuspendError
 from taskturbine.taskturbine import (
     ContextInner,

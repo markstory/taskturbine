@@ -2,9 +2,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import psycopg2
-import pytest
 
-from taskturbine import Config, Task, TaskContext, TaskturbineApp
+from taskturbine import Config, TaskContext, TaskturbineApp
 from tests.demo import app as demo_app
 from taskturbine.taskturbine import ClaimedTask
 
