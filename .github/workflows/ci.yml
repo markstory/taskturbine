@@ -120,3 +120,5 @@ jobs:
 
       - name: Run tests
         run: make test-rs
+        env:
+          TASKTURBINE_DATABASE_URL: "postgres://postgres:postgres@postgres:5432/postgres"
