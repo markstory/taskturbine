@@ -31,7 +31,7 @@ style-rs: ## Run cargo fmt --check
 	cargo fmt --all --check
 .PHONY: style-rs
 
-style-py: ## Run ruff format check on python code
+style-py: install-py ## Run ruff format check on python code
 	uv run ruff format --check ./taskturbine-python
 .PHONY: style-rs
 
