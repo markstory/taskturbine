@@ -18,6 +18,7 @@ def pytest_sessionstart() -> None:
     # have cross test bleed through.
     db_url = os.getenv("TASKTURBINE_DATABASE_URL")
     assert db_url, "Required environment variable TASKTURBINE_DATABASE_URL undefined"
+    print(f"Using DB_URL {db_url}")
 
     connection = psycopg2.connect(db_url)
     with connection.cursor() as cursor:
