@@ -32,7 +32,7 @@ style-rs: ## Run cargo fmt --check
 .PHONY: style-rs
 
 style-py: install-py ## Run ruff format check on python code
-	uv run ruff format --check ./taskturbine-python
+	cd taskturbine-python && uv run ruff format --check .
 .PHONY: style-rs
 
 lint: lint-rs lint-py ## Run linting tools for all packages
@@ -44,7 +44,7 @@ lint-rs: ## Run clippy for rust
 .PHONY: lint-rs
 
 lint-py: install-py
-	uv run ruff check --fix ./taskturbine-python
+	cd taskturbine-python && uv run ruff check --fix .
 .PHONY: lint-py
 
 format: format-rs format-py ## Run style + lint autofixing for all packages
@@ -58,7 +58,7 @@ format-rs: ## Run style and lint fixing for rust (clippy, fmt)
 .PHONY: format-rs
 
 format-py: install-py ## Run style fixing for py (ruff --fix)
-	uv run ruff format ./taskturbine-python
+	cd taskturbine-python && uv run ruff format .
 .PHONY: format-rs
 
 
