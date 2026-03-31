@@ -87,7 +87,7 @@ jobs:
         # if: steps.changes.outputs.python == 'true'
         run: make test-py
         env:
-          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@localhoast:5432/postgres"
+          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/postgres"
 
   test-rs:
     name: Rust tests
