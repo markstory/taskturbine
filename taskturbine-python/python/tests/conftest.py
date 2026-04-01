@@ -3,6 +3,7 @@ from typing import Any
 
 import logging
 import psycopg2
+import psycopg2.errors
 import pytest
 
 from taskturbine import Config
@@ -21,11 +22,14 @@ def pytest_sessionstart() -> None:
     print(f"Using DB_URL {db_url}")
 
     connection = psycopg2.connect(db_url)
-    with connection.cursor() as cursor:
-        cursor.execute("BEGIN")
-        for table in ("events", "waits", "runs", "tasks"):
-            cursor.execute(f"TRUNCATE taskturbine.{table}")
-        cursor.execute("COMMIT")
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("BEGIN")
+            for table in ("events", "waits", "runs", "tasks"):
+                cursor.execute(f"TRUNCATE taskturbine.{table}")
+            cursor.execute("COMMIT")
+    except psycopg2.errors.Error as e:
+        print(f"DB cleanup failed with {e}")
 
 
 @pytest.fixture
