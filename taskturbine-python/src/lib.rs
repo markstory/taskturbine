@@ -95,6 +95,14 @@ impl AppInner {
 
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
+    
+    fn update_schema(&self) -> PyResult<()> {
+        let res = self
+            .runtime
+            .block_on(self.storage.update_schema());
+
+        res.map_err(|v| PyValueError::new_err(format!("Could not update_schema: {v:?}")))
+    }
 
     fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
         WorkerInner {
