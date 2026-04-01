@@ -127,6 +127,12 @@ class TaskturbineApp:
             cancellation_max_age=cancellation_max_age,
         )
 
+    def update_schema(self) -> None:
+        """
+        Create or update the taskturbine schema and tables.
+        """
+        self._inner.update_schema()
+
     def add_channel(self, name: str) -> None:
         """
         Add a channel that tasks can be spawned on.

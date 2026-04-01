@@ -6,7 +6,7 @@ import psycopg2
 import psycopg2.errors
 import pytest
 
-from taskturbine import Config
+from taskturbine import Config, TaskturbineApp
 
 Connection = psycopg2._psycopg.connection
 Cursor = psycopg2._psycopg.cursor
@@ -30,6 +30,10 @@ def pytest_sessionstart() -> None:
             cursor.execute("COMMIT")
     except psycopg2.errors.Error as e:
         print(f"DB cleanup failed with {e}")
+        print(f"Creating database schema")
+        config = Config(database_url=db_url, app_module="")
+        app = TaskturbineApp(config)
+        app.update_schema()
 
 
 @pytest.fixture
