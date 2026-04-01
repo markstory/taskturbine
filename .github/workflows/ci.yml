@@ -50,18 +50,6 @@ jobs:
     name: Python client tests
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        # Set health checks to wait until postgres has started
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
@@ -77,6 +65,10 @@ jobs:
         # if: steps.changes.outputs.python != 'true'
         run: echo "No Python client files changed, skipping tests"
 
+      - name: Start PostgreSQL
+        # if: steps.changes.output != 'true'
+        run: docker run --rm --name=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=taskturbine -p 5432:5432 -d postgres:latest
+
       - uses: astral-sh/setup-uv@5a7eac68fb9809dea845d802897dc5c723910fa3 # v7.1.3
         # if: steps.changes.outputs.python == 'true'
         with:
@@ -87,26 +79,18 @@ jobs:
         # if: steps.changes.outputs.python == 'true'
         run: make test-py
         env:
-          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/postgres"
+          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
 
   test-rs:
     name: Rust tests
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        # Set health checks to wait until postgres has started
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
+
+      - name: Start PostgreSQL
+        # if: steps.changes.output != 'true'
+        run: docker run --rm --name=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=taskturbine -p 5432:5432 -d postgres:latest
 
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
         with:
@@ -122,4 +106,4 @@ jobs:
         run: make test-rs
         env:
           RUST_BACKTRACE: 1
-          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/postgres"
+          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
