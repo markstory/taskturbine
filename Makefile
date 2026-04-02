@@ -1,5 +1,11 @@
+# Makefile
+#
+# Shortcuts and high level operation names for local development
+# and CI. Using make for CI makes reproducing what happens in CI
+# locally much simpler and forces you to avoid complex code being stored in YAML.
 
 # Install and setup
+###################
 
 install-py: ## Install python dependencies with uv
 	cd ./taskturbine-python && uv sync --all-packages --all-groups --frozen
@@ -9,7 +15,20 @@ install-rs: ## Install deps for rust
 	cargo install
 .PHONY: install-rs
 
+# Building
+###################
+
+build-rs: install-rs ## Build cargo crates
+	cargo build
+.PHONY: build-rs
+
+build-py: install-py ## Build python extension
+	cd ./taskturbine-python && maturin build
+.PHONY: build-py
+
+
 # Running tests
+###################
 
 test: test-rs test-py ## Run all tests
 .PHONY: test
@@ -22,6 +41,7 @@ test-py: install-py ## Run python tests
 	cd ./taskturbine-python && uv run pytest
 
 # Linting and style
+###################
 
 style: style-rs style-py ## Run style checking tools for all packages
 .PHONY: style
@@ -63,6 +83,8 @@ format-py: install-py ## Run style fixing for py (ruff --fix)
 
 
 # Help
+###################
+
 help: ## this help
 	@ awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-10s\033[0m\t%s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 .PHONY: help
