@@ -11,14 +11,11 @@ install-py: ## Install python dependencies with uv
 	cd ./taskturbine-python && uv sync --all-packages --all-groups --frozen
 .PHONY: install-py
 
-install-rs: ## Install deps for rust
-	cargo install
-.PHONY: install-rs
 
 # Building
 ###################
 
-build-rs: install-rs ## Build cargo crates
+build-rs: ## Build cargo crates
 	cargo build
 .PHONY: build-rs
 
