@@ -12,8 +12,7 @@ env:
 
 jobs:
   build:
-    id: build
-    name: Build binaries
+    name: "Build binaries"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -49,7 +48,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    needs: build
+    needs: "Build binaries"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
