@@ -23,7 +23,7 @@ build-rs: install-rs ## Build cargo crates
 .PHONY: build-rs
 
 build-py: install-py ## Build python extension
-	cd ./taskturbine-python && maturin build
+	cd ./taskturbine-python && uv run maturin build
 .PHONY: build-py
 
 
