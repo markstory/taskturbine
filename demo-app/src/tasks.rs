@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use sqlx::Row;
 use taskturbine_core::{
-    app::TaskturbineApp,
+    app::{ResultData, TaskturbineApp},
     config::Config,
     context::{FlowControl, TaskContext},
 };
@@ -56,12 +56,12 @@ pub struct UserRegister {
     pub email: String,
 }
 
-pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
+pub async fn register_user(mut ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
     log::info!("starting register task");
 
     /// Steps can be defined as standard functions
     /// Store the user in the database.
-    async fn create_user(ctx: TaskContext) -> Result<Vec<u8>, TaskError> {
+    async fn create_user(ctx: TaskContext) -> Result<ResultData, TaskError> {
         log::info!("create the user in the database");
         let db = create_db().await;
         let payload: RegisterUserParams = serde_json::from_slice(ctx.param_bytes())?;
@@ -91,7 +91,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
     let event_name = ctx
         .async_step(
             "send-verification-code",
-            async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+            async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
                 log::info!("Generate and log a verification code");
 
                 // This simulates an email verification flow.
@@ -127,7 +127,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
     let _ = ctx
         .async_step(
             "verification-complete",
-            async |_ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+            async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
                 log::info!("Verification complete, update the user.");
                 let db = create_db().await;
                 let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
@@ -142,7 +142,7 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
         )
         .await?;
 
-    let _ = ctx.async_step("provision-organization", async |ctx: TaskContext| -> Result<Vec<u8>, TaskError> {
+    let _ = ctx.async_step("provision-organization", async |ctx: TaskContext| -> Result<ResultData, TaskError> {
         log::info!("Provision the organization.");
         let params: RegisterUserParams = serde_json::from_slice(ctx.param_bytes())?;
         let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
@@ -181,17 +181,17 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<(), FlowControl> {
     }).await?;
     log::info!("All steps complete.");
 
-    Ok(())
+    Ok(None)
 }
 
 /// Task that always fail are handled.
-pub async fn err_failure(mut _ctx: TaskContext) -> Result<(), FlowControl> {
+pub async fn err_failure(mut _ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
     log::info!("Starting failure task");
     Err(FlowControl::InvalidValue("something bad".into()))
 }
 
 /// Tasks that panic will be handled without killing the worker.
-pub async fn panic_failure(mut _ctx: TaskContext) -> Result<(), FlowControl> {
+pub async fn panic_failure(mut _ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
     log::info!("Starting panic_failure task");
     panic!("A task has hit panic!");
 }
