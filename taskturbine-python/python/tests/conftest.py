@@ -30,7 +30,7 @@ def pytest_sessionstart() -> None:
             cursor.execute("COMMIT")
     except psycopg2.errors.Error as e:
         print(f"DB cleanup failed with {e}")
-        print(f"Creating database schema")
+        print("Creating database schema")
         config = Config(database_url=db_url, app_module="")
         app = TaskturbineApp(config)
         app.update_schema()
