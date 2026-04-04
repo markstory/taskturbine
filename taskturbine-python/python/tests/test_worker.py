@@ -83,7 +83,9 @@ def test_worker_execute_batch_simple_success(
     rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
     assert len(rows) == 2
     assert rows[0]["state"] == "completed"
+    assert rows[0]["result"].tobytes() == b'{"complete": "ok"}'
     assert rows[1]["state"] == "completed"
+    assert rows[1]["result"].tobytes() == b'{"complete": "ok"}'
 
 
 def test_worker_execute_batch_simple_failure(
