@@ -63,7 +63,8 @@ CREATE TABLE taskturbine.events (
     event_name text not null,
     payload bytea,
     created_at timestamptz not null default current_timestamp,
-    primary key (usecase, event_name)
+    primary key (usecase, event_name),
+    CONSTRAINT unique_event_name UNIQUE (usecase, event_name)
 );
 
 CREATE TABLE taskturbine.waits (
