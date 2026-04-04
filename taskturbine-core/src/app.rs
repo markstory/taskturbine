@@ -1,5 +1,8 @@
 use std::{
-    collections::{HashMap, HashSet}, pin::Pin, sync::Arc, time::Duration
+    collections::{HashMap, HashSet},
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
 };
 
 use async_channel::{Receiver, Sender, TrySendError};
@@ -225,7 +228,10 @@ impl TaskturbineApp {
 ///
 /// The current result is not generic, and requires a FlowControl error to be used.
 pub trait TaskHandler<Ctx> {
-    fn call(&self, ctx: Ctx) -> Pin<Box<dyn Future<Output = Result<Option<ResultData>, FlowControl>> + Send>>;
+    fn call(
+        &self,
+        ctx: Ctx,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<ResultData>, FlowControl>> + Send>>;
 }
 
 /// Implement the TaskHandler trait for Fn(TaskContext) -> Ret
@@ -399,7 +405,9 @@ impl Worker {
             Ok(maybe_result) => {
                 log::debug!("Completed task {taskname}");
                 let result_data = maybe_result.unwrap_or_else(Vec::new);
-                let res = storage.complete_run(task.run_id, result_data.as_slice()).await;
+                let res = storage
+                    .complete_run(task.run_id, result_data.as_slice())
+                    .await;
                 if let Err(msg) = res {
                     log::error!("Failed to complete run {msg:?}");
                 }
@@ -801,7 +809,10 @@ mod tests {
             let task_data = worker.app.storage.get_run(run_id).await.unwrap();
             dbg!(&task_data);
             assert_eq!(TaskState::Completed, task_data.get::<TaskState, _>("state"));
-            assert_eq!(b"{\"some\":\"json\"}".to_vec(), task_data.get::<Vec<u8>, _>("result"));
+            assert_eq!(
+                b"{\"some\":\"json\"}".to_vec(),
+                task_data.get::<Vec<u8>, _>("result")
+            );
         }
     }
 

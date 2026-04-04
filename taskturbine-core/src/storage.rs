@@ -1058,7 +1058,7 @@ impl Storage {
         let _ = sqlx::query(
             "INSERT INTO taskturbine.events (usecase, event_name, payload, created_at)
             VALUES ($1, $2, null, NOW())
-            ON CONFLICT (usecase, event_name) DO NOTHING"
+            ON CONFLICT (usecase, event_name) DO NOTHING",
         )
         .bind(&self.config.usecase)
         .bind(event_name)
@@ -1191,7 +1191,7 @@ impl Storage {
         conn: &mut PgConnection,
         event_name: &str,
     ) -> Result<Option<Vec<u8>>, TaskTurbineError> {
-        // Take a share lock to avoid races between checking 
+        // Take a share lock to avoid races between checking
         // if an event exists, creating a checkpoint or wait
         let event_opt = sqlx::query(
             "SELECT payload FROM taskturbine.events
@@ -1204,8 +1204,8 @@ impl Storage {
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
-        if let Some(event) = event_opt &&
-            let Some(payload) = event.get::<Option<Vec<u8>>, _>("payload")
+        if let Some(event) = event_opt
+            && let Some(payload) = event.get::<Option<Vec<u8>>, _>("payload")
         {
             Ok(Some(payload))
         } else {
@@ -1692,10 +1692,17 @@ mod tests {
         assert_eq!(run.get::<String, _>("state"), "running");
 
         // A checkpoint should be created from the event.
-        let checkpoint_opt = storage.get_checkpoint(spawned.task_id, "wait-for-event").await.unwrap();
+        let checkpoint_opt = storage
+            .get_checkpoint(spawned.task_id, "wait-for-event")
+            .await
+            .unwrap();
         assert!(checkpoint_opt.is_some());
         let checkpoint = checkpoint_opt.unwrap();
-        assert_eq!(b"event-payload".to_vec(), checkpoint.state, "checkpoint state should be event payload");
+        assert_eq!(
+            b"event-payload".to_vec(),
+            checkpoint.state,
+            "checkpoint state should be event payload"
+        );
     }
 
     #[tokio::test]

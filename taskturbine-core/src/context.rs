@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 
 use crate::{
-    app::{Channel, TaskturbineApp, ResultData},
+    app::{Channel, ResultData, TaskturbineApp},
     models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
     storage::{TaskOptions, TaskTurbineError},
 };
@@ -119,7 +119,10 @@ impl TaskContext {
     /// Get the result of a previously completed step name.
     /// If the step has not been completed, the return is None.
     /// If there are multiple steps with the same name, the *latest* iteration will be used.
-    pub async fn step_result(&self, step_name: &str) -> Result<Option<ResultData>, TaskTurbineError> {
+    pub async fn step_result(
+        &self,
+        step_name: &str,
+    ) -> Result<Option<ResultData>, TaskTurbineError> {
         let Some(counter) = self.checkpoints.get_counter(step_name) else {
             return Ok(None);
         };
