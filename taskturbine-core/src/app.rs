@@ -1,8 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    pin::Pin,
-    sync::Arc,
-    time::Duration,
+    collections::{HashMap, HashSet}, pin::Pin, sync::Arc, time::Duration
 };
 
 use async_channel::{Receiver, Sender, TrySendError};
@@ -17,6 +14,10 @@ use crate::{
 
 /// TaskRegistry contains a map of task names -> task handlers
 type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
+
+/// A basic interface for results from tasks & steps.
+/// Applications are responsible for decoding bytes.
+pub type ResultData = Vec<u8>;
 
 /// The entrypoint and container for a Task application
 ///
@@ -108,7 +109,7 @@ impl TaskturbineApp {
     ///
     ///     app.register_task("process-feedback", |ctx| async {
     ///         // Do some IO
-    ///         Ok(())
+    ///         Ok(None)
     ///     });
     /// })();
     /// ```
@@ -224,22 +225,21 @@ impl TaskturbineApp {
 ///
 /// The current result is not generic, and requires a FlowControl error to be used.
 pub trait TaskHandler<Ctx> {
-    fn call(&self, ctx: Ctx) -> Pin<Box<dyn Future<Output = Result<(), FlowControl>> + Send>>;
+    fn call(&self, ctx: Ctx) -> Pin<Box<dyn Future<Output = Result<Option<ResultData>, FlowControl>> + Send>>;
 }
 
 /// Implement the TaskHandler trait for Fn(TaskContext) -> Ret
 /// Trait bounds narrow down to async functions that return a narrow result
 /// type.
-/// TODO: Consider replacing `()` with `Bytes` so that tasks can return values.
 impl<F: Sync + 'static, Ret> TaskHandler<TaskContext> for F
 where
     F: Fn(TaskContext) -> Ret + Sync + 'static,
-    Ret: Future<Output = Result<(), FlowControl>> + Send + 'static,
+    Ret: Future<Output = Result<Option<ResultData>, FlowControl>> + Send + 'static,
 {
     fn call(
         &self,
         ctx: TaskContext,
-    ) -> Pin<Box<dyn Future<Output = Result<(), FlowControl>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Option<ResultData>, FlowControl>> + Send>> {
         Box::pin(self(ctx))
     }
 }
@@ -396,9 +396,10 @@ impl Worker {
                     log::error!("Failed to schedule run on suspend {schedule_err:?}");
                 }
             }
-            Ok(_) => {
+            Ok(maybe_result) => {
                 log::debug!("Completed task {taskname}");
-                let res = storage.complete_run(task.run_id, b"").await;
+                let result_data = maybe_result.unwrap_or_else(Vec::new);
+                let res = storage.complete_run(task.run_id, result_data.as_slice()).await;
                 if let Err(msg) = res {
                     log::error!("Failed to complete run {msg:?}");
                 }
@@ -630,7 +631,7 @@ mod tests {
         create_app()
             .await
             .add_channel(channel)
-            .register_task("first-task", |_ctx| async { Ok(()) })
+            .register_task("first-task", |_ctx| async { Ok(None) })
     }
 
     fn now() -> u64 {
@@ -645,8 +646,8 @@ mod tests {
     async fn register_task_panic() {
         create_app()
             .await
-            .register_task("duplicate-task", |_ctx| async { Ok(()) })
-            .register_task("duplicate-task", |_ctx| async { Ok(()) });
+            .register_task("duplicate-task", |_ctx| async { Ok(None) })
+            .register_task("duplicate-task", |_ctx| async { Ok(None) });
     }
 
     #[tokio::test]
@@ -669,7 +670,7 @@ mod tests {
         let app = create_app()
             .await
             .add_channel("reports")
-            .register_task("hello-world", |_ctx| async { Ok(()) });
+            .register_task("hello-world", |_ctx| async { Ok(None) });
 
         let res = app
             .channel("reports")
@@ -688,7 +689,7 @@ mod tests {
     async fn spawn_task_known() {
         let app = create_app()
             .await
-            .register_task("first-task", |_ctx| async { Ok(()) });
+            .register_task("first-task", |_ctx| async { Ok(None) });
 
         let res = app.spawn_task("first-task", b"", None).await;
         assert!(res.is_ok());
@@ -774,6 +775,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn worker_execute_task_result() {
+        let channel = "worker_execute_task_results";
+        let mut app = create_app_with_task(channel).await;
+        app = app.register_task("result-task", async |_ctx: TaskContext| {
+            let data = (b"{\"some\":\"json\"}").to_vec();
+            Ok(Some(data))
+        });
+
+        let res = app
+            .channel(channel)
+            .spawn_task("result-task", b"", None)
+            .await;
+        assert!(res.is_ok(), "failed to spawn task");
+
+        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let timeout = Duration::from_secs(300);
+        let res = worker.claim_tasks(timeout).await;
+        assert!(res.is_ok(), "failed to claim tasks");
+
+        for task in res.unwrap().into_iter() {
+            let run_id = task.run_id;
+            worker.execute_task(task).await;
+
+            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
+            dbg!(&task_data);
+            assert_eq!(TaskState::Completed, task_data.get::<TaskState, _>("state"));
+            assert_eq!(b"{\"some\":\"json\"}".to_vec(), task_data.get::<Vec<u8>, _>("result"));
+        }
+    }
+
+    #[tokio::test]
     async fn worker_execute_task_failure() {
         let channel = "worker_execute_task_failure";
         let mut app = create_app_with_task(channel).await;
@@ -838,7 +870,7 @@ mod tests {
         let mut app = create_app_with_task(&channel).await;
         app = app.register_task("sleep-task", async |mut ctx: TaskContext| {
             ctx.sleep_for("sleep-time", Duration::from_secs(30)).await?;
-            Ok(())
+            Ok(None)
         });
 
         let options = TaskOptions {
@@ -882,7 +914,7 @@ mod tests {
         let mut app = create_app_with_task(&channel).await;
         app = app.register_task("sleep-task", async |ctx: TaskContext| {
             let _event = ctx.await_event("sleep-time", None).await?;
-            Ok(())
+            Ok(None)
         });
 
         let res = app

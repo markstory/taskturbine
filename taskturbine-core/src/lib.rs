@@ -85,16 +85,17 @@
 //! [async_step()](context/struct.TaskContext.html#method.async_step).
 //!
 //! ```rust
-//! use taskturbine_core::context::{FlowControl, StepData, TaskContext};
+//! use taskturbine_core::app::ResultData;
+//! use taskturbine_core::context::{FlowControl, TaskContext};
 //!
 //! #[derive(Debug)]
 //! struct Error(String);
 //!
-//! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {
+//! pub async fn do_some_task(mut ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
 //!     // Define a sync step. `step_result` will contain the bytes returned by the step fn.
 //!     let prepared_bytes = ctx.step(
 //!         "prepare-data",
-//!         |ctx: TaskContext| -> Result<StepData, Error> {
+//!         |ctx: TaskContext| -> Result<ResultData, Error> {
 //!             todo!();
 //!         }
 //!     ).await?;
@@ -102,12 +103,12 @@
 //!     // Define an async step
 //!     let email_results = ctx.async_step(
 //!         "send-results",
-//!         async |ctx: TaskContext| -> Result<StepData, Error> {
+//!         async |ctx: TaskContext| -> Result<ResultData, Error> {
 //!             todo!();
 //!         }
 //!     ).await?;
 //!
-//!     Ok(())
+//!     Ok(None)
 //! }
 //! ```
 //!
@@ -138,16 +139,16 @@
 //!
 //! ```rust
 //! use std::env;
-//! use taskturbine_core::app::{TaskturbineApp, run_worker};
+//! use taskturbine_core::app::{TaskturbineApp, ResultData, run_worker};
 //! use taskturbine_core::config::Config;
 //! use taskturbine_core::context::{FlowControl, TaskContext};
 //!
-//! async fn send_mail(ctx: TaskContext) -> Result<(), FlowControl> {
-//!     Ok(())
+//! async fn send_mail(ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+//!     Ok(None)
 //! }
 //!
-//! async fn register_user(ctx: TaskContext) -> Result<(), FlowControl> {
-//!     Ok(())
+//! async fn register_user(ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+//!     Ok(None)
 //! }
 //!
 //! // Create a Task application.

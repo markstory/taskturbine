@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 
 use crate::{
-    app::{Channel, TaskturbineApp},
+    app::{Channel, TaskturbineApp, ResultData},
     models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
     storage::{TaskOptions, TaskTurbineError},
 };
@@ -57,9 +57,6 @@ impl Checkpoints {
         self.counters.get(name)
     }
 }
-
-/// The result of steps. The primitive API is just bytes.
-pub type StepData = Vec<u8>;
 
 /// Execution context for a task.
 /// Passed to task functions by the Worker runtime.
@@ -122,7 +119,7 @@ impl TaskContext {
     /// Get the result of a previously completed step name.
     /// If the step has not been completed, the return is None.
     /// If there are multiple steps with the same name, the *latest* iteration will be used.
-    pub async fn step_result(&self, step_name: &str) -> Result<Option<StepData>, TaskTurbineError> {
+    pub async fn step_result(&self, step_name: &str) -> Result<Option<ResultData>, TaskTurbineError> {
         let Some(counter) = self.checkpoints.get_counter(step_name) else {
             return Ok(None);
         };
@@ -148,9 +145,9 @@ impl TaskContext {
         &mut self,
         name: &str,
         step_fn: F,
-    ) -> Result<StepData, FlowControl>
+    ) -> Result<ResultData, FlowControl>
     where
-        Fut: Future<Output = Result<StepData, E>>,
+        Fut: Future<Output = Result<ResultData, E>>,
         F: FnOnce(TaskContext) -> Fut,
         E: std::fmt::Debug,
     {
@@ -195,7 +192,7 @@ impl TaskContext {
                     )));
                 }
 
-                Ok(state as StepData)
+                Ok(state as ResultData)
             }
             Err(err) => Err(FlowControl::Failure(format!(
                 "Task execution failed: {err:?}"
@@ -207,9 +204,9 @@ impl TaskContext {
     /// When steps complete, they create checkpoints of the
     /// step results which enables re-runs of the task to durably
     /// resume from their last checkpoint.
-    pub async fn step<F, E>(&mut self, name: &str, step_fn: F) -> Result<StepData, FlowControl>
+    pub async fn step<F, E>(&mut self, name: &str, step_fn: F) -> Result<ResultData, FlowControl>
     where
-        F: FnOnce(TaskContext) -> Result<StepData, E>,
+        F: FnOnce(TaskContext) -> Result<ResultData, E>,
         E: std::fmt::Debug,
     {
         let async_step_fn = async |ctx: TaskContext| step_fn(ctx);
@@ -346,6 +343,8 @@ impl TaskContext {
 #[cfg(test)]
 mod tests {
 
+    use std::str::Bytes;
+
     use uuid::Uuid;
 
     use super::*;
@@ -391,9 +390,9 @@ mod tests {
         claim.clone()
     }
 
-    async fn hello_world(mut _ctx: TaskContext) -> Result<(), FlowControl> {
+    async fn hello_world(mut _ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
         println!("hello world");
-        Ok(())
+        Ok(None)
     }
 
     #[tokio::test]
@@ -642,6 +641,7 @@ mod tests {
         assert!(stored.is_ok());
         let value = stored.unwrap();
         assert!(value.is_some());
+        assert_eq!(value.unwrap(), b"checkpoint value".to_vec());
 
         let stored = context.step_result("undefined").await;
         assert!(stored.is_ok());
