@@ -113,13 +113,11 @@ impl Storage {
         // This code is tested at the Worker layer
         let older_than = Utc::now() - older_than;
         let cleanup_limit = self.config.worker_cleanup_limit;
-        let _ = self.cleanup_events(older_than, cleanup_limit).await?;
 
-        let _ = self.cleanup_tasks(older_than, cleanup_limit).await?;
-
-        let _ = self.handle_expired_claims().await?;
-
-        let _ = self.handle_cancellation_max_age().await?;
+        self.cleanup_events(older_than, cleanup_limit).await?;
+        self.cleanup_tasks(older_than, cleanup_limit).await?;
+        self.handle_expired_claims().await?;
+        self.handle_cancellation_max_age().await?;
 
         Ok(())
     }
@@ -533,7 +531,7 @@ impl Storage {
         Ok(())
     }
 
-    /// Release claims on tasks where the claim_timeout_at has passed.
+    /// Release claims on tasks where the `claim_expires_at` has passed.
     /// Will only process up to `config.worker_cleanup_limit` expired
     /// claims at a time.
     ///
@@ -688,7 +686,7 @@ impl Storage {
             return Err(StorageError::SqlError(e));
         }
 
-        let _ = sqlx::query(
+        sqlx::query(
             "UPDATE taskturbine.tasks
             SET state = $1, last_attempt_run = $2, completed_at = NOW()
             WHERE task_id = $3",
@@ -761,7 +759,7 @@ impl Storage {
         run_id: RunId,
         conn: &mut PgConnection,
     ) -> Result<(), StorageError> {
-        let _ = sqlx::query("DELETE FROM taskturbine.waits WHERE run_id = $1")
+        sqlx::query("DELETE FROM taskturbine.waits WHERE run_id = $1")
             .bind(run_id)
             .execute(&mut *conn)
             .await
@@ -785,12 +783,12 @@ impl Storage {
             .begin()
             .await
             .map_err(StorageError::SqlError)?;
-        let res = self
-            .do_fail_run(&mut atomic, run_id, reason, retry_at, true)
-            .await;
+
+        self.do_fail_run(&mut atomic, run_id, reason, retry_at, true).await?;
+
         atomic.commit().await.map_err(StorageError::SqlError)?;
 
-        res
+        Ok(())
     }
 
     /// Internal method to fail a run. Can be used within an existing transaction.
@@ -870,7 +868,7 @@ impl Storage {
 
                 // Schedule the next run attempt.
                 // Create a new run for the next attempt
-                let _ = sqlx::query(
+                sqlx::query(
                     "INSERT INTO taskturbine.runs (
                         run_id, task_id, attempt, state, available_at
                     ) VALUES ($1, $2, $3, $4, $5)",
@@ -886,7 +884,7 @@ impl Storage {
             }
         }
 
-        let _ = sqlx::query(
+        sqlx::query(
             "UPDATE taskturbine.tasks
             SET state = $1, 
                 attempts = $2, 
@@ -1001,7 +999,7 @@ impl Storage {
             .await?;
         if let Some(extension) = extend_claim {
             let seconds = extension.as_secs() as f64;
-            let _ = sqlx::query(
+            sqlx::query(
                 "UPDATE taskturbine.runs 
                 SET claim_expires_at = COALESCE(claim_expires_at, NOW()) + $1 * INTERVAL '1 second'
                 WHERE run_id = $2",
@@ -1055,7 +1053,7 @@ impl Storage {
 
         // Store a sentinel event, ignoring conflicts so we can get a share
         // lock on the event reliably.
-        let _ = sqlx::query(
+        sqlx::query(
             "INSERT INTO taskturbine.events (usecase, event_name, payload, created_at)
             VALUES ($1, $2, null, NOW())
             ON CONFLICT (usecase, event_name) DO NOTHING",
@@ -1130,7 +1128,7 @@ impl Storage {
         timeout: Duration,
     ) -> Result<(), StorageError> {
         let timeout = Utc::now() + timeout;
-        let _ = sqlx::query(
+        sqlx::query(
             "INSERT INTO taskturbine.waits (task_id, run_id, step_name, event_name, timeout_at, created_at)
             VALUES ($1, $2, $3, $4, $5, NOW())
             ON CONFLICT (event_name)
@@ -1163,7 +1161,7 @@ impl Storage {
         step_name: &str,
         state: &[u8],
     ) -> Result<(), StorageError> {
-        let _ = sqlx::query(
+        sqlx::query(
             "INSERT INTO taskturbine.checkpoints (task_id, owner_run_id, step_name, state, updated_at)
             VALUES ($1, $2, $3, $4, NOW())
             ON CONFLICT (task_id, step_name)
@@ -1222,7 +1220,7 @@ impl Storage {
         available_in: Duration,
     ) -> Result<(), StorageError> {
         let available_at = Utc::now() + available_in;
-        let _ = sqlx::query(
+        sqlx::query(
             "WITH update_runs AS (
                 UPDATE taskturbine.runs
                 SET state = $1,
@@ -1260,7 +1258,7 @@ impl Storage {
             .await
             .map_err(StorageError::SqlError)?;
 
-        let _ = sqlx::query(
+        sqlx::query(
             "INSERT INTO taskturbine.events (usecase, event_name, payload, created_at)
             VALUES ($1, $2, $3, NOW())
             ON CONFLICT (usecase, event_name)
@@ -1277,7 +1275,7 @@ impl Storage {
 
         // Wake up the task/run.
         // Clear any valid waits, and wake up those runs.
-        let _ = sqlx::query(
+        sqlx::query(
             "WITH matching_waits AS (
                 DELETE FROM taskturbine.waits
                 WHERE event_name = $1
