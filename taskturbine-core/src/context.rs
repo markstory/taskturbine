@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 use crate::{
     app::{Channel, ResultData, TaskturbineApp},
     models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
-    storage::{TaskOptions, StorageError},
+    storage::{StorageError, TaskOptions},
 };
 
 /// Used as signaling 'errors' to the worker runtime
@@ -119,10 +119,7 @@ impl TaskContext {
     /// Get the result of a previously completed step name.
     /// If the step has not been completed, the return is None.
     /// If there are multiple steps with the same name, the *latest* iteration will be used.
-    pub async fn step_result(
-        &self,
-        step_name: &str,
-    ) -> Result<Option<ResultData>, StorageError> {
+    pub async fn step_result(&self, step_name: &str) -> Result<Option<ResultData>, StorageError> {
         let Some(counter) = self.checkpoints.get_counter(step_name) else {
             return Ok(None);
         };
@@ -349,7 +346,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        app::{TaskturbineApp, TaskResult},
+        app::{TaskResult, TaskturbineApp},
         config::Config,
         storage::{Storage, StorageError},
     };

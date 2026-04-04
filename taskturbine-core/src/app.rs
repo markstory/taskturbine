@@ -12,7 +12,7 @@ use crate::{
     config::Config,
     context::{FlowControl, TaskContext},
     models::{ClaimedTask, SpawnResult},
-    storage::{Storage, TaskOptions, StorageError},
+    storage::{Storage, StorageError, TaskOptions},
 };
 
 /// TaskRegistry contains a map of task names -> task handlers
@@ -231,10 +231,7 @@ impl TaskturbineApp {
 ///
 /// The current result is not generic, and requires a FlowControl error to be used.
 pub trait TaskHandler<Ctx> {
-    fn call(
-        &self,
-        ctx: Ctx,
-    ) -> Pin<Box<dyn Future<Output = TaskResult> + Send>>;
+    fn call(&self, ctx: Ctx) -> Pin<Box<dyn Future<Output = TaskResult> + Send>>;
 }
 
 /// Implement the TaskHandler trait for Fn(TaskContext) -> Ret
@@ -245,10 +242,7 @@ where
     F: Fn(TaskContext) -> Ret + Sync + 'static,
     Ret: Future<Output = TaskResult> + Send + 'static,
 {
-    fn call(
-        &self,
-        ctx: TaskContext,
-    ) -> Pin<Box<dyn Future<Output = TaskResult> + Send>> {
+    fn call(&self, ctx: TaskContext) -> Pin<Box<dyn Future<Output = TaskResult> + Send>> {
         Box::pin(self(ctx))
     }
 }
@@ -618,7 +612,7 @@ mod tests {
         config::Config,
         context::{FlowControl, TaskContext},
         models::TaskState,
-        storage::{TaskOptions, StorageError},
+        storage::{StorageError, TaskOptions},
     };
 
     use super::TaskturbineApp;
