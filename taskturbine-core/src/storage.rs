@@ -1034,12 +1034,6 @@ impl Storage {
             .await
             .map_err(TaskTurbineError::SqlError)?;
 
-        // Ensure the task & run exist and are running.
-        let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
-        if run_row.get::<TaskState, _>("state") != TaskState::Running {
-            return Err(TaskTurbineError::NotRunning(run_id.0));
-        }
-
         // Fetch the checkpoint if it exists
         let checkpoint_opt = sqlx::query(
             "SELECT state FROM taskturbine.checkpoints
@@ -1051,7 +1045,7 @@ impl Storage {
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
-        // If we have a checkpoint already, return early.
+        // If the task has a checkpoint already, return early.
         if let Some(checkpoint) = checkpoint_opt {
             return Ok(AwaitResult {
                 payload: checkpoint.get::<Vec<u8>, _>("state"),
@@ -1059,12 +1053,35 @@ impl Storage {
             });
         }
 
-        // Check for an event that was received while we were sleeping/running.
+        // Store a sentinel event, ignoring conflicts so we can get a share
+        // lock on the event reliably.
+        let _ = sqlx::query(
+            "INSERT INTO taskturbine.events (usecase, event_name, payload, created_at)
+            VALUES ($1, $2, null, NOW())
+            ON CONFLICT (usecase, event_name) DO NOTHING"
+        )
+        .bind(&self.config.usecase)
+        .bind(event_name)
+        .execute(&mut *atomic)
+        .await
+        .map_err(TaskTurbineError::SqlError)?;
+
+        // Get the event payload with a share lock, preventing a concurrent update.
         let event = self.get_event(&mut atomic, event_name).await?;
+
+        // Ensure the task & run exists, is running, and that we can lock the run.
+        let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
+        if run_row.get::<TaskState, _>("state") != TaskState::Running {
+            return Err(TaskTurbineError::NotRunning(run_id.0));
+        }
+
+        // Check for an event that was received while we were sleeping/running.
         if let Some(payload) = event {
             // There was an event, store a checkpoint and return
             self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, &payload)
                 .await?;
+
+            let _ = atomic.commit().await.map_err(TaskTurbineError::SqlError);
 
             return Ok(AwaitResult {
                 payload,
@@ -1167,14 +1184,19 @@ impl Storage {
     }
 
     /// Read an event's payload by name or None
+    /// Will return None if the event doesn't exist, or has a null payload.
+    /// Null payloads are used as sentinel values.
     async fn get_event(
         &self,
         conn: &mut PgConnection,
         event_name: &str,
     ) -> Result<Option<Vec<u8>>, TaskTurbineError> {
+        // Take a share lock to avoid races between checking 
+        // if an event exists, creating a checkpoint or wait
         let event_opt = sqlx::query(
             "SELECT payload FROM taskturbine.events
-            WHERE usecase = $1 AND event_name = $2",
+            WHERE usecase = $1 AND event_name = $2
+            FOR SHARE",
         )
         .bind(&self.config.usecase)
         .bind(event_name)
@@ -1182,9 +1204,9 @@ impl Storage {
         .await
         .map_err(TaskTurbineError::SqlError)?;
 
-        if let Some(event) = event_opt {
-            let payload: Vec<u8> = event.get("payload");
-
+        if let Some(event) = event_opt &&
+            let Some(payload) = event.get::<Option<Vec<u8>>, _>("payload")
+        {
             Ok(Some(payload))
         } else {
             Ok(None)
@@ -1535,7 +1557,6 @@ mod tests {
                 None,
             )
             .await;
-        dbg!(&res);
         assert!(res.is_ok());
         let wait_res = storage.get_wait_by_run_id(spawned.run_id).await;
         assert!(wait_res.is_ok());
@@ -1643,21 +1664,21 @@ mod tests {
     async fn await_event_has_event() {
         let (storage, spawned) = create_task().await.unwrap();
 
-        // Coerce to running and set a checkpoint
-        let _ = storage
-            .set_run_state(spawned.task_id, TaskState::Running)
-            .await;
-
         let task_id = spawned.task_id;
         let event_name = format!("event-{task_id}");
         let _ = storage.emit_event(&event_name, b"event-payload").await;
+
+        // Coerce to running
+        let _ = storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await;
 
         // Should get the event payload back
         let res = storage
             .await_event(
                 spawned.task_id,
                 spawned.run_id,
-                "first-step",
+                "wait-for-event",
                 &event_name,
                 None,
             )
@@ -1669,6 +1690,12 @@ mod tests {
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.get::<String, _>("state"), "running");
+
+        // A checkpoint should be created from the event.
+        let checkpoint_opt = storage.get_checkpoint(spawned.task_id, "wait-for-event").await.unwrap();
+        assert!(checkpoint_opt.is_some());
+        let checkpoint = checkpoint_opt.unwrap();
+        assert_eq!(b"event-payload".to_vec(), checkpoint.state, "checkpoint state should be event payload");
     }
 
     #[tokio::test]
@@ -1976,7 +2003,6 @@ mod tests {
         let _ = storage.spawn_task("test", "hello-world", b"", None).await;
 
         let res = storage.claim_task(vec![], "worker-1", timeout, 1).await;
-        dbg!(&res);
         assert!(res.is_ok());
         let claimed = res.unwrap();
         assert!(!claimed.is_empty());
