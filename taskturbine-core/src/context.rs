@@ -1,9 +1,9 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 
 use crate::{
-    app::{Channel, ResultData, TaskturbineApp, TaskResult},
+    app::{Channel, ResultData, TaskturbineApp},
     models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
-    storage::{TaskOptions, TaskTurbineError},
+    storage::{TaskOptions, StorageError},
 };
 
 /// Used as signaling 'errors' to the worker runtime
@@ -122,7 +122,7 @@ impl TaskContext {
     pub async fn step_result(
         &self,
         step_name: &str,
-    ) -> Result<Option<ResultData>, TaskTurbineError> {
+    ) -> Result<Option<ResultData>, StorageError> {
         let Some(counter) = self.checkpoints.get_counter(step_name) else {
             return Ok(None);
         };
@@ -330,7 +330,7 @@ impl TaskContext {
         task_name: &str,
         params: &[u8],
         options: Option<TaskOptions>,
-    ) -> Result<SpawnResult, TaskTurbineError> {
+    ) -> Result<SpawnResult, StorageError> {
         self.app.spawn_task(task_name, params, options).await
     }
 
@@ -349,9 +349,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        app::TaskturbineApp,
+        app::{TaskturbineApp, TaskResult},
         config::Config,
-        storage::{Storage, TaskTurbineError},
+        storage::{Storage, StorageError},
     };
     use sqlx::Row;
 
@@ -408,7 +408,7 @@ mod tests {
         let arc_app = Arc::new(app);
         let mut context = TaskContext::build(claim.clone(), arc_app);
         let res = context
-            .step::<_, TaskTurbineError>("first-step", |_ctx| Ok(b"should not run".to_vec()))
+            .step::<_, StorageError>("first-step", |_ctx| Ok(b"should not run".to_vec()))
             .await
             .unwrap();
 
@@ -423,7 +423,7 @@ mod tests {
         let mut context = TaskContext::build(claim.clone(), arc_app.clone());
 
         let res = context
-            .step::<_, TaskTurbineError>("first-step", |_ctx| Ok(b"checkpoint value".to_vec()))
+            .step::<_, StorageError>("first-step", |_ctx| Ok(b"checkpoint value".to_vec()))
             .await
             .unwrap();
         assert_eq!(res, b"checkpoint value".to_vec());
@@ -552,7 +552,7 @@ mod tests {
         assert!(res.is_err(), "Should not be able to spawn undefined task");
         assert!(matches!(
             res.err().unwrap(),
-            TaskTurbineError::ValidationError(_)
+            StorageError::ValidationError(_)
         ))
     }
 
@@ -632,7 +632,7 @@ mod tests {
         let mut context = TaskContext::build(claim.clone(), arc_app.clone());
 
         let res = context
-            .step::<_, TaskTurbineError>("first-step", |_ctx| Ok(b"checkpoint value".to_vec()))
+            .step::<_, StorageError>("first-step", |_ctx| Ok(b"checkpoint value".to_vec()))
             .await
             .unwrap();
         assert_eq!(res, b"checkpoint value".to_vec());

@@ -12,7 +12,7 @@ use crate::{
     config::Config,
     context::{FlowControl, TaskContext},
     models::{ClaimedTask, SpawnResult},
-    storage::{Storage, TaskOptions, TaskTurbineError},
+    storage::{Storage, TaskOptions, StorageError},
 };
 
 /// TaskRegistry contains a map of task names -> task handlers
@@ -22,7 +22,7 @@ type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sy
 /// Applications are responsible for decoding bytes.
 pub type ResultData = Vec<u8>;
 
-/// The result type of task & step functions.
+/// The result type of task functions.
 pub type TaskResult = Result<Option<ResultData>, FlowControl>;
 
 /// The entrypoint and container for a Task application
@@ -184,9 +184,9 @@ impl TaskturbineApp {
         task_name: &str,
         params: &[u8],
         options: Option<TaskOptions>,
-    ) -> Result<SpawnResult, TaskTurbineError> {
+    ) -> Result<SpawnResult, StorageError> {
         if !self.tasks.contains_key(task_name) {
-            return Err(TaskTurbineError::ValidationError(format!(
+            return Err(StorageError::ValidationError(format!(
                 "No task named {task_name} is registered."
             )));
         }
@@ -274,9 +274,9 @@ impl<'a> Channel<'a> {
         task_name: &str,
         params: &[u8],
         options: Option<TaskOptions>,
-    ) -> Result<SpawnResult, TaskTurbineError> {
+    ) -> Result<SpawnResult, StorageError> {
         if !self.app.has_task(task_name) {
-            return Err(TaskTurbineError::ValidationError(format!(
+            return Err(StorageError::ValidationError(format!(
                 "No task named {task_name} is registered."
             )));
         }
@@ -294,8 +294,8 @@ pub enum WorkerError {
 }
 
 /// Convert from storage errors to worker errors.
-impl From<TaskTurbineError> for WorkerError {
-    fn from(err: TaskTurbineError) -> Self {
+impl From<StorageError> for WorkerError {
+    fn from(err: StorageError) -> Self {
         WorkerError::Message(format!("{err:?}"))
     }
 }
@@ -618,7 +618,7 @@ mod tests {
         config::Config,
         context::{FlowControl, TaskContext},
         models::TaskState,
-        storage::{TaskOptions, TaskTurbineError},
+        storage::{TaskOptions, StorageError},
     };
 
     use super::TaskturbineApp;
@@ -713,7 +713,7 @@ mod tests {
         let res = app.spawn_task("first-task", b"", None).await;
         assert!(res.is_err());
         let err = res.err().unwrap();
-        assert!(matches!(err, TaskTurbineError::ValidationError(_)));
+        assert!(matches!(err, StorageError::ValidationError(_)));
     }
 
     #[tokio::test]
@@ -962,7 +962,7 @@ mod tests {
             .await;
         assert!(res.is_err(), "undefined task should fail");
         let err = res.err().unwrap();
-        assert!(matches!(err, TaskTurbineError::ValidationError(..)));
+        assert!(matches!(err, StorageError::ValidationError(..)));
     }
 
     #[tokio::test]
