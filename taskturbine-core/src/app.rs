@@ -22,6 +22,9 @@ type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sy
 /// Applications are responsible for decoding bytes.
 pub type ResultData = Vec<u8>;
 
+/// The result type of task & step functions.
+pub type TaskResult = Result<Option<ResultData>, FlowControl>;
+
 /// The entrypoint and container for a Task application
 ///
 /// Application instances are created from [`Config`]. Tasks and channels
@@ -231,7 +234,7 @@ pub trait TaskHandler<Ctx> {
     fn call(
         &self,
         ctx: Ctx,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<ResultData>, FlowControl>> + Send>>;
+    ) -> Pin<Box<dyn Future<Output = TaskResult> + Send>>;
 }
 
 /// Implement the TaskHandler trait for Fn(TaskContext) -> Ret
@@ -240,12 +243,12 @@ pub trait TaskHandler<Ctx> {
 impl<F: Sync + 'static, Ret> TaskHandler<TaskContext> for F
 where
     F: Fn(TaskContext) -> Ret + Sync + 'static,
-    Ret: Future<Output = Result<Option<ResultData>, FlowControl>> + Send + 'static,
+    Ret: Future<Output = TaskResult> + Send + 'static,
 {
     fn call(
         &self,
         ctx: TaskContext,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<ResultData>, FlowControl>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = TaskResult> + Send>> {
         Box::pin(self(ctx))
     }
 }

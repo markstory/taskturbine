@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 
 use crate::{
-    app::{Channel, ResultData, TaskturbineApp},
+    app::{Channel, ResultData, TaskturbineApp, TaskResult},
     models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
     storage::{TaskOptions, TaskTurbineError},
 };
@@ -390,7 +390,7 @@ mod tests {
         claim.clone()
     }
 
-    async fn hello_world(mut _ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+    async fn hello_world(mut _ctx: TaskContext) -> TaskResult {
         println!("hello world");
         Ok(None)
     }

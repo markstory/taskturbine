@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use sqlx::Row;
 use taskturbine_core::{
-    app::{ResultData, TaskturbineApp},
+    app::{ResultData, TaskResult, TaskturbineApp},
     config::Config,
     context::{FlowControl, TaskContext},
 };
@@ -56,7 +56,7 @@ pub struct UserRegister {
     pub email: String,
 }
 
-pub async fn register_user(mut ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+pub async fn register_user(mut ctx: TaskContext) -> TaskResult {
     log::info!("starting register task");
 
     /// Steps can be defined as standard functions
@@ -185,13 +185,13 @@ pub async fn register_user(mut ctx: TaskContext) -> Result<Option<ResultData>, F
 }
 
 /// Task that always fail are handled.
-pub async fn err_failure(mut _ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+pub async fn err_failure(mut _ctx: TaskContext) -> TaskResult {
     log::info!("Starting failure task");
     Err(FlowControl::InvalidValue("something bad".into()))
 }
 
 /// Tasks that panic will be handled without killing the worker.
-pub async fn panic_failure(mut _ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+pub async fn panic_failure(mut _ctx: TaskContext) -> TaskResult {
     log::info!("Starting panic_failure task");
     panic!("A task has hit panic!");
 }
