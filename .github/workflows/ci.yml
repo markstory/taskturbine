@@ -69,7 +69,7 @@ jobs:
   lint-py:
     name: Lint python
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-py
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
