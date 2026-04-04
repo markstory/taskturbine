@@ -342,9 +342,6 @@ impl TaskContext {
 
 #[cfg(test)]
 mod tests {
-
-    use std::str::Bytes;
-
     use uuid::Uuid;
 
     use super::*;
