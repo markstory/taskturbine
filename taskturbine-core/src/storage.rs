@@ -32,6 +32,9 @@ pub enum StorageError {
     NotRunning(Uuid),
     /// Validation errors from input parameters. The &str contains an error message.
     ValidationError(String),
+    /// The spawn_task request contained an idempotency_key that has been seen recently.
+    /// The included task id is the id of the conflict task that exists already.
+    DuplicateSpawn(TaskId),
 }
 
 /// Options for spawning a task.
@@ -39,6 +42,12 @@ pub enum StorageError {
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct TaskOptions {
+    /// A unique identifier used to prevent duplicate tasks from being spawned.
+    /// By providing an idempotency_key only one copy of a task can be scheduled
+    /// at a time. The uniqueness constraint will end when the task is cleaned up
+    /// after completion/failure.
+    pub idempotency_key: Option<String>,
+
     /// Map of headers to include with the task activation
     pub headers: HashMap<String, String>,
 
@@ -63,6 +72,7 @@ pub struct TaskOptions {
 impl Default for TaskOptions {
     fn default() -> Self {
         TaskOptions {
+            idempotency_key: None,
             headers: HashMap::new(),
             max_attempts: 5,
             retry_seconds: 10,
@@ -341,12 +351,17 @@ impl Storage {
 
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
         let task_id = Uuid::now_v7();
+        // We do a no-op update on conflict to abuse RETURNING.
         let res = sqlx::query(
             "INSERT INTO taskturbine.tasks (
                 task_id, usecase, channel, task_name, params, headers,
-                retry_seconds, retry_factor, retry_max_seconds,
+                idempotency_key, retry_seconds, retry_factor, retry_max_seconds,
                 max_attempts, cancellation_max_age, created_at, state
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), $12)",
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13)
+            ON CONFLICT (task_name, idempotency_key)
+            DO UPDATE SET task_name = EXCLUDED.task_name
+            RETURNING task_id
+            ",
         )
         .bind(task_id)
         .bind(&self.config.usecase)
@@ -354,16 +369,25 @@ impl Storage {
         .bind(task_name)
         .bind(params)
         .bind(header_json)
+        .bind(options.idempotency_key)
         .bind(options.retry_seconds)
         .bind(options.retry_factor)
         .bind(options.retry_max_seconds)
         .bind(options.max_attempts)
         .bind(options.cancellation_max_age)
         .bind(TaskState::Pending)
-        .execute(&mut *atomic);
+        .fetch_one(&mut *atomic)
+        .await;
 
-        if let Err(e) = res.await {
+        let Ok(row) = res else {
+            let e = res.err().unwrap();
             return Err(StorageError::SqlError(e));
+        };
+
+        // If the task_ids are different we've encountered an idempotency error.
+        let spawned_task_id: Uuid = row.get("task_id");
+        if spawned_task_id != task_id {
+            return Err(StorageError::DuplicateSpawn(TaskId(spawned_task_id)));
         }
 
         let run_id = Uuid::now_v7();
@@ -1328,6 +1352,62 @@ mod tests {
         let (_, spawned) = create_task().await.unwrap();
         assert!(!spawned.task_id.0.to_string().is_empty());
         assert!(!spawned.run_id.to_string().is_empty());
+    }
+
+    #[tokio::test]
+    async fn spawn_task_idempotency_key_violation() {
+        let storage = create_storage().await;
+        storage.clear_storage().await.expect("Failed to clear storage");
+
+        let channel = "spawn_task_idempotency_key_violation";
+        let task_name = "say_hello";
+        let payload = b"";
+        let idempotency_key = "some-unique-value";
+        let result = storage
+            .spawn_task(
+                channel,
+                task_name,
+                payload,
+                Some(TaskOptions {
+                    idempotency_key: Some(idempotency_key.to_string()),
+                    ..Default::default()
+                }),
+            )
+            .await;
+        assert!(result.is_ok(), "Should spawn");
+        let original = result.unwrap();
+
+        // Spawn a duplicate task (same task_name + idempotency_key) -> err
+        let duplicate = storage
+            .spawn_task(
+                channel,
+                task_name,
+                payload,
+                Some(TaskOptions {
+                    idempotency_key: Some(idempotency_key.to_string()),
+                    ..Default::default()
+                }),
+            )
+            .await;
+        assert!(duplicate.is_err(), "Should return an error");
+        let err = duplicate.err().unwrap();
+        assert!(matches!(err, StorageError::DuplicateSpawn(task_id) if task_id == original.task_id));
+
+        // Make a task with a different idempotency key.
+        let result = storage
+            .spawn_task(
+                channel,
+                task_name,
+                payload,
+                Some(TaskOptions {
+                    idempotency_key: Some("a-different-value".to_string()),
+                    ..Default::default()
+                }),
+            )
+            .await;
+        assert!(result.is_ok(), "Should spawn");
+        let spawn_result = result.unwrap();
+        assert!(spawn_result.task_id != original.task_id, "should make a unique task");
     }
 
     #[tokio::test]

@@ -10,6 +10,7 @@ CREATE TABLE taskturbine.tasks (
     task_name text not null,
     params bytea not null,
     headers bytea,
+    idempotency_key varchar,
     -- Each retry increments enqueue_at = enqueue_at + (retry_seconds * retry_factor * attempts)
     retry_seconds integer,
     retry_factor real,
@@ -25,7 +26,8 @@ CREATE TABLE taskturbine.tasks (
     state text not null check (state in ('pending', 'running', 'sleeping', 'completed', 'failed', 'cancelled')),
     last_attempt_run uuid,
     -- When the task was completed/failed/cancelled.
-    completed_at timestamptz
+    completed_at timestamptz,
+    CONSTRAINT task_name_idempotent UNIQUE (task_name, idempotency_key)
 );
 CREATE INDEX tasks_usecase_channel ON taskturbine.tasks (usecase, channel);
 
