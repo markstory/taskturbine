@@ -61,11 +61,21 @@ multiplier * retry_seconds = next retry delay."
 and the time after which it should be considered cancelled."
     )]
     cancellation_max_age: Option<i32>,
+
+    #[arg(
+        long,
+        help = "A unique value that used to make task spawning idempotent."
+    )]
+    idempotency_key: Option<String>,
+
 }
 
 impl From<SpawnArgs> for TaskOptions {
     fn from(val: SpawnArgs) -> Self {
         let mut options = TaskOptions::default();
+        if val.idempotency_key.is_some() {
+            options.idempotency_key = val.idempotency_key.clone();
+        }
         if let Some(headers) = val.headers {
             options.headers =
                 serde_json::from_str::<HashMap<String, String>>(&headers).unwrap_or_default();
