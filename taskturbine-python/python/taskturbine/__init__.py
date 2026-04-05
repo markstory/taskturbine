@@ -99,6 +99,7 @@ class TaskturbineApp:
             retry_factor=1.0,
             retry_max_seconds=300,
             cancellation_max_age=86400,
+            idempotency_key=None,
         )
         self.error_handler = error_handler
         if serializer is None:
@@ -114,6 +115,7 @@ class TaskturbineApp:
         retry_factor: float | None = None,
         retry_max_seconds: int | None = None,
         cancellation_max_age: int | None = None,
+        idempotency_key: str | None = None,
     ) -> None:
         """
         Update the default options that are used to spawn tasks.
@@ -125,6 +127,7 @@ class TaskturbineApp:
             retry_factor=retry_factor,
             retry_max_seconds=retry_max_seconds,
             cancellation_max_age=cancellation_max_age,
+            idempotency_key=idempotency_key,
         )
 
     def update_schema(self) -> None:
@@ -203,6 +206,7 @@ class TaskturbineApp:
         retry_factor: float | None = None,
         retry_max_seconds: int | None = None,
         cancellation_max_age: int | None = None,
+        idempotency_key: str | None = None,
     ) -> SpawnResult:
         """
         Spawn a task to be run later by a worker.
@@ -215,6 +219,7 @@ class TaskturbineApp:
         :param retry_factor: The scaling factor applied to retry_seconds to grow seconds.
         :param retry_max_seconds: The maximum number of seconds that a retry can be.
         :param cancellation_max_age: The age after which a task is cancelled.
+        :param idempotency_key: A key to make spawn_task idempotent.
         :return: Details about the spawned task.
 
         The headers, max_attempts, retry_seconds, retry_factors, retry_max_seconds, and
@@ -235,6 +240,7 @@ class TaskturbineApp:
             retry_factor=retry_factor,
             retry_max_seconds=retry_max_seconds,
             cancellation_max_age=cancellation_max_age,
+            idempotency_key=idempotency_key,
         )
         if channel:
             return self._inner.channel_spawn_task(

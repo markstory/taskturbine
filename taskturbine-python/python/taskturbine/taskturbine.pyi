@@ -204,6 +204,8 @@ class TaskOptions:
     """
     The runtime options used to spawn a task
     """
+    idempotency_key: str | None
+    """A unique key that is paired with task_name to provide idempotent task spawning."""
 
     headers: dict[str, str]
     """A dictionary of headers for the task"""
@@ -236,6 +238,7 @@ class TaskOptions:
         retry_factor: float,
         retry_max_seconds: int,
         cancellation_max_age: int,
+        idempotency_key: str | None,
     ) -> None: ...
     def copy_with(
         self,
@@ -245,6 +248,7 @@ class TaskOptions:
         retry_factor: float | None,
         retry_max_seconds: int | None,
         cancellation_max_age: int | None,
+        idempotency_key: str | None,
     ) -> Self: ...
     """Create a clone of TaskOptions with updated values"""
 

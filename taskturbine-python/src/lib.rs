@@ -329,6 +329,7 @@ impl ContextInner {
 #[pyclass]
 #[derive(Debug, PartialEq, Clone)]
 struct TaskOptions {
+    pub idempotency_key: Option<String>,
     pub headers: HashMap<String, String>,
     pub max_attempts: i32,
     pub retry_seconds: i32,
@@ -341,6 +342,7 @@ struct TaskOptions {
 impl From<TaskOptions> for taskturbine_core::storage::TaskOptions {
     fn from(value: TaskOptions) -> taskturbine_core::storage::TaskOptions {
         let mut out = taskturbine_core::storage::TaskOptions::default();
+        out.idempotency_key = value.idempotency_key;
         out.headers = value.headers;
         out.max_attempts = value.max_attempts;
         out.retry_seconds = value.retry_seconds;
@@ -360,7 +362,8 @@ impl TaskOptions {
         retry_seconds,
         retry_factor,
         retry_max_seconds,
-        cancellation_max_age
+        cancellation_max_age,
+        idempotency_key = None,
     ))]
     fn __new__(
         max_attempts: i32,
@@ -368,8 +371,10 @@ impl TaskOptions {
         retry_factor: f64,
         retry_max_seconds: i32,
         cancellation_max_age: i32,
+        idempotency_key: Option<String>,
     ) -> Self {
         Self {
+            idempotency_key,
             headers: HashMap::new(),
             max_attempts,
             retry_seconds,
@@ -386,7 +391,8 @@ impl TaskOptions {
         retry_seconds,
         retry_factor,
         retry_max_seconds,
-        cancellation_max_age
+        cancellation_max_age,
+        idempotency_key
     ))]
     fn copy_with(
         &self,
@@ -396,8 +402,12 @@ impl TaskOptions {
         retry_factor: Option<f64>,
         retry_max_seconds: Option<i32>,
         cancellation_max_age: Option<i32>,
+        idempotency_key: Option<String>,
     ) -> Self {
         let mut copied = self.clone();
+        if idempotency_key.is_some() {
+            copied.idempotency_key = idempotency_key;
+        }
         if let Some(value) = headers {
             copied.headers = value;
         }
