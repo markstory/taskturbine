@@ -2,6 +2,7 @@
 use chrono::{DateTime, Utc};
 use std::{
     fmt::{Display, Formatter},
+    str::FromStr,
     time::Duration,
 };
 use uuid::Uuid;
@@ -22,6 +23,24 @@ pub enum TaskState {
     Failed,
     /// The task was not cancelled due to max age.
     Cancelled,
+}
+
+/// Used by CLI for parsing from string.
+/// Db conversions are handled with `sqlx` attribute macro
+impl FromStr for TaskState {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let enum_val = match s.to_lowercase().as_ref() {
+            "pending" => TaskState::Pending,
+            "running" => TaskState::Running,
+            "sleeping" => TaskState::Sleeping,
+            "completed" => TaskState::Completed,
+            "failed" => TaskState::Failed,
+            "cancelled" => TaskState::Cancelled,
+            &_ => return Err(format!("Invalid value `{s}` for TaskState")),
+        };
+        Ok(enum_val)
+    }
 }
 
 /// Marker type for Task identifiers. Bare UUIDs are easy to confuse.

@@ -2,18 +2,26 @@ use clap::{Parser, Subcommand};
 
 use simple_logger::SimpleLogger;
 use taskturbine_core::config::Config;
-use taskturbine_core::storage::Storage;
+use taskturbine_core::storage::{Storage, StorageError};
 
+mod admin_storage;
 mod cancel;
 mod cleanup;
 mod clear;
 mod emit_event;
 mod migrate;
 mod spawn;
+mod task_list;
 
 #[derive(Debug)]
 enum CliError {
     Message(String),
+}
+impl From<StorageError> for CliError {
+    fn from(value: StorageError) -> Self {
+        let message = format!("Operation failed - StorageError\n{value:?}");
+        CliError::Message(message)
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -52,6 +60,8 @@ enum Commands {
     Migrate,
     /// Spawn a new task.
     Spawn(spawn::SpawnArgs),
+    /// List tasks with filtering
+    TaskList(task_list::TaskListArgs),
 }
 
 #[tokio::main]
@@ -60,11 +70,10 @@ async fn main() {
     SimpleLogger::new().init().unwrap();
 
     // Find the database url. Use both CLI options and environment variables.
-    let db_url = args.database_url
-        .unwrap_or_else(|| {
-            std::env::var("TASKTURBINE_DATABASE_URL")
-                .expect("Could not determine database url from options or TASKTURBINE_DATABASE_URL")
-        });
+    let db_url = args.database_url.unwrap_or_else(|| {
+        std::env::var("TASKTURBINE_DATABASE_URL")
+            .expect("Could not determine database url from options or TASKTURBINE_DATABASE_URL")
+    });
 
     let config = Config {
         database_url: db_url,
@@ -82,6 +91,7 @@ async fn main() {
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
         Commands::Migrate => migrate::run_migrations(storage).await,
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
+        Commands::TaskList(args) => task_list::execute(storage, args).await,
     };
     if result.is_ok() {
         log::info!("Complete");

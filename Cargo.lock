@@ -1632,6 +1632,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sql"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "896118a791e834c7e81f35a2580696ec62e70ab33725871ecd9801020e376d54"
+
+[[package]]
 name = "sqlx"
 version = "0.9.0-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1898,6 +1904,8 @@ dependencies = [
  "log",
  "serde_json",
  "simple_logger",
+ "sql",
+ "sqlx",
  "taskturbine-core",
  "tokio",
  "uuid",
