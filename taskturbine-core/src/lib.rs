@@ -120,6 +120,14 @@
 //! take their parameters as a bytestring, and encoding/decoding parameter payloads is
 //! an application concern.
 //!
+//! ### Making tasks idempotent
+//!
+//! In scenarios where you want to prevent duplicate tasks from being spawned you can
+//! use `TaskOptions.idempotency_key` to provide a unique value that is combined with the task
+//! name to prevent duplicate tasks being spawned. When a duplicate task creation is attempted
+//! the result will be a `StorageError::DuplicateSpawn` containing the id of the previously created
+//! task.
+//!
 //! # Events
 //!
 //! Tasks can wait for an event to happen outside of a task. Your application logic can _emit
