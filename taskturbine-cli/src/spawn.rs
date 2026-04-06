@@ -67,7 +67,6 @@ and the time after which it should be considered cancelled."
         help = "A unique value that used to make task spawning idempotent."
     )]
     idempotency_key: Option<String>,
-
 }
 
 impl From<SpawnArgs> for TaskOptions {

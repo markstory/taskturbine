@@ -204,6 +204,7 @@ class TaskOptions:
     """
     The runtime options used to spawn a task
     """
+
     idempotency_key: str | None
     """A unique key that is paired with task_name to provide idempotent task spawning."""
 

@@ -1357,7 +1357,10 @@ mod tests {
     #[tokio::test]
     async fn spawn_task_idempotency_key_violation() {
         let storage = create_storage().await;
-        storage.clear_storage().await.expect("Failed to clear storage");
+        storage
+            .clear_storage()
+            .await
+            .expect("Failed to clear storage");
 
         let channel = "spawn_task_idempotency_key_violation";
         let task_name = "say_hello";
@@ -1391,7 +1394,9 @@ mod tests {
             .await;
         assert!(duplicate.is_err(), "Should return an error");
         let err = duplicate.err().unwrap();
-        assert!(matches!(err, StorageError::DuplicateSpawn(task_id) if task_id == original.task_id));
+        assert!(
+            matches!(err, StorageError::DuplicateSpawn(task_id) if task_id == original.task_id)
+        );
 
         // Make a task with a different idempotency key.
         let result = storage
@@ -1407,7 +1412,10 @@ mod tests {
             .await;
         assert!(result.is_ok(), "Should spawn");
         let spawn_result = result.unwrap();
-        assert!(spawn_result.task_id != original.task_id, "should make a unique task");
+        assert!(
+            spawn_result.task_id != original.task_id,
+            "should make a unique task"
+        );
     }
 
     #[tokio::test]
