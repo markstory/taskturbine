@@ -60,19 +60,12 @@ async fn main() {
     SimpleLogger::new().init().unwrap();
 
     // Find the database url. Use both CLI options and environment variables.
-    let db_url = match args.database_url {
-        Some(db_url) => db_url,
-        None => match std::env::var("TASKTURBINE_DATABASE_URL") {
-            Ok(db_url) => db_url,
-            Err(_) => {
-                panic!("Could not determine database url from options or TASKTURBINE_DATABSE_URL")
-            }
-        },
-    };
+    let db_url = args.database_url
+        .unwrap_or_else(|| {
+            std::env::var("TASKTURBINE_DATABASE_URL")
+                .expect("Could not determine database url from options or TASKTURBINE_DATABASE_URL")
+        });
 
-    // TODO it would be nice if taskturbine could provide command line tools
-    // that consume a userland application. As spawn_task and worker commands
-    // could be provided by the framework then.
     let config = Config {
         database_url: db_url,
         usecase: args.usecase,
