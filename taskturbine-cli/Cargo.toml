@@ -13,5 +13,4 @@ serde_json = { workspace = true }
 log = { workspace = true }
 simple_logger = "5.1.0"
 uuid.workspace = true
-sql = "0.4.3"
 sqlx.workspace = true

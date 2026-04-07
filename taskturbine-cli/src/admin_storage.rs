@@ -9,7 +9,7 @@ use taskturbine_core::storage::StorageError;
 ///
 /// Building against the database schema is not recommended.
 pub struct AdminStorage {
-    config: Config,
+    _config: Config,
     pool: PgPool,
 }
 
@@ -28,9 +28,10 @@ impl AdminStorage {
             }
             pool.set_connect_options(opts);
         }
-        Self { config, pool }
+        Self { _config: config, pool }
     }
 
+    /// Get a list of tasks.
     pub async fn task_list(&self) -> Result<Vec<Task>, StorageError> {
         // TODO add filtering
         let res: Result<Vec<Task>, sqlx::Error> =
