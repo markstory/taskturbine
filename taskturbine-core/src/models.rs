@@ -122,6 +122,8 @@ impl TryFrom<&String> for RunId {
 pub struct Task {
     /// The task id of the spawned task.
     pub task_id: TaskId,
+    /// The application/usecase the task belongs to.
+    pub usecase: String,
     /// The channel the task belongs to.
     pub channel: String,
     /// The name of the task that was claimed.

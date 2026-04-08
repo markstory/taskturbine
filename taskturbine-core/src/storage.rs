@@ -494,10 +494,17 @@ impl Storage {
                 WHERE t.task_id = cr.task_id
             )
             SELECT
-            t.task_id, cr.run_id,
-            t.channel, t.task_name, t.params,
-            t.retry_seconds, t.retry_factor, t.retry_max_seconds,
-            cr.attempt, t.max_attempts
+            t.task_id,
+            cr.run_id,
+            t.usecase,
+            t.channel,
+            t.task_name,
+            t.params,
+            t.retry_seconds,
+            t.retry_factor,
+            t.retry_max_seconds,
+            cr.attempt,
+            t.max_attempts
             FROM claim_run AS cr
             INNER JOIN taskturbine.tasks AS t ON cr.task_id = t.task_id
             INNER JOIN taskturbine.runs AS r ON cr.run_id = r.run_id
