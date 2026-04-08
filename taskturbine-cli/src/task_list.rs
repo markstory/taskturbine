@@ -1,6 +1,9 @@
 use clap::Args;
 
-use crate::{CliError, admin_storage::{AdminStorage, TaskListOptions}};
+use crate::{
+    CliError,
+    admin_storage::{AdminStorage, TaskListOptions},
+};
 use taskturbine_core::{
     models::TaskState,
     storage::{Storage, StorageError},
@@ -9,28 +12,16 @@ use taskturbine_core::{
 #[derive(Args, Debug)]
 pub struct TaskListArgs {
     /// TODO make this a glob pattern
-    #[arg(
-        long,
-        help = "A substring to match task names against"
-    )]
+    #[arg(long, help = "A substring to match task names against")]
     pub taskname: Option<String>,
 
-    #[arg(
-        long,
-        help = "The task state value to filter by"
-    )]
+    #[arg(long, help = "The task state value to filter by")]
     pub state: Option<TaskState>,
 
-    #[arg(
-        long,
-        help = "The task channel"
-    )]
+    #[arg(long, help = "The task channel")]
     pub channel: Option<String>,
 
-    #[arg(
-        long,
-        help = "The task usecase"
-    )]
+    #[arg(long, help = "The task usecase")]
     pub usecase: Option<String>,
 }
 
@@ -61,8 +52,14 @@ pub async fn execute(storage: Storage, args: TaskListArgs) -> Result<(), CliErro
         println!("  channel:    {}", task.channel);
         println!("  task_name:  {}", task.task_name);
         println!("  state:      {}", task.state);
-        println!("  headers:    {}", str::from_utf8(&task.headers).unwrap_or("<non-utf8 data>"));
-        println!("  parameters: {}", str::from_utf8(&task.params).unwrap_or("<non-utf8 data>"));
+        println!(
+            "  headers:    {}",
+            str::from_utf8(&task.headers).unwrap_or("<non-utf8 data>")
+        );
+        println!(
+            "  parameters: {}",
+            str::from_utf8(&task.params).unwrap_or("<non-utf8 data>")
+        );
         println!(" Retry:");
         println!("  seconds:      {}", &task.retry_seconds);
         println!("  factor:       {}", &task.retry_factor);

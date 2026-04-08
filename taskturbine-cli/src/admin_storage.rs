@@ -6,7 +6,7 @@ use taskturbine_core::storage::StorageError;
 
 /// Filtering options for task_list()
 pub struct TaskListOptions {
-    /// A substring to match task names against. 
+    /// A substring to match task names against.
     /// TODO make this a glob pattern
     pub taskname: Option<String>,
 
@@ -42,14 +42,15 @@ impl AdminStorage {
             }
             pool.set_connect_options(opts);
         }
-        Self { _config: config, pool }
+        Self {
+            _config: config,
+            pool,
+        }
     }
 
     /// Get a list of tasks.
     pub async fn task_list(&self, options: TaskListOptions) -> Result<Vec<Task>, StorageError> {
-        let mut query = QueryBuilder::new(
-            "SELECT * FROM taskturbine.tasks WHERE "
-        );
+        let mut query = QueryBuilder::new("SELECT * FROM taskturbine.tasks WHERE ");
 
         let mut added = false;
         let mut clauses = query.separated(" AND ");
@@ -79,9 +80,8 @@ impl AdminStorage {
         }
         query.push(" ORDER BY created_at DESC");
 
-        let res: Result<Vec<Task>, sqlx::Error> = query.build_query_as()
-                .fetch_all(&self.pool)
-                .await;
+        let res: Result<Vec<Task>, sqlx::Error> =
+            query.build_query_as().fetch_all(&self.pool).await;
 
         let tasks = res.map_err(StorageError::SqlError)?;
         Ok(tasks)

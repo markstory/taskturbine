@@ -384,6 +384,7 @@ impl TaskOptions {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (
         *,
         headers,
