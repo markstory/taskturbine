@@ -58,5 +58,8 @@ pub async fn execute(storage: Storage, args: TaskListArgs) -> Result<(), CliErro
         println!(" cancellation_max_age:  {}", &task.cancellation_max_age);
         println!();
     }
+    if tasks.is_empty() {
+        println!("No tasks match those filtering options");
+    }
     Ok(())
 }
