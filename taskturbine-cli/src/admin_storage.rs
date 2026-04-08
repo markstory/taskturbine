@@ -12,6 +12,9 @@ pub struct TaskListOptions {
 
     /// The task state to filter by
     pub state: Option<TaskState>,
+
+    pub channel: Option<String>,
+    pub usecase: Option<String>,
 }
 
 /// Administrative storage API. Used by the CLI to access storage with a supported API.
@@ -60,6 +63,17 @@ impl AdminStorage {
             clauses.push(" state = ");
             clauses.push_bind_unseparated(state.to_string());
         }
+        if let Some(value) = options.channel {
+            added = true;
+            clauses.push(" channel = ");
+            clauses.push_bind_unseparated(value);
+        }
+        if let Some(value) = options.usecase {
+            added = true;
+            clauses.push(" usecase = ");
+            clauses.push_bind_unseparated(value);
+        }
+
         if !added {
             query.push("1 = 1");
         }

@@ -20,6 +20,18 @@ pub struct TaskListArgs {
         help = "The task state value to filter by"
     )]
     pub state: Option<TaskState>,
+
+    #[arg(
+        long,
+        help = "The task channel"
+    )]
+    pub channel: Option<String>,
+
+    #[arg(
+        long,
+        help = "The task usecase"
+    )]
+    pub usecase: Option<String>,
 }
 
 /// Implement into/from to convert into the storage interface struct
@@ -28,6 +40,8 @@ impl From<TaskListArgs> for TaskListOptions {
         TaskListOptions {
             taskname: value.taskname,
             state: value.state,
+            channel: value.channel,
+            usecase: value.usecase,
         }
     }
 }
