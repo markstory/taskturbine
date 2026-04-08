@@ -43,6 +43,20 @@ impl FromStr for TaskState {
     }
 }
 
+impl Display for TaskState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str_val = match self {
+            TaskState::Pending => "pending",
+            TaskState::Running => "running",
+            TaskState::Sleeping => "sleeping",
+            TaskState::Completed => "completed",
+            TaskState::Failed => "failed",
+            TaskState::Cancelled => "cancelled",
+        };
+        f.write_str(str_val)
+    }
+}
+
 /// Marker type for Task identifiers. Bare UUIDs are easy to confuse.
 #[derive(sqlx::Decode, sqlx::Encode, Clone, Copy, Debug, PartialEq)]
 pub struct TaskId(pub Uuid);

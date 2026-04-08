@@ -1,6 +1,6 @@
 use clap::Args;
 
-use crate::{CliError, admin_storage::AdminStorage};
+use crate::{CliError, admin_storage::{AdminStorage, TaskListOptions}};
 use taskturbine_core::{
     models::TaskState,
     storage::{Storage, StorageError},
@@ -8,14 +8,36 @@ use taskturbine_core::{
 
 #[derive(Args, Debug)]
 pub struct TaskListArgs {
-    /// The task state to filter by
+    /// TODO make this a glob pattern
+    #[arg(
+        long,
+        help = "A substring to match task names against"
+    )]
+    pub taskname: Option<String>,
+
+    #[arg(
+        long,
+        help = "The task state value to filter by"
+    )]
     pub state: Option<TaskState>,
 }
 
-pub async fn execute(storage: Storage, _args: TaskListArgs) -> Result<(), CliError> {
+/// Implement into/from to convert into the storage interface struct
+impl From<TaskListArgs> for TaskListOptions {
+    fn from(value: TaskListArgs) -> Self {
+        TaskListOptions {
+            taskname: value.taskname,
+            state: value.state,
+        }
+    }
+}
+
+pub async fn execute(storage: Storage, args: TaskListArgs) -> Result<(), CliError> {
     let admin_storage = AdminStorage::new(storage.get_config());
+    let options: TaskListOptions = args.into();
+
     let tasks = admin_storage
-        .task_list()
+        .task_list(options)
         .await
         .map_err(<StorageError as Into<CliError>>::into)?;
 
@@ -24,6 +46,7 @@ pub async fn execute(storage: Storage, _args: TaskListArgs) -> Result<(), CliErr
         println!("  usecase:    {}", task.usecase);
         println!("  channel:    {}", task.channel);
         println!("  task_name:  {}", task.task_name);
+        println!("  state:      {}", task.state);
         println!("  headers:    {}", str::from_utf8(&task.headers).unwrap_or("<non-utf8 data>"));
         println!("  parameters: {}", str::from_utf8(&task.params).unwrap_or("<non-utf8 data>"));
         println!(" Retry:");
