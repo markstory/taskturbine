@@ -56,22 +56,22 @@ impl AdminStorage {
         let mut clauses = query.separated(" AND ");
         if let Some(name) = options.taskname {
             added = true;
-            clauses.push(" task_name = ");
+            clauses.push("task_name = ");
             clauses.push_bind_unseparated(name);
         }
         if let Some(state) = options.state {
             added = true;
-            clauses.push(" state = ");
+            clauses.push("state = ");
             clauses.push_bind_unseparated(state.to_string());
         }
         if let Some(value) = options.channel {
             added = true;
-            clauses.push(" channel = ");
+            clauses.push("channel = ");
             clauses.push_bind_unseparated(value);
         }
         if let Some(value) = options.usecase {
             added = true;
-            clauses.push(" usecase = ");
+            clauses.push("usecase = ");
             clauses.push_bind_unseparated(value);
         }
 
