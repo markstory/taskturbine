@@ -27,7 +27,7 @@ pub struct TaskGetOptions {
 ///
 /// Building against the database schema is not recommended.
 pub struct AdminStorage {
-    _config: Config,
+    config: Config,
     pool: PgPool,
 }
 
@@ -47,7 +47,7 @@ impl AdminStorage {
             pool.set_connect_options(opts);
         }
         Self {
-            _config: config,
+            config: config,
             pool,
         }
     }
@@ -55,27 +55,21 @@ impl AdminStorage {
     /// Get a list of tasks.
     pub async fn task_list(&self, options: TaskListOptions) -> Result<Vec<Task>, StorageError> {
         let mut query = QueryBuilder::new("SELECT * FROM taskturbine.tasks WHERE ");
-
-        let mut added = false;
         let mut clauses = query.separated(" AND ");
+        clauses.push("usecase = ");
+        clauses.push_bind_unseparated(&self.config.usecase);
+
         if let Some(name) = options.taskname {
-            added = true;
             clauses.push("task_name = ");
             clauses.push_bind_unseparated(name);
         }
         if let Some(state) = options.state {
-            added = true;
             clauses.push("state = ");
             clauses.push_bind_unseparated(state.to_string());
         }
         if let Some(value) = options.channel {
-            added = true;
             clauses.push("channel = ");
             clauses.push_bind_unseparated(value);
-        }
-
-        if !added {
-            query.push("1 = 1");
         }
         query.push(" ORDER BY created_at DESC");
 
@@ -92,8 +86,9 @@ impl AdminStorage {
             .try_into()
             .map_err(|_| StorageError::ValidationError("invalid task_id".to_string()))?;
 
-        let task: Task = sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
+        let task: Task = sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1 AND usecase = $2")
             .bind(task_id)
+            .bind(&self.config.usecase)
             .fetch_one(&self.pool)
             .await
             .map_err(StorageError::SqlError)?;
