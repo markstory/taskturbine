@@ -20,9 +20,6 @@ pub struct TaskListArgs {
 
     #[arg(long, help = "The task channel")]
     pub channel: Option<String>,
-
-    #[arg(long, help = "The task usecase")]
-    pub usecase: Option<String>,
 }
 
 /// Implement into/from to convert into the storage interface struct
@@ -32,7 +29,6 @@ impl From<TaskListArgs> for TaskListOptions {
             taskname: value.taskname,
             state: value.state,
             channel: value.channel,
-            usecase: value.usecase,
         }
     }
 }
@@ -48,7 +44,6 @@ pub async fn execute(storage: Storage, args: TaskListArgs) -> Result<(), CliErro
 
     for task in tasks.iter() {
         println!("Task Id: {}", task.task_id);
-        println!("  usecase:    {}", task.usecase);
         println!("  channel:    {}", task.channel);
         println!("  task_name:  {}", task.task_name);
         println!("  state:      {}", task.state);

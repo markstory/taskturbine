@@ -1,7 +1,7 @@
 use sqlx::QueryBuilder;
 use sqlx::{ConnectOptions, PgPool, postgres::PgConnectOptions};
 use taskturbine_core::config::Config;
-use taskturbine_core::models::{Task, TaskState};
+use taskturbine_core::models::{Task, TaskId, TaskState};
 use taskturbine_core::storage::StorageError;
 
 /// Filtering options for task_list()
@@ -14,7 +14,11 @@ pub struct TaskListOptions {
     pub state: Option<TaskState>,
 
     pub channel: Option<String>,
-    pub usecase: Option<String>,
+}
+
+/// Filtering options for task_get()
+pub struct TaskGetOptions {
+    pub task_id: String,
 }
 
 /// Administrative storage API. Used by the CLI to access storage with a supported API.
@@ -69,11 +73,6 @@ impl AdminStorage {
             clauses.push("channel = ");
             clauses.push_bind_unseparated(value);
         }
-        if let Some(value) = options.usecase {
-            added = true;
-            clauses.push("usecase = ");
-            clauses.push_bind_unseparated(value);
-        }
 
         if !added {
             query.push("1 = 1");
@@ -85,5 +84,22 @@ impl AdminStorage {
 
         let tasks = res.map_err(StorageError::SqlError)?;
         Ok(tasks)
+    }
+
+    /// Get a task and related runs and checkpoint state
+    pub async fn task_get(&self, options: TaskGetOptions) -> Result<Task, StorageError> {
+        let task_id: TaskId = options.task_id
+            .try_into()
+            .map_err(|_| StorageError::ValidationError("invalid task_id".to_string()))?;
+
+        let task: Task = sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
+            .bind(task_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(StorageError::SqlError)?;
+
+        // TODO add runs and checkpoints
+
+        Ok(task)
     }
 }

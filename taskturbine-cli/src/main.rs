@@ -11,6 +11,7 @@ mod clear;
 mod emit_event;
 mod migrate;
 mod spawn;
+mod task_get;
 mod task_list;
 
 #[derive(Debug)]
@@ -62,6 +63,8 @@ enum Commands {
     Spawn(spawn::SpawnArgs),
     /// List tasks with filtering
     TaskList(task_list::TaskListArgs),
+    /// Get a single task with filtering
+    TaskGet(task_get::TaskGetArgs),
 }
 
 #[tokio::main]
@@ -92,6 +95,7 @@ async fn main() {
         Commands::Migrate => migrate::run_migrations(storage).await,
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
         Commands::TaskList(args) => task_list::execute(storage, args).await,
+        Commands::TaskGet(args) => task_get::execute(storage, args).await,
     };
     if result.is_ok() {
         log::info!("Complete");
