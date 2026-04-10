@@ -7,6 +7,8 @@ pub async fn cleanup(storage: Storage) -> Result<(), CliError> {
     // In userland code they would define the config, and apply to the App.
     let config = storage.get_config();
 
+    // TODO this should just be a one-shot on the retention cleanup methods
+    // not a long running worker.
     log::info!("Starting cleanup worker");
 
     // Create an application instance, and a Worker.

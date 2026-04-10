@@ -126,6 +126,11 @@ impl Storage {
 
         self.cleanup_events(older_than, cleanup_limit).await?;
         self.cleanup_tasks(older_than, cleanup_limit).await?;
+
+        // TODO these should be separate from cleanup.
+        // Cleanup is for retention limits and disk usage concerns.
+        // These methods advance the state-machine of workers.
+        // Split retention methods out and make them runnable through the CLI
         self.handle_expired_claims().await?;
         self.handle_cancellation_max_age().await?;
 
