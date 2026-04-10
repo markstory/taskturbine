@@ -13,6 +13,7 @@ mod migrate;
 mod spawn;
 mod task_get;
 mod task_list;
+mod run_list;
 
 #[derive(Debug)]
 enum CliError {
@@ -65,6 +66,8 @@ enum Commands {
     TaskList(task_list::TaskListArgs),
     /// Get a single task with filtering
     TaskGet(task_get::TaskGetArgs),
+    /// Get a list of runs with filtering
+    RunList(run_list::RunListArgs),
 }
 
 #[tokio::main]
@@ -96,6 +99,7 @@ async fn main() {
         Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
         Commands::TaskList(args) => task_list::execute(storage, args).await,
         Commands::TaskGet(args) => task_get::execute(storage, args).await,
+        Commands::RunList(args) => run_list::execute(storage, args).await,
     };
     if result.is_ok() {
         log::info!("Complete");

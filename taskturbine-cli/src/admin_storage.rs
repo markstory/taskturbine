@@ -6,6 +6,12 @@ use taskturbine_core::storage::StorageError;
 
 /// Filtering options for task_list()
 #[derive(Debug, Clone)]
+pub struct RunListOptions {
+    pub task_id: Option<TaskId>,
+}
+
+/// Filtering options for task_list()
+#[derive(Debug, Clone)]
 pub struct TaskListOptions {
     /// A substring to match task names against.
     /// TODO make this a glob pattern
@@ -120,5 +126,10 @@ impl AdminStorage {
             .map_err(StorageError::SqlError)?;
 
         Ok(TaskDetails {task, runs, checkpoints})
+    }
+
+    /// Get a list of runs based on filtering options
+    pub async fn run_list(&self, _options: RunListOptions) -> Result<Vec<Run>, StorageError> {
+        Ok(vec![])
     }
 }
