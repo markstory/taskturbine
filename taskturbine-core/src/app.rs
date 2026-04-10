@@ -457,6 +457,7 @@ pub async fn run_worker(worker: Worker) {
     }
     tokio::spawn(claim_tasks(arc_worker.clone(), send.clone()));
 
+    // TODO This should run the state-machine cleanup, not retention
     if config.worker_cleanup_inline {
         tokio::spawn(run_cleanup(arc_worker.clone()));
     }
