@@ -36,6 +36,8 @@ pub struct Config {
     pub worker_cleanup_cutoff_secs: i32,
 
     /// The minimum number of seconds between each cleanup operation.
+    /// It is recommended you do this periodically to ensure that your
+    /// database doesn't grow indefinitely.
     pub worker_cleanup_interval_secs: i32,
 
     /// Whether or not workers should run cleanup operations inline.
