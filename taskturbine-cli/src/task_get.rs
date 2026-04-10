@@ -27,11 +27,12 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
     let admin_storage = AdminStorage::new(storage.get_config());
     let options: TaskGetOptions = args.into();
 
-    let task = admin_storage
+    let details = admin_storage
         .task_get(options)
         .await
         .map_err(<StorageError as Into<CliError>>::into)?;
 
+    let task = details.task;
     println!();
     println!("Task Id: {}", task.task_id);
     println!("  channel:    {}", task.channel);
@@ -54,8 +55,24 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
     println!(" cancellation_max_age:  {}", &task.cancellation_max_age);
     println!();
 
-    // TODO get checkpoints, runs
+    println!("Runs:");
+    println!();
+    for run in details.runs.iter() {
+        println!("Run Id: {}", run.run_id);
+        println!(" attempt: {}", run.attempt);
+        println!(" state: {}", run.state);
+        println!(" claimed_by: {}", run.claimed_by);
+        println!(" created at: {}", run.created_at);
+    }
+    println!();
 
+    println!("Checkpoints:");
+    println!();
+    for checkpoint in details.checkpoints.iter() {
+        println!("Checkpoint: {}", checkpoint.step_name);
+        println!(" owner run: {}", checkpoint.owner_run_id);
+        println!(" updated at: {}", checkpoint.updated_at);
+    }
 
     Ok(())
 }

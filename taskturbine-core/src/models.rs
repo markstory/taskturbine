@@ -229,6 +229,35 @@ pub struct SpawnResult {
 
 /// Entity structure for a task checkpoint
 #[derive(sqlx::FromRow, Debug, PartialEq)]
+pub struct Run {
+    pub task_id: TaskId,
+    pub run_id: RunId,
+    /// The attempt index this Run is.
+    pub attempt: i32,
+    /// The current state of the task.
+    pub state: TaskState,
+    /// The timestamp that the current claim expires at.
+    pub claimed_by: String,
+    /// The timestamp that the current claim expires at.
+    /// Once a claim expires, the cleanup operations will
+    /// make the task available again.
+    pub claim_expires_at: Option<DateTime<Utc>>,
+    /// The timestamp the run can be claimed next.
+    pub available_at: Option<DateTime<Utc>>,
+    /// The timestamp the run started execution if available.
+    pub started_at: Option<DateTime<Utc>>,
+    /// The timestamp the run completed if defined.
+    pub completed_at: Option<DateTime<Utc>>,
+    /// The result payload of the task in bytes. Generally utf8 encoded.
+    pub result: Option<Vec<u8>>,
+    /// Reason bytes for why run failed. Generally utf8 encoded.
+    pub failure_reason: Option<Vec<u8>>,
+    /// Timestamp the run was created
+    pub created_at: DateTime<Utc>,
+}
+
+/// Entity structure for a task checkpoint
+#[derive(sqlx::FromRow, Debug, PartialEq)]
 pub struct Checkpoint {
     /// The task id of the spawned task.
     pub task_id: TaskId,

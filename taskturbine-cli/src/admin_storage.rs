@@ -1,7 +1,7 @@
 use sqlx::QueryBuilder;
 use sqlx::{ConnectOptions, PgPool, postgres::PgConnectOptions};
 use taskturbine_core::config::Config;
-use taskturbine_core::models::{Task, TaskId, TaskState};
+use taskturbine_core::models::{Checkpoint, Run, Task, TaskId, TaskState};
 use taskturbine_core::storage::StorageError;
 
 /// Filtering options for task_list()
@@ -19,6 +19,13 @@ pub struct TaskListOptions {
 /// Filtering options for task_get()
 pub struct TaskGetOptions {
     pub task_id: String,
+}
+
+/// Container for a Task and its relations.
+pub struct TaskDetails {
+    pub task: Task,
+    pub runs: Vec<Run>,
+    pub checkpoints: Vec<Checkpoint>,
 }
 
 /// Administrative storage API. Used by the CLI to access storage with a supported API.
@@ -47,7 +54,7 @@ impl AdminStorage {
             pool.set_connect_options(opts);
         }
         Self {
-            config: config,
+            config,
             pool,
         }
     }
@@ -81,7 +88,7 @@ impl AdminStorage {
     }
 
     /// Get a task and related runs and checkpoint state
-    pub async fn task_get(&self, options: TaskGetOptions) -> Result<Task, StorageError> {
+    pub async fn task_get(&self, options: TaskGetOptions) -> Result<TaskDetails, StorageError> {
         let task_id: TaskId = options.task_id
             .try_into()
             .map_err(|_| StorageError::ValidationError("invalid task_id".to_string()))?;
@@ -93,8 +100,22 @@ impl AdminStorage {
             .await
             .map_err(StorageError::SqlError)?;
 
-        // TODO add runs and checkpoints
+        let runs: Vec<Run> = sqlx::query_as(
+                "SELECT * FROM taskturbine.runs WHERE task_id = $1 ORDER BY attempt, created_at"
+            )
+            .bind(task_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(StorageError::SqlError)?;
 
-        Ok(task)
+        let checkpoints: Vec<Checkpoint> = sqlx::query_as(
+                "SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 ORDER BY updated_at"
+            )
+            .bind(task_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(StorageError::SqlError)?;
+
+        Ok(TaskDetails {task, runs, checkpoints})
     }
 }
