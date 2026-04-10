@@ -27,7 +27,7 @@ pub struct TaskListOptions {
 #[derive(Debug, Clone)]
 pub struct TaskGetOptions {
     pub task_id: String,
-    pub show_results: bool
+    pub show_results: bool,
 }
 
 /// Container for a Task and its relations.
@@ -62,10 +62,7 @@ impl AdminStorage {
             }
             pool.set_connect_options(opts);
         }
-        Self {
-            config,
-            pool,
-        }
+        Self { config, pool }
     }
 
     /// Get a list of tasks.
@@ -98,34 +95,40 @@ impl AdminStorage {
 
     /// Get a task and related runs and checkpoint state
     pub async fn task_get(&self, options: TaskGetOptions) -> Result<TaskDetails, StorageError> {
-        let task_id: TaskId = options.task_id
+        let task_id: TaskId = options
+            .task_id
             .try_into()
             .map_err(|_| StorageError::ValidationError("invalid task_id".to_string()))?;
 
-        let task: Task = sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1 AND usecase = $2")
-            .bind(task_id)
-            .bind(&self.config.usecase)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(StorageError::SqlError)?;
+        let task: Task =
+            sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1 AND usecase = $2")
+                .bind(task_id)
+                .bind(&self.config.usecase)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(StorageError::SqlError)?;
 
         let runs: Vec<Run> = sqlx::query_as(
-                "SELECT * FROM taskturbine.runs WHERE task_id = $1 ORDER BY attempt, created_at"
-            )
-            .bind(task_id)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(StorageError::SqlError)?;
+            "SELECT * FROM taskturbine.runs WHERE task_id = $1 ORDER BY attempt, created_at",
+        )
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StorageError::SqlError)?;
 
         let checkpoints: Vec<Checkpoint> = sqlx::query_as(
-                "SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 ORDER BY updated_at"
-            )
-            .bind(task_id)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(StorageError::SqlError)?;
+            "SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 ORDER BY updated_at",
+        )
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StorageError::SqlError)?;
 
-        Ok(TaskDetails {task, runs, checkpoints})
+        Ok(TaskDetails {
+            task,
+            runs,
+            checkpoints,
+        })
     }
 
     /// Get a list of runs based on filtering options

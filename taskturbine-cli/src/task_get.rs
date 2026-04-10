@@ -4,16 +4,18 @@ use crate::{
     CliError,
     admin_storage::{AdminStorage, TaskGetOptions},
 };
-use taskturbine_core::{
-    storage::{Storage, StorageError},
-};
+use taskturbine_core::storage::{Storage, StorageError};
 
 #[derive(Args, Debug)]
 pub struct TaskGetArgs {
     /// The id of the task to get
     pub task_id: String,
 
-    #[arg(long, default_value_t = false, help = "Enable to show result and state attributes as utf8 strings")]
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Enable to show result and state attributes as utf8 strings"
+    )]
     pub show_results: bool,
 }
 
@@ -69,8 +71,13 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
         println!(" state: {}", run.state);
         println!(" claimed_by: {}", run.claimed_by);
         println!(" created at: {}", run.created_at);
-        if options.show_results && let Some(result) = &run.result {
-            println!(" payload: {}", str::from_utf8(result.as_slice()).unwrap_or(INVALID_DATA));
+        if options.show_results
+            && let Some(result) = &run.result
+        {
+            println!(
+                " payload: {}",
+                str::from_utf8(result.as_slice()).unwrap_or(INVALID_DATA)
+            );
         }
     }
     println!();
@@ -82,7 +89,10 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
         println!(" owner run: {}", checkpoint.owner_run_id);
         println!(" updated at: {}", checkpoint.updated_at);
         if options.show_results {
-            println!(" result: {}", str::from_utf8(checkpoint.state.as_slice()).unwrap_or(INVALID_DATA));
+            println!(
+                " result: {}",
+                str::from_utf8(checkpoint.state.as_slice()).unwrap_or(INVALID_DATA)
+            );
         }
     }
 

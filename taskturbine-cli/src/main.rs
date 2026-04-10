@@ -10,10 +10,10 @@ mod cleanup;
 mod clear;
 mod emit_event;
 mod migrate;
+mod run_list;
 mod spawn;
 mod task_get;
 mod task_list;
-mod run_list;
 
 #[derive(Debug)]
 enum CliError {
