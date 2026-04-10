@@ -12,13 +12,19 @@ use taskturbine_core::{
 pub struct TaskGetArgs {
     /// The id of the task to get
     pub task_id: String,
+
+    #[arg(long, default_value_t = false, help = "Enable to show result and state attributes as utf8 strings")]
+    pub show_results: bool,
 }
+
+const INVALID_DATA: &str = "<non-utf8 data>";
 
 /// Implement into/from to convert into the storage interface struct
 impl From<TaskGetArgs> for TaskGetOptions {
     fn from(value: TaskGetArgs) -> Self {
         TaskGetOptions {
             task_id: value.task_id,
+            show_results: value.show_results,
         }
     }
 }
@@ -28,7 +34,7 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
     let options: TaskGetOptions = args.into();
 
     let details = admin_storage
-        .task_get(options)
+        .task_get(options.clone())
         .await
         .map_err(<StorageError as Into<CliError>>::into)?;
 
@@ -40,11 +46,11 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
     println!("  state:      {}", task.state);
     println!(
         "  headers:    {}",
-        str::from_utf8(&task.headers).unwrap_or("<non-utf8 data>")
+        str::from_utf8(&task.headers).unwrap_or(INVALID_DATA)
     );
     println!(
         "  parameters: {}",
-        str::from_utf8(&task.params).unwrap_or("<non-utf8 data>")
+        str::from_utf8(&task.params).unwrap_or(INVALID_DATA)
     );
     println!(" Retry:");
     println!("  seconds:      {}", &task.retry_seconds);
@@ -55,7 +61,7 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
     println!(" cancellation_max_age:  {}", &task.cancellation_max_age);
     println!();
 
-    println!("Runs:");
+    println!("== Runs ==");
     println!();
     for run in details.runs.iter() {
         println!("Run Id: {}", run.run_id);
@@ -63,15 +69,21 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
         println!(" state: {}", run.state);
         println!(" claimed_by: {}", run.claimed_by);
         println!(" created at: {}", run.created_at);
+        if options.show_results && let Some(result) = &run.result {
+            println!(" payload: {}", str::from_utf8(result.as_slice()).unwrap_or(INVALID_DATA));
+        }
     }
     println!();
 
-    println!("Checkpoints:");
+    println!("== Checkpoints ==");
     println!();
     for checkpoint in details.checkpoints.iter() {
         println!("Checkpoint: {}", checkpoint.step_name);
         println!(" owner run: {}", checkpoint.owner_run_id);
         println!(" updated at: {}", checkpoint.updated_at);
+        if options.show_results {
+            println!(" result: {}", str::from_utf8(checkpoint.state.as_slice()).unwrap_or(INVALID_DATA));
+        }
     }
 
     Ok(())

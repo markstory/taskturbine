@@ -5,6 +5,7 @@ use taskturbine_core::models::{Checkpoint, Run, Task, TaskId, TaskState};
 use taskturbine_core::storage::StorageError;
 
 /// Filtering options for task_list()
+#[derive(Debug, Clone)]
 pub struct TaskListOptions {
     /// A substring to match task names against.
     /// TODO make this a glob pattern
@@ -17,8 +18,10 @@ pub struct TaskListOptions {
 }
 
 /// Filtering options for task_get()
+#[derive(Debug, Clone)]
 pub struct TaskGetOptions {
     pub task_id: String,
+    pub show_results: bool
 }
 
 /// Container for a Task and its relations.
