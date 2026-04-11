@@ -52,15 +52,7 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
     println!("== Checkpoints ==");
     println!();
     for checkpoint in details.checkpoints.iter() {
-        println!("Checkpoint: {}", checkpoint.step_name);
-        println!(" owner run: {}", checkpoint.owner_run_id);
-        println!(" updated at: {}", checkpoint.updated_at);
-        if options.show_results {
-            println!(
-                " result: {}",
-                str::from_utf8(checkpoint.state.as_slice()).unwrap_or(formatters::INVALID_DATA)
-            );
-        }
+        formatters::dump_checkpoint(checkpoint, options.show_results);
     }
 
     Ok(())

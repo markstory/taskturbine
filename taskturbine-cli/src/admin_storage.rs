@@ -1,13 +1,18 @@
 use sqlx::QueryBuilder;
 use sqlx::{ConnectOptions, PgPool, postgres::PgConnectOptions};
 use taskturbine_core::config::Config;
-use taskturbine_core::models::{Checkpoint, Run, Task, TaskId, TaskState};
+use taskturbine_core::models::{Checkpoint, Run, RunId, Task, TaskId, TaskState};
 use taskturbine_core::storage::StorageError;
 
 /// Filtering options for task_list()
 #[derive(Debug, Clone)]
+
 pub struct RunListOptions {
     pub task_id: Option<TaskId>,
+}
+
+pub struct RunGetOptions {
+    pub run_id: RunId,
 }
 
 /// Filtering options for task_list()
@@ -34,6 +39,11 @@ pub struct TaskGetOptions {
 pub struct TaskDetails {
     pub task: Task,
     pub runs: Vec<Run>,
+    pub checkpoints: Vec<Checkpoint>,
+}
+
+pub struct RunDetails {
+    pub run: Run,
     pub checkpoints: Vec<Checkpoint>,
 }
 
@@ -153,5 +163,32 @@ impl AdminStorage {
 
         let runs = res.map_err(StorageError::SqlError)?;
         Ok(runs)
+    }
+
+    pub async fn run_get(&self, options: RunGetOptions) -> Result<RunDetails, StorageError> {
+        let run: Run =
+            sqlx::query_as(
+                "SELECT runs.* FROM taskturbine.runs AS runs
+                INNER JOIN taskturbine.tasks AS tasks ON tasks.task_id = runs.task_id
+                WHERE runs.run_id = $1 AND tasks.usecase = $2"
+                )
+                .bind(options.run_id)
+                .bind(&self.config.usecase)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(StorageError::SqlError)?;
+
+        let checkpoints: Vec<Checkpoint> = sqlx::query_as(
+            "SELECT * FROM taskturbine.checkpoints WHERE owner_run_id = $1 ORDER BY updated_at",
+        )
+        .bind(options.run_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StorageError::SqlError)?;
+
+        Ok(RunDetails {
+            run,
+            checkpoints,
+        })
     }
 }

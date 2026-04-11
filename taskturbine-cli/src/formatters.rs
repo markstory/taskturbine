@@ -1,4 +1,4 @@
-use taskturbine_core::models::{Run, Task};
+use taskturbine_core::models::{Checkpoint, Run, Task};
 
 pub const INVALID_DATA: &str = "<non-utf8 data>";
 
@@ -39,4 +39,16 @@ pub fn dump_task(task: &Task) {
     println!("  attempts:     {}", &task.attempts);
     println!("  max_attempts: {}", &task.max_attempts);
     println!(" cancellation_max_age:  {}", &task.cancellation_max_age);
+}
+
+pub fn dump_checkpoint(checkpoint: &Checkpoint, show_results: bool) {
+    println!("Checkpoint: {}", checkpoint.step_name);
+    println!(" owner run: {}", checkpoint.owner_run_id);
+    println!(" updated at: {}", checkpoint.updated_at);
+    if show_results {
+        println!(
+            " result: {}",
+            str::from_utf8(checkpoint.state.as_slice()).unwrap_or(INVALID_DATA)
+        );
+    }
 }

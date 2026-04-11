@@ -11,6 +11,7 @@ mod clear;
 mod emit_event;
 mod formatters;
 mod migrate;
+mod run_get;
 mod run_list;
 mod spawn;
 mod task_get;
@@ -69,6 +70,8 @@ enum Commands {
     TaskGet(task_get::TaskGetArgs),
     /// Get a list of runs with filtering
     RunList(run_list::RunListArgs),
+    /// Get the details for a run
+    RunGet(run_get::RunGetArgs),
 }
 
 #[tokio::main]
@@ -101,6 +104,7 @@ async fn main() {
         Commands::TaskList(args) => task_list::execute(storage, args).await,
         Commands::TaskGet(args) => task_get::execute(storage, args).await,
         Commands::RunList(args) => run_list::execute(storage, args).await,
+        Commands::RunGet(args) => run_get::execute(storage, args).await,
     };
     if result.is_ok() {
         log::info!("Complete");
