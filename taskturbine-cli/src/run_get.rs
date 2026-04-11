@@ -1,7 +1,9 @@
 use clap::Args;
 
 use crate::{
-    admin_storage::{AdminStorage, RunGetOptions}, formatters, CliError
+    CliError,
+    admin_storage::{AdminStorage, RunGetOptions},
+    formatters,
 };
 use taskturbine_core::{
     models::RunId,
@@ -19,7 +21,8 @@ impl TryFrom<RunGetArgs> for RunGetOptions {
     type Error = String;
 
     fn try_from(value: RunGetArgs) -> Result<Self, String> {
-        let run_id: RunId = value.run_id
+        let run_id: RunId = value
+            .run_id
             .try_into()
             .map_err(|_| "Invalid run_id".to_string())?;
         Ok(RunGetOptions { run_id })

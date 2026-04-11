@@ -147,7 +147,8 @@ impl AdminStorage {
             "SELECT runs.* 
             FROM taskturbine.runs AS runs
             INNER JOIN taskturbine.tasks AS tasks on tasks.task_id = runs.task_id
-            WHERE ");
+            WHERE ",
+        );
         let mut clauses = query.separated(" AND ");
         clauses.push("tasks.usecase = ");
         clauses.push_bind_unseparated(&self.config.usecase);
@@ -158,25 +159,23 @@ impl AdminStorage {
         }
         query.push(" ORDER BY runs.created_at DESC");
 
-        let res: Result<Vec<Run>, sqlx::Error> =
-            query.build_query_as().fetch_all(&self.pool).await;
+        let res: Result<Vec<Run>, sqlx::Error> = query.build_query_as().fetch_all(&self.pool).await;
 
         let runs = res.map_err(StorageError::SqlError)?;
         Ok(runs)
     }
 
     pub async fn run_get(&self, options: RunGetOptions) -> Result<RunDetails, StorageError> {
-        let run: Run =
-            sqlx::query_as(
-                "SELECT runs.* FROM taskturbine.runs AS runs
+        let run: Run = sqlx::query_as(
+            "SELECT runs.* FROM taskturbine.runs AS runs
                 INNER JOIN taskturbine.tasks AS tasks ON tasks.task_id = runs.task_id
-                WHERE runs.run_id = $1 AND tasks.usecase = $2"
-                )
-                .bind(options.run_id)
-                .bind(&self.config.usecase)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(StorageError::SqlError)?;
+                WHERE runs.run_id = $1 AND tasks.usecase = $2",
+        )
+        .bind(options.run_id)
+        .bind(&self.config.usecase)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(StorageError::SqlError)?;
 
         let checkpoints: Vec<Checkpoint> = sqlx::query_as(
             "SELECT * FROM taskturbine.checkpoints WHERE owner_run_id = $1 ORDER BY updated_at",
@@ -186,9 +185,6 @@ impl AdminStorage {
         .await
         .map_err(StorageError::SqlError)?;
 
-        Ok(RunDetails {
-            run,
-            checkpoints,
-        })
+        Ok(RunDetails { run, checkpoints })
     }
 }

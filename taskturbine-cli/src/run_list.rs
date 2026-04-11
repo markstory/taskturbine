@@ -1,7 +1,9 @@
 use clap::Args;
 
 use crate::{
-    admin_storage::{AdminStorage, RunListOptions}, formatters, CliError
+    CliError,
+    admin_storage::{AdminStorage, RunListOptions},
+    formatters,
 };
 use taskturbine_core::{
     models::{TaskId, TaskState},

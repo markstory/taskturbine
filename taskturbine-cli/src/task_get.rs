@@ -1,7 +1,9 @@
 use clap::Args;
 
 use crate::{
-    admin_storage::{AdminStorage, TaskGetOptions}, formatters, CliError
+    CliError,
+    admin_storage::{AdminStorage, TaskGetOptions},
+    formatters,
 };
 use taskturbine_core::storage::{Storage, StorageError};
 
@@ -17,7 +19,6 @@ pub struct TaskGetArgs {
     )]
     pub show_results: bool,
 }
-
 
 /// Implement into/from to convert into the storage interface struct
 impl From<TaskGetArgs> for TaskGetOptions {

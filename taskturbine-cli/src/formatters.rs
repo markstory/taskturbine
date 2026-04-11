@@ -9,7 +9,10 @@ pub fn dump_run(run: &Run, show_results: bool, show_task_id: bool) {
     }
     println!(" attempt: {}", run.attempt);
     println!(" state: {}", run.state);
-    println!(" claimed_by: {}", run.claimed_by.clone().unwrap_or("<unclaimed>".to_string()));
+    println!(
+        " claimed_by: {}",
+        run.claimed_by.clone().unwrap_or("<unclaimed>".to_string())
+    );
     println!(" created at: {}", run.created_at);
     if show_results && let Some(result) = &run.result {
         println!(
