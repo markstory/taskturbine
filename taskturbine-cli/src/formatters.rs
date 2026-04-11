@@ -2,8 +2,11 @@ use taskturbine_core::models::{Run, Task};
 
 pub const INVALID_DATA: &str = "<non-utf8 data>";
 
-pub fn dump_run(run: &Run, show_results: bool) {
+pub fn dump_run(run: &Run, show_results: bool, show_task_id: bool) {
     println!("Run Id: {}", run.run_id);
+    if show_task_id {
+        println!(" task id: {}", run.task_id);
+    }
     println!(" attempt: {}", run.attempt);
     println!(" state: {}", run.state);
     println!(" claimed_by: {}", run.claimed_by.clone().unwrap_or("<unclaimed>".to_string()));

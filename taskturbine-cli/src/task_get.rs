@@ -45,7 +45,7 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
     println!("== Runs ==");
     println!();
     for run in details.runs.iter() {
-        formatters::dump_run(run, options.show_results);
+        formatters::dump_run(run, options.show_results, false);
     }
     println!();
 
