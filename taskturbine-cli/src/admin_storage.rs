@@ -132,7 +132,26 @@ impl AdminStorage {
     }
 
     /// Get a list of runs based on filtering options
-    pub async fn run_list(&self, _options: RunListOptions) -> Result<Vec<Run>, StorageError> {
-        Ok(vec![])
+    pub async fn run_list(&self, options: RunListOptions) -> Result<Vec<Run>, StorageError> {
+        let mut query = QueryBuilder::new(
+            "SELECT runs.* 
+            FROM taskturbine.runs AS runs
+            INNER JOIN taskturbine.tasks AS tasks on tasks.task_id = runs.task_id
+            WHERE ");
+        let mut clauses = query.separated(" AND ");
+        clauses.push("tasks.usecase = ");
+        clauses.push_bind_unseparated(&self.config.usecase);
+
+        if let Some(task_id) = options.task_id {
+            clauses.push("runs.task_id = ");
+            clauses.push_bind_unseparated(task_id);
+        }
+        query.push(" ORDER BY runs.created_at DESC");
+
+        let res: Result<Vec<Run>, sqlx::Error> =
+            query.build_query_as().fetch_all(&self.pool).await;
+
+        let runs = res.map_err(StorageError::SqlError)?;
+        Ok(runs)
     }
 }

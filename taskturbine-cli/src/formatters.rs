@@ -6,7 +6,7 @@ pub fn dump_run(run: &Run, show_results: bool) {
     println!("Run Id: {}", run.run_id);
     println!(" attempt: {}", run.attempt);
     println!(" state: {}", run.state);
-    println!(" claimed_by: {}", run.claimed_by);
+    println!(" claimed_by: {}", run.claimed_by.clone().unwrap_or("<unclaimed>".to_string()));
     println!(" created at: {}", run.created_at);
     if show_results && let Some(result) = &run.result {
         println!(

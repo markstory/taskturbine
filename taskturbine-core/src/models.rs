@@ -237,7 +237,7 @@ pub struct Run {
     /// The current state of the task.
     pub state: TaskState,
     /// The timestamp that the current claim expires at.
-    pub claimed_by: String,
+    pub claimed_by: Option<String>,
     /// The timestamp that the current claim expires at.
     /// Once a claim expires, the cleanup operations will
     /// make the task available again.

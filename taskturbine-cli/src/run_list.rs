@@ -48,6 +48,7 @@ pub async fn execute(storage: Storage, args: RunListArgs) -> Result<(), CliError
 
     for run in runs.iter() {
         formatters::dump_run(run, false);
+        println!();
     }
     if runs.is_empty() {
         println!("No runs match those filtering options");
