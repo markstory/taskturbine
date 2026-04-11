@@ -1,8 +1,7 @@
 use clap::Args;
 
 use crate::{
-    CliError,
-    admin_storage::{AdminStorage, RunListOptions},
+    admin_storage::{AdminStorage, RunListOptions}, formatters, CliError
 };
 use taskturbine_core::{
     models::{TaskId, TaskState},
@@ -47,7 +46,9 @@ pub async fn execute(storage: Storage, args: RunListArgs) -> Result<(), CliError
         .await
         .map_err(<StorageError as Into<CliError>>::into)?;
 
-    for run in runs.iter() {}
+    for run in runs.iter() {
+        formatters::dump_run(run, false);
+    }
     if runs.is_empty() {
         println!("No runs match those filtering options");
     }

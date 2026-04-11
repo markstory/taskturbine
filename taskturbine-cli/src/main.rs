@@ -9,6 +9,7 @@ mod cancel;
 mod cleanup;
 mod clear;
 mod emit_event;
+mod formatters;
 mod migrate;
 mod run_list;
 mod spawn;

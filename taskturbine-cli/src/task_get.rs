@@ -1,8 +1,7 @@
 use clap::Args;
 
 use crate::{
-    CliError,
-    admin_storage::{AdminStorage, TaskGetOptions},
+    admin_storage::{AdminStorage, TaskGetOptions}, formatters, CliError
 };
 use taskturbine_core::storage::{Storage, StorageError};
 
@@ -19,7 +18,6 @@ pub struct TaskGetArgs {
     pub show_results: bool,
 }
 
-const INVALID_DATA: &str = "<non-utf8 data>";
 
 /// Implement into/from to convert into the storage interface struct
 impl From<TaskGetArgs> for TaskGetOptions {
@@ -40,45 +38,14 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
         .await
         .map_err(<StorageError as Into<CliError>>::into)?;
 
-    let task = details.task;
     println!();
-    println!("Task Id: {}", task.task_id);
-    println!("  channel:    {}", task.channel);
-    println!("  task_name:  {}", task.task_name);
-    println!("  state:      {}", task.state);
-    println!(
-        "  headers:    {}",
-        str::from_utf8(&task.headers).unwrap_or(INVALID_DATA)
-    );
-    println!(
-        "  parameters: {}",
-        str::from_utf8(&task.params).unwrap_or(INVALID_DATA)
-    );
-    println!(" Retry:");
-    println!("  seconds:      {}", &task.retry_seconds);
-    println!("  factor:       {}", &task.retry_factor);
-    println!("  max_seconds:  {}", &task.retry_max_seconds);
-    println!("  attempts:     {}", &task.attempts);
-    println!("  max_attempts: {}", &task.max_attempts);
-    println!(" cancellation_max_age:  {}", &task.cancellation_max_age);
+    formatters::dump_task(&details.task);
     println!();
 
     println!("== Runs ==");
     println!();
     for run in details.runs.iter() {
-        println!("Run Id: {}", run.run_id);
-        println!(" attempt: {}", run.attempt);
-        println!(" state: {}", run.state);
-        println!(" claimed_by: {}", run.claimed_by);
-        println!(" created at: {}", run.created_at);
-        if options.show_results
-            && let Some(result) = &run.result
-        {
-            println!(
-                " payload: {}",
-                str::from_utf8(result.as_slice()).unwrap_or(INVALID_DATA)
-            );
-        }
+        formatters::dump_run(run, options.show_results);
     }
     println!();
 
@@ -91,7 +58,7 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
         if options.show_results {
             println!(
                 " result: {}",
-                str::from_utf8(checkpoint.state.as_slice()).unwrap_or(INVALID_DATA)
+                str::from_utf8(checkpoint.state.as_slice()).unwrap_or(formatters::INVALID_DATA)
             );
         }
     }
