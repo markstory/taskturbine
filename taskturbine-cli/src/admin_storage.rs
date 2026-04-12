@@ -25,7 +25,11 @@ pub struct TaskListOptions {
     /// The task state to filter by
     pub state: Option<TaskState>,
 
+    /// The channel the task was spawned on
     pub channel: Option<String>,
+
+    /// The number of records to fetch
+    pub limit: i32,
 }
 
 /// Filtering options for task_get()
@@ -95,6 +99,8 @@ impl AdminStorage {
             clauses.push_bind_unseparated(value);
         }
         query.push(" ORDER BY created_at DESC");
+        query.push(" LIMIT ");
+        query.push_bind(options.limit);
 
         let res: Result<Vec<Task>, sqlx::Error> =
             query.build_query_as().fetch_all(&self.pool).await;

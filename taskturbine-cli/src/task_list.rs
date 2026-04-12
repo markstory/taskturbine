@@ -21,6 +21,9 @@ pub struct TaskListArgs {
 
     #[arg(long, help = "The task channel")]
     pub channel: Option<String>,
+
+    #[arg(long, default_value_t = 50, help = "The number of records to read")]
+    pub limit: i32,
 }
 
 /// Implement into/from to convert into the storage interface struct
@@ -30,6 +33,7 @@ impl From<TaskListArgs> for TaskListOptions {
             taskname: value.taskname,
             state: value.state,
             channel: value.channel,
+            limit: value.limit,
         }
     }
 }
