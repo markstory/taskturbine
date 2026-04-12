@@ -6,6 +6,8 @@ use taskturbine_core::storage::{Storage, StorageError};
 
 mod admin_storage;
 mod cleanup;
+mod cleanup_event;
+mod cleanup_task;
 mod clear;
 mod emit_event;
 mod formatters;
@@ -56,6 +58,10 @@ enum Commands {
     Clear(clear::ClearArgs),
     /// Run a cleanup worker
     Cleanup,
+    /// Run a retention cleanup on event data.
+    CleanupEvent,
+    /// Run a retention cleanup on task, run and checkpoint data.
+    CleanupTask,
     /// Emit an event to storage.
     EmitEvent(emit_event::EmitEventArgs),
     /// Run migrations for the taskturbine schema.
@@ -96,6 +102,8 @@ async fn main() {
     let storage = Storage::new(config);
     let result = match args.command {
         Commands::Cleanup => cleanup::cleanup(storage).await,
+        Commands::CleanupEvent => cleanup_event::execute(storage).await,
+        Commands::CleanupTask => cleanup_task::execute(storage).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
         Commands::Migrate => migrate::run_migrations(storage).await,
