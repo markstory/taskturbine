@@ -61,17 +61,17 @@ enum Commands {
     /// Run migrations for the taskturbine schema.
     Migrate,
     /// Get a list of runs with filtering
-    RunList(run_list::RunListArgs),
-    /// Get the details for a run
-    RunGet(run_get::RunGetArgs),
-    /// Cancels a sleeping or pending task
-    TaskCancel(task_cancel::CancelArgs),
+    ListRun(run_list::RunListArgs),
     /// List tasks with filtering
-    TaskList(task_list::TaskListArgs),
+    ListTask(task_list::TaskListArgs),
+    /// Get the details for a run
+    GetRun(run_get::RunGetArgs),
     /// Get a single task with filtering
-    TaskGet(task_get::TaskGetArgs),
+    GetTask(task_get::TaskGetArgs),
     /// Spawn a new task.
-    TaskSpawn(task_spawn::SpawnArgs),
+    SpawnTask(task_spawn::SpawnArgs),
+    /// Cancels a sleeping or pending task
+    CancelTask(task_cancel::CancelArgs),
 }
 
 #[tokio::main]
@@ -99,12 +99,12 @@ async fn main() {
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
         Commands::Migrate => migrate::run_migrations(storage).await,
-        Commands::RunList(args) => run_list::execute(storage, args).await,
-        Commands::RunGet(args) => run_get::execute(storage, args).await,
-        Commands::TaskCancel(args) => task_cancel::cancel(storage, args).await,
-        Commands::TaskGet(args) => task_get::execute(storage, args).await,
-        Commands::TaskList(args) => task_list::execute(storage, args).await,
-        Commands::TaskSpawn(args) => task_spawn::spawn_task(storage, args).await,
+        Commands::ListRun(args) => run_list::execute(storage, args).await,
+        Commands::GetRun(args) => run_get::execute(storage, args).await,
+        Commands::CancelTask(args) => task_cancel::cancel(storage, args).await,
+        Commands::GetTask(args) => task_get::execute(storage, args).await,
+        Commands::ListTask(args) => task_list::execute(storage, args).await,
+        Commands::SpawnTask(args) => task_spawn::spawn_task(storage, args).await,
     };
     if result.is_ok() {
         log::info!("Complete");
