@@ -38,11 +38,11 @@ pub struct Config {
     /// The minimum number of seconds between each cleanup operation.
     /// It is recommended you do this periodically to ensure that your
     /// database doesn't grow indefinitely.
-    pub worker_cleanup_interval_secs: i32,
+    pub worker_upkeep_interval_secs: i32,
 
     /// Whether or not workers should run cleanup operations inline.
     /// Set to false if you are going to run cleanup workers separately.
-    pub worker_cleanup_inline: bool,
+    pub worker_upkeep_inline: bool,
 
     /// The number of seconds that workers will claim tasks for.
     /// Workers are expected to complete tasks within their claim timeout.
@@ -63,8 +63,8 @@ impl Default for Config {
             default_channel: "default".to_string(),
             worker_concurrency: 3,
             worker_sleep_secs: 2,
-            worker_cleanup_inline: true,
-            worker_cleanup_interval_secs: 10,
+            worker_upkeep_inline: true,
+            worker_upkeep_interval_secs: 10,
             worker_cleanup_cutoff_secs: 60 * 10,
             worker_cleanup_limit: 1000,
             worker_claim_timeout_secs: 60 * 10,

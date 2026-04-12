@@ -187,40 +187,40 @@
 //! }
 //! ```
 //!
-//! # Performing cleanup
+//! # Performing upkeep
 //!
-//! As tasks are completed, the related state is retained in postgres until
-//! _cleanup_ operations are performed. Cleanup operations are done within processing workers
-//! by default.
+//! Workers can timeout, get OOMkilled and be restarted mid task. When this happens
+//! the tasks they previously claimed need to be released. By periodically running
+//! upkeep operations, expired claims are released, and tasks that are past their
+//! `cancellation_max_age` can be cancelled. Upkeep operations are done 
+//! within processing workers by default.
 //!
-//! You can tune how often cleanup operations are done by workers using
+//! You can tune how often upkeep operations are done by workers using
 //!
-//! - [Config.worker_cleanup_limit](config/struct.Config.html#structfield.worker_cleanup_limit)
-//! - [Config.worker_cleanup_cutoff_secs](config/struct.Config.html#structfield.worker_cleanup_cutoff_secs)
-//! - [Config.worker_cleanup_interval_secs](config/struct.Config.html#structfield.worker_cleanup_interval_secs)
-//! - [Config.worker_cleanup_inline](config/struct.Config.html#structfield.worker_cleanup_inline)
+//! - [Config.worker_upkeep_interval_secs](config/struct.Config.html#structfield.worker_upkeep_interval_secs)
+//! - [Config.worker_upkeep_inline](config/struct.Config.html#structfield.worker_upkeep_inline)
 //!
-//! # Cleanup workers
+//! # Upkeep workers
 //!
-//! If you have larger numbers of workers, the cleanup operations of those workers can create
+//! If you have larger numbers of workers, the upkeep operations of those workers can create
 //! contention and consume cycles from executing tasks. In larger deployments it can be more efficient
-//! to have dedicated cleanup worker to reduce contention:
+//! to have dedicated upkeep worker to reduce contention:
 //!
 //! ```rust
-//! use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
+//! use taskturbine_core::app::{TaskturbineApp, run_upkeep_worker};
 //! use taskturbine_core::config::Config;
 //!
 //! async fn worker_main() {
 //!     let config = Config::default();
 //!     let app = TaskturbineApp::new(config);
 //!
-//!     let worker = app.create_worker("cleanup-worker-1", vec![]);
-//!     run_cleanup_worker(worker).await;
+//!     let worker = app.create_worker("upkeep-worker-1", vec![]);
+//!     run_upkeep_worker(worker).await;
 //! }
 //! ```
 //!
 //! When running a dedicated worker you may need to tune your configuration if you were previously
-//! running inline cleanup operations on many workers.
+//! running inline upkeep operations on many workers.
 //!
 pub mod app;
 pub mod config;

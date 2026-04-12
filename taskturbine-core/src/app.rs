@@ -143,7 +143,7 @@ impl TaskturbineApp {
     /// If `channels` is empty, tasks in all channels will be processed.
     ///
     /// ```rust
-    /// use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
+    /// use taskturbine_core::app::TaskturbineApp;
     /// use taskturbine_core::config::Config;
     ///
     /// (async || {
@@ -201,7 +201,7 @@ impl TaskturbineApp {
     /// How those bytes are encoded is an application concern.
     ///
     /// ```rust
-    /// use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
+    /// use taskturbine_core::app::TaskturbineApp;
     /// use taskturbine_core::config::Config;
     ///
     /// (async || {
@@ -348,14 +348,14 @@ impl Worker {
         }
     }
 
-    /// Runs a cleanup step on storage.
+    /// Runs a upkeep step on storage.
     ///
     /// Takes a datetime of what is considered stale and can be purged.
-    /// See [run_cleanup_worker](fn.run_cleanup_worker.html) for running cleanup operations.
-    pub async fn run_cleanup(&self, older_than: Duration) -> Result<(), WorkerError> {
+    /// See [run_upkeep_worker](fn.run_upkeep_worker.html) for running upkeep operations.
+    pub async fn run_upkeep(&self) -> Result<(), WorkerError> {
         self.app
             .storage
-            .run_cleanup(older_than)
+            .run_upkeep()
             .await
             .map_err(|e| WorkerError::Message(format!("{e:?}")))
     }
@@ -458,8 +458,8 @@ pub async fn run_worker(worker: Worker) {
     tokio::spawn(claim_tasks(arc_worker.clone(), send.clone()));
 
     // TODO This should run the state-machine cleanup, not retention
-    if config.worker_cleanup_inline {
-        tokio::spawn(run_cleanup(arc_worker.clone()));
+    if config.worker_upkeep_inline {
+        tokio::spawn(run_upkeep(arc_worker.clone()));
     }
 
     elegant_departure::tokio::depart()
@@ -468,31 +468,31 @@ pub async fn run_worker(worker: Worker) {
         .await
 }
 
-/// Run a cleanup worker in a while loop.
+/// Run a upkeep worker in a while loop.
 ///
-/// In multi-worker deployments, it can be more efficient to run the cleanup
+/// In multi-worker deployments, it can be more efficient to run the upkeep
 /// operations as a dedicated worker/process instead of having each worker
-/// periodically running cleanup operations.
+/// periodically running upkeep operations.
 ///
 /// Consumes the worker and runs indefinitely until the process is killed.
 ///
 /// ```rust
-/// use taskturbine_core::app::{TaskturbineApp, run_cleanup_worker};
+/// use taskturbine_core::app::{TaskturbineApp, run_upkeep_worker};
 /// use taskturbine_core::config::Config;
 ///
 /// (async || {
 ///     let config = Config::default();
 ///     let app = TaskturbineApp::new(config);
 ///
-///     run_cleanup_worker(app.create_worker("worker-1", vec!["feedback-ingest".into()])).await
+///     run_upkeep_worker(app.create_worker("worker-1", vec!["feedback-ingest".into()])).await
 /// })();
 /// ```
 ///
 /// Use [Config](../config/struct.Config.html) to configure worker behavior.
-pub async fn run_cleanup_worker(worker: Worker) {
+pub async fn run_upkeep_worker(worker: Worker) {
     let arc_worker = Arc::new(worker);
 
-    tokio::spawn(run_cleanup(arc_worker.clone()));
+    tokio::spawn(run_upkeep(arc_worker.clone()));
 
     elegant_departure::tokio::depart()
         .on_termination()
@@ -500,14 +500,14 @@ pub async fn run_cleanup_worker(worker: Worker) {
         .await
 }
 
-/// Run cleanup operations periodically.
-/// Every `config.worker_cleanup_interval` a cleanup operation will run
+/// Run upkeep operations periodically.
+/// Every `config.worker_upkeep_interval` a upkeep operation will run
 /// which deletes completed tasks and expired events from the database.
-async fn run_cleanup(worker: Arc<Worker>) {
-    log::debug!("Spawing cleanup");
+async fn run_upkeep(worker: Arc<Worker>) {
+    log::debug!("Spawing upkeep");
     let config = worker.config();
     let mut timer = time::interval(Duration::from_secs(
-        config.worker_cleanup_interval_secs as u64,
+        config.worker_upkeep_interval_secs as u64,
     ));
     timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     let guard = elegant_departure::get_shutdown_guard();
@@ -515,11 +515,10 @@ async fn run_cleanup(worker: Arc<Worker>) {
     loop {
         tokio::select! {
             _ = timer.tick() => {
-                log::debug!("Running cleanup operations.");
-                let cutoff = Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
-                match worker.run_cleanup(cutoff).await {
+                log::debug!("Running upkeep operations.");
+                match worker.run_upkeep().await {
                     Ok(_) => {
-                        log::info!("Cleanup operations complete");
+                        log::info!("upkeep operations complete");
                     },
                     Err(err) => {
                         log::error!("{err:?}");
@@ -527,7 +526,7 @@ async fn run_cleanup(worker: Arc<Worker>) {
                 }
             }
             _ = guard.wait() => {
-                log::debug!("Shutting down cleanup");
+                log::debug!("Shutting down upkeep");
                 break;
             }
         }
@@ -961,13 +960,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_run_cleanup() {
+    async fn worker_run_upkeep() {
+        // TODO expand this test to check that it releases claims
+        // and cancels old tasks
         let channel = "worker_run_cleanup";
         let app = create_app_with_task(channel).await;
 
         let worker = app.create_worker("worker-1", vec![]);
-        let older_than = Duration::from_secs(30);
-        let res = worker.run_cleanup(older_than).await;
+        let res = worker.run_upkeep().await;
         assert!(res.is_ok());
     }
 }

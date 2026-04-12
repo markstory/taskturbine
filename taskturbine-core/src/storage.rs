@@ -117,20 +117,9 @@ impl Storage {
         self.config.clone()
     }
 
-    /// Run all the cleanup operations
-    /// Meant to be run periodically to compact completed/expired data from postgres.
-    pub async fn run_cleanup(&self, older_than: Duration) -> Result<(), StorageError> {
-        // This code is tested at the Worker layer
-        let older_than = Utc::now() - older_than;
-        let cleanup_limit = self.config.worker_cleanup_limit;
-
-        self.cleanup_events(older_than, cleanup_limit).await?;
-        self.cleanup_tasks(older_than, cleanup_limit).await?;
-
-        // TODO these should be separate from cleanup.
-        // Cleanup is for retention limits and disk usage concerns.
-        // These methods advance the state-machine of workers.
-        // Split retention methods out and make them runnable through the CLI
+    /// Run upkeep operations to release expired claims and cancel tasks
+    /// based on `cancellation_max_age`.
+    pub async fn run_upkeep(&self) -> Result<(), StorageError> {
         self.handle_expired_claims().await?;
         self.handle_cancellation_max_age().await?;
 
