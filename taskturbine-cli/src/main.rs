@@ -5,7 +5,6 @@ use taskturbine_core::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
 
 mod admin_storage;
-mod cancel;
 mod cleanup;
 mod clear;
 mod emit_event;
@@ -13,9 +12,10 @@ mod formatters;
 mod migrate;
 mod run_get;
 mod run_list;
-mod spawn;
+mod task_cancel;
 mod task_get;
 mod task_list;
+mod task_spawn;
 
 #[derive(Debug)]
 enum CliError {
@@ -52,8 +52,6 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Cancels a sleeping or pending task
-    Cancel(cancel::CancelArgs),
     /// Clears all data from storage.
     Clear(clear::ClearArgs),
     /// Run a cleanup worker
@@ -62,16 +60,18 @@ enum Commands {
     EmitEvent(emit_event::EmitEventArgs),
     /// Run migrations for the taskturbine schema.
     Migrate,
-    /// Spawn a new task.
-    Spawn(spawn::SpawnArgs),
-    /// List tasks with filtering
-    TaskList(task_list::TaskListArgs),
-    /// Get a single task with filtering
-    TaskGet(task_get::TaskGetArgs),
     /// Get a list of runs with filtering
     RunList(run_list::RunListArgs),
     /// Get the details for a run
     RunGet(run_get::RunGetArgs),
+    /// Cancels a sleeping or pending task
+    TaskCancel(task_cancel::CancelArgs),
+    /// List tasks with filtering
+    TaskList(task_list::TaskListArgs),
+    /// Get a single task with filtering
+    TaskGet(task_get::TaskGetArgs),
+    /// Spawn a new task.
+    TaskSpawn(task_spawn::SpawnArgs),
 }
 
 #[tokio::main]
@@ -95,16 +95,16 @@ async fn main() {
 
     let storage = Storage::new(config);
     let result = match args.command {
-        Commands::Cancel(args) => cancel::cancel(storage, args).await,
         Commands::Cleanup => cleanup::cleanup(storage).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
         Commands::Migrate => migrate::run_migrations(storage).await,
-        Commands::Spawn(args) => spawn::spawn_task(storage, args).await,
-        Commands::TaskList(args) => task_list::execute(storage, args).await,
-        Commands::TaskGet(args) => task_get::execute(storage, args).await,
         Commands::RunList(args) => run_list::execute(storage, args).await,
         Commands::RunGet(args) => run_get::execute(storage, args).await,
+        Commands::TaskCancel(args) => task_cancel::cancel(storage, args).await,
+        Commands::TaskGet(args) => task_get::execute(storage, args).await,
+        Commands::TaskList(args) => task_list::execute(storage, args).await,
+        Commands::TaskSpawn(args) => task_spawn::spawn_task(storage, args).await,
     };
     if result.is_ok() {
         log::info!("Complete");
