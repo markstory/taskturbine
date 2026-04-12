@@ -20,7 +20,7 @@ pub async fn execute(storage: Storage) -> Result<(), CliError> {
         Ok(removed) => {
             log::info!("Cleanup complete. Removed {removed}");
             Ok(())
-        },
+        }
         Err(e) => Err(e.into()),
     }
 }
