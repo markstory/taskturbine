@@ -5,11 +5,8 @@ use chrono::Utc;
 use taskturbine_core::storage::Storage;
 
 pub async fn execute(storage: Storage) -> Result<(), CliError> {
-    // Get the configuration from storage.
-    // In userland code they would define the config, and apply to the App.
+    // TODO cutoff_secs and cleanup_limit should come from CLI args.
     let config = storage.get_config();
-
-    // This code is tested at the Worker layer
     let cutoff = Duration::from_secs(config.worker_cleanup_cutoff_secs as u64);
     let older_than = Utc::now() - cutoff;
     let limit = config.worker_cleanup_limit;
