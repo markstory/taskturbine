@@ -187,7 +187,7 @@ def test_worker_cleanup(
             WHERE task_id = %s
             """,
             [
-                (datetime.now() - timedelta(minutes=1)).isoformat(), 
+                (datetime.now() - timedelta(minutes=1)).isoformat(),
                 "worker-1",
                 first.task_id,
             ],
@@ -203,7 +203,7 @@ def test_worker_cleanup(
             WHERE task_id = %s
             """,
             [
-                (datetime.now() - timedelta(minutes=10, seconds=1)).isoformat(), 
+                (datetime.now() - timedelta(minutes=10, seconds=1)).isoformat(),
                 600,
                 second.task_id,
             ],

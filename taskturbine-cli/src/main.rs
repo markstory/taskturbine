@@ -5,7 +5,6 @@ use taskturbine_core::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
 
 mod admin_storage;
-mod upkeep;
 mod cleanup_event;
 mod cleanup_task;
 mod clear;
@@ -18,6 +17,7 @@ mod task_cancel;
 mod task_get;
 mod task_list;
 mod task_spawn;
+mod upkeep;
 
 #[derive(Debug)]
 enum CliError {
