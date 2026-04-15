@@ -143,9 +143,9 @@ impl WorkerInner {
         self.config.worker_sleep_secs
     }
 
-    #[getter(worker_cleanup_interval_secs)]
-    pub fn worker_cleanup_interval_secs(&self) -> i32 {
-        self.config.worker_cleanup_interval_secs
+    #[getter(worker_upkeep_interval_secs)]
+    pub fn worker_upkeep_interval_secs(&self) -> i32 {
+        self.config.worker_upkeep_interval_secs
     }
 
     #[getter(worker_concurrency)]
@@ -177,25 +177,23 @@ impl WorkerInner {
             .map_err(|e| PyValueError::new_err(format!("Could not claim tasks: {e:?}")))
     }
 
-    /// Run all the cleanup operations on the database.
-    fn run_cleanup(&self) -> PyResult<()> {
-        let older_than = Duration::from_secs(self.config.worker_cleanup_cutoff_secs as u64);
-
+    /// Run all the upkeep operations on the database.
+    fn run_upkeep(&self) -> PyResult<()> {
         self.runtime
-            .block_on(self.storage.run_cleanup(older_than))
-            .map_err(|e| PyValueError::new_err(format!("Could not run_cleanup: {e:?}")))
+            .block_on(self.storage.run_upkeep())
+            .map_err(|e| PyValueError::new_err(format!("Upkeep failed: {e:?}")))
     }
 
-    // Should cleanup be run right now by a Worker?
-    // Set `config.worker_cleanup_inline` to false if you are running a dedicated
-    // cleanup worker.
-    fn should_run_cleanup(&self, timestamp: i64) -> bool {
-        if !self.config.worker_cleanup_inline {
+    // Should upkeep be run right now by a Worker?
+    // Set `config.worker_upkeep_inline` to false if you are running a dedicated
+    // upkeep worker.
+    fn should_run_upkeep(&self, timestamp: i64) -> bool {
+        if !self.config.worker_upkeep_inline {
             return false;
         }
         let now = Utc::now().timestamp();
         let delta = now - timestamp;
-        if delta < self.config.worker_cleanup_interval_secs as i64 {
+        if delta < self.config.worker_upkeep_interval_secs as i64 {
             return false;
         }
         true

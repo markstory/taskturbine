@@ -146,16 +146,19 @@ class Config:
     Default value is 600 (10m)
     """
 
+    worker_upkeep_inline: bool
+    """
+    Whether or not workers should run upkeep operations inline.
+    Set to false if you are going to run upkeep workers separately.
+    """
+
+    worker_upkeep_interval_secs: int
+    """The minimum number of seconds between each upkeep operation."""
+
     worker_cleanup_cutoff_secs: int
     """
     The age of completed tasks and events in seconds
     after now() that are safe to delete.
-    """
-
-    worker_cleanup_inline: bool
-    """
-    Whether or not workers should run cleanup operations inline.
-    Set to false if you are going to run cleanup workers separately.
     """
 
     worker_cleanup_limit: int
@@ -163,9 +166,6 @@ class Config:
     The maximum number of completed tasks and events
     a worker will delete in a single cleanup operation.
     """
-
-    worker_cleanup_interval_secs: int
-    """The minimum number of seconds between each cleanup operation."""
 
     worker_concurrency: int
     """
@@ -192,8 +192,8 @@ class Config:
         default_channel: str = "default",
         worker_claim_timeout_secs: int = 600,
         worker_cleanup_cutoff_secs: int = 30,
-        worker_cleanup_inline: bool = True,
-        worker_cleanup_interval_secs: int = 10,
+        worker_upkeep_inline: bool = True,
+        worker_upkeep_interval_secs: int = 10,
         worker_cleanup_limit: int = 1000,
         worker_concurrency: int = 3,
         worker_sleep_secs: int = 2,
@@ -267,7 +267,7 @@ class WorkerInner:
     worker_sleep_secs: int
     """Number of seconds workers should sleep between run loops."""
 
-    worker_cleanup_interval_secs: int
+    worker_upkeep_interval_secs: int
     """Number of seconds between cleanup operations."""
 
     worker_max_tasks_per_child: int
@@ -276,14 +276,14 @@ class WorkerInner:
     def claim_tasks(self) -> list[ClaimedTask]: ...
     """Claim a list of tasks based on configuration"""
 
-    def should_run_cleanup(self, timestamp: int) -> bool: ...
-    """Should the current worker run a cleanup loop"""
+    def should_run_upkeep(self, timestamp: int) -> bool: ...
+    """Should the current worker run upkeep operations"""
 
-    def run_cleanup(self) -> None: ...
+    def run_upkeep(self) -> None: ...
     """
-    Run a cleanup operation that purges old:
-    - events
-    - tasks & runs
+    Run a cleanup operation that:
+    - releases expired claims
+    - cancels tasks past cancellation_max_age
     """
 
     def fail_run(self, run_id: str, retry_at: timedelta | None = None) -> None: ...

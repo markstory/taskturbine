@@ -7,7 +7,7 @@ from taskturbine import Config, TaskContext, TaskturbineApp
 from tests.demo import app as demo_app
 from taskturbine.taskturbine import ClaimedTask
 
-from .conftest import row_factory
+from .conftest import fetch_all
 
 Connection = psycopg2._psycopg.connection
 
@@ -80,7 +80,7 @@ def test_worker_execute_batch_simple_success(
         "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s)",
         [first.run_id, second.run_id],
     )
-    rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
+    rows = fetch_all(cursor)
     assert len(rows) == 2
     assert rows[0]["state"] == "completed"
     assert rows[0]["result"].tobytes() == b'{"complete": "ok"}'
@@ -109,7 +109,7 @@ def test_worker_execute_batch_simple_failure(
         "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s) AND state = 'failed'",
         [first.run_id, second.run_id],
     )
-    rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
+    rows = fetch_all(cursor)
     assert len(rows) == 2
 
 
@@ -154,7 +154,7 @@ def test_worker_execute_batch_mixed_failure(
         "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s) ORDER BY state",
         [first.run_id, second.run_id],
     )
-    rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
+    rows = fetch_all(cursor)
     assert len(rows) == 2
     assert rows[0]["state"] == "completed"
     assert rows[1]["state"] == "failed"
@@ -166,48 +166,69 @@ def test_worker_cleanup(
     app = TaskturbineApp(config)
     app.add_channel(channel)
 
+    # TODO continue here, this test needs to be re-written
     @app.register_task(name="worker-cleanup")
     def worker_task(ctx: TaskContext) -> dict[str, Any]:
         return {"ok": "ok"}
 
-    app.emit_event("cleanup-event", {"id": "event"})
     first = app.spawn_task("worker-cleanup", {"oid": 123}, channel=channel)
+    second = app.spawn_task("worker-cleanup", {"oid": 123}, channel=channel)
 
     # Update state to allow cleanup to make changes
     with db_connection.cursor() as cursor:
         cursor.execute("BEGIN")
+        # Expired claim
         cursor.execute(
-            "UPDATE taskturbine.events SET created_at = %s WHERE event_name = %s",
-            [(datetime.now() - timedelta(hours=3)).isoformat(), "cleanup-event"],
+            """
+            UPDATE taskturbine.runs
+            SET state = 'running',
+              claim_expires_at = %s,
+              claimed_by = %s
+            WHERE task_id = %s
+            """,
+            [
+                (datetime.now() - timedelta(minutes=1)).isoformat(), 
+                "worker-1",
+                first.task_id,
+            ],
         )
+
+        # Expired task
         cursor.execute(
             """
             UPDATE taskturbine.tasks
-            SET state = 'completed', completed_at = %s
+            SET state = 'sleeping', 
+              first_started_at = %s,
+              cancellation_max_age = %s
             WHERE task_id = %s
             """,
-            [(datetime.now() - timedelta(hours=3)).isoformat(), first.task_id],
+            [
+                (datetime.now() - timedelta(minutes=10, seconds=1)).isoformat(), 
+                600,
+                second.task_id,
+            ],
         )
         cursor.execute("COMMIT")
     worker = app.create_worker("worker-1", [channel])
-    worker._inner.run_cleanup()
+    worker._inner.run_upkeep()
 
     with db_connection.cursor() as cursor:
         cursor.execute(
-            "SELECT COUNT(*) FROM taskturbine.events WHERE event_name = %s",
-            ["cleanup-event"],
-        )
-        row = cursor.fetchone()
-        assert row
-        assert row[0] == 0, "no events should be found"
-
-        cursor.execute(
-            "SELECT COUNT(*) FROM taskturbine.tasks WHERE task_id = %s",
+            "SELECT * FROM taskturbine.runs WHERE task_id = %s",
             [first.task_id],
         )
         row = cursor.fetchone()
+        breakpoint()
         assert row
-        assert row[0] == 0, "no task should be found"
+        assert row["state"] == "failed", "claimed task should be failed now"
+
+        cursor.execute(
+            "SELECT * FROM taskturbine.tasks WHERE task_id = %s",
+            [second.task_id],
+        )
+        row = cursor.fetchone()
+        assert row
+        assert row["state"] == "cancelled", "should be cancelled now"
 
 
 def test_worker_run_simple_success(
@@ -227,7 +248,7 @@ def test_worker_run_simple_success(
         "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s)",
         [first.run_id, second.run_id],
     )
-    rows = list(map(lambda row: row_factory(cursor, row), cursor.fetchall()))
+    rows = fetch_all(cursor)
     assert len(rows) == 2
     assert rows[0]["state"] == "completed"
     assert rows[1]["state"] == "completed"

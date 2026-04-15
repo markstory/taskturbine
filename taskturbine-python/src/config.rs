@@ -32,10 +32,10 @@ pub struct Config {
     pub worker_cleanup_cutoff_secs: i32,
 
     #[pyo3(get, set)]
-    pub worker_cleanup_interval_secs: i32,
+    pub worker_upkeep_interval_secs: i32,
 
     #[pyo3(get, set)]
-    pub worker_cleanup_inline: bool,
+    pub worker_upkeep_inline: bool,
 
     #[pyo3(get, set)]
     pub await_event_default_timeout_secs: i32,
@@ -57,8 +57,8 @@ impl From<Config> for taskturbine_core::config::Config {
             default_channel: value.default_channel,
             worker_claim_timeout_secs: value.worker_claim_timeout_secs,
             worker_cleanup_cutoff_secs: value.worker_cleanup_cutoff_secs,
-            worker_cleanup_inline: value.worker_cleanup_inline,
-            worker_cleanup_interval_secs: value.worker_cleanup_interval_secs,
+            worker_upkeep_inline: value.worker_upkeep_inline,
+            worker_upkeep_interval_secs: value.worker_upkeep_interval_secs,
             worker_cleanup_limit: value.worker_cleanup_limit,
             worker_concurrency: value.worker_concurrency,
             worker_sleep_secs: value.worker_sleep_secs,
@@ -80,8 +80,8 @@ impl Config {
         default_channel="default",
         worker_claim_timeout_secs=600,
         worker_cleanup_cutoff_secs=600,
-        worker_cleanup_inline=true,
-        worker_cleanup_interval_secs=10,
+        worker_upkeep_inline=true,
+        worker_upkeep_interval_secs=10,
         worker_cleanup_limit=1000,
         worker_concurrency=3,
         worker_sleep_secs=2,
@@ -96,8 +96,8 @@ impl Config {
         default_channel: &str,
         worker_claim_timeout_secs: i32,
         worker_cleanup_cutoff_secs: i32,
-        worker_cleanup_inline: bool,
-        worker_cleanup_interval_secs: i32,
+        worker_upkeep_inline: bool,
+        worker_upkeep_interval_secs: i32,
         worker_cleanup_limit: i32,
         worker_concurrency: i32,
         worker_sleep_secs: i32,
@@ -113,8 +113,8 @@ impl Config {
             worker_concurrency,
             worker_sleep_secs,
             worker_cleanup_limit,
-            worker_cleanup_interval_secs,
-            worker_cleanup_inline,
+            worker_upkeep_interval_secs,
+            worker_upkeep_inline,
             worker_cleanup_cutoff_secs,
             worker_claim_timeout_secs,
             worker_max_tasks_per_child,
