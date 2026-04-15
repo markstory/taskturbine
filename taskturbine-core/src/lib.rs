@@ -192,7 +192,7 @@
 //! Workers can timeout, get OOMkilled and be restarted mid task. When this happens
 //! the tasks they previously claimed need to be released. By periodically running
 //! upkeep operations, expired claims are released, and tasks that are past their
-//! `cancellation_max_age` can be cancelled. Upkeep operations are done 
+//! `cancellation_max_age` can be cancelled. Upkeep operations are done
 //! within processing workers by default.
 //!
 //! You can tune how often upkeep operations are done by workers using

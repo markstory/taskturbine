@@ -5,7 +5,7 @@ use taskturbine_core::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
 
 mod admin_storage;
-mod cleanup;
+mod upkeep;
 mod cleanup_event;
 mod cleanup_task;
 mod clear;
@@ -56,8 +56,8 @@ struct Cli {
 enum Commands {
     /// Clears all data from storage.
     Clear(clear::ClearArgs),
-    /// Run a cleanup worker
-    Cleanup,
+    /// Run a upkeep worker
+    UpkeepWorker,
     /// Run a retention cleanup on event data.
     CleanupEvent,
     /// Run a retention cleanup on task, run and checkpoint data.
@@ -101,7 +101,6 @@ async fn main() {
 
     let storage = Storage::new(config);
     let result = match args.command {
-        Commands::Cleanup => cleanup::cleanup(storage).await,
         Commands::CleanupEvent => cleanup_event::execute(storage).await,
         Commands::CleanupTask => cleanup_task::execute(storage).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
@@ -113,6 +112,7 @@ async fn main() {
         Commands::GetTask(args) => task_get::execute(storage, args).await,
         Commands::ListTask(args) => task_list::execute(storage, args).await,
         Commands::SpawnTask(args) => task_spawn::spawn_task(storage, args).await,
+        Commands::UpkeepWorker => upkeep::upkeep(storage).await,
     };
     if result.is_ok() {
         log::info!("Complete");
