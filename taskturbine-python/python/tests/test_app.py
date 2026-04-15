@@ -4,7 +4,7 @@ import psycopg2
 import pytest
 from taskturbine import Config, Task, TaskSerializer, TaskturbineApp, TaskOptions
 
-from .conftest import row_factory
+from .conftest import fetch_one
 
 Connection = psycopg2._psycopg.connection
 
@@ -83,7 +83,7 @@ def test_spawn_task_uses_serialize_hooks(
 
     cur = db_connection.cursor()
     cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
-    row = row_factory(cur, cur.fetchone())
+    row = fetch_one(cur)
     assert row
     assert row["task_id"] == res.task_id
     assert row["params"].tobytes() == b'--{"a": 123}--'
@@ -111,7 +111,7 @@ def test_spawn_task_with_options(config: Config, db_connection: Connection) -> N
 
     cur = db_connection.cursor()
     cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
-    row = row_factory(cur, cur.fetchone())
+    row = fetch_one(cur)
     assert row
     assert row["task_id"] == res.task_id
     assert row["retry_seconds"] == 5
@@ -143,7 +143,7 @@ def test_spawn_task_uses_task_options(
 
     cur = db_connection.cursor()
     cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
-    row = row_factory(cur, cur.fetchone())
+    row = fetch_one(cur)
     assert row
     assert row["task_id"] == res.task_id
     assert row["retry_seconds"] == 5
@@ -173,7 +173,7 @@ def test_set_spawn_options(config: Config, db_connection: Connection) -> None:
 
     cur = db_connection.cursor()
     cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
-    row = row_factory(cur, cur.fetchone())
+    row = fetch_one(cur)
     assert row
     assert row["task_id"] == res.task_id
     assert row["retry_seconds"] == 5
@@ -191,6 +191,6 @@ def test_emit_event(config: Config, db_connection: Connection) -> None:
 
     cur = db_connection.cursor()
     cur.execute("SELECT * FROM taskturbine.events WHERE event_name = %s", ["event-1"])
-    row = row_factory(cur, cur.fetchone())
+    row = fetch_one(cur)
     assert row
     assert row["payload"].tobytes() == json.dumps(data).encode()

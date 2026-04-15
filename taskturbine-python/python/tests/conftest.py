@@ -58,11 +58,20 @@ def database_url() -> str:
 def db_connection(database_url: str) -> Connection:
     return psycopg2.connect(database_url)
 
-
-def row_factory(cursor: Cursor, row: tuple[Any, ...] | None) -> dict[str, Any]:
+def row_factory(columns: list[tuple[str]], row: tuple[Any, ...] | None) -> dict[str, Any]:
     d: dict[str, Any] = {}
-    if not row or not cursor.description:
+    if not row or not columns:
         return d
-    for idx, col in enumerate(cursor.description):
+    for idx, col in enumerate(columns):
         d[col[0]] = row[idx]
     return d
+
+def fetch_one(cursor: Cursor) -> dict[str, Any]:
+    return row_factory(cursor.description, cursor.fetchone())
+
+def fetch_all(cursor: Cursor) -> list[dict[str, Any]]:
+    """fetch all the rows from a cursor as dicts"""
+    return [
+        row_factory(cursor.description, row)
+        for row in cursor.fetchall()
+    ]
