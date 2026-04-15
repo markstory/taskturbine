@@ -55,6 +55,20 @@ impl TaskturbineApp {
         }
     }
 
+    /// Constructor when you already have a Storage instance.
+    pub fn from_storage(storage: Storage) -> Self {
+        let config = storage.get_config();
+        let mut channels = HashSet::new();
+        channels.insert(config.default_channel.clone());
+
+        Self {
+            config,
+            storage,
+            channels,
+            tasks: HashMap::new(),
+        }
+    }
+
     /// Define a channel that tasks can be consumed on.
     ///
     /// Channels allow you to have dedicated workers for specific
@@ -298,7 +312,7 @@ impl From<StorageError> for WorkerError {
 /// storage with task results.
 ///
 /// A Worker can be run with [`run_worker`]. You can also
-/// use [`run_cleanup_worker`] to run a cleanup worker.
+/// use [`run_upkeep_worker`] to run a dedicated upkeep worker.
 pub struct Worker {
     /// The application instance this worker is for.
     app: Arc<TaskturbineApp>,
@@ -351,7 +365,7 @@ impl Worker {
     /// Runs a upkeep step on storage.
     ///
     /// Takes a datetime of what is considered stale and can be purged.
-    /// See [run_upkeep_worker](fn.run_upkeep_worker.html) for running upkeep operations.
+    /// See [`run_upkeep_worker`] for running upkeep operations.
     pub async fn run_upkeep(&self) -> Result<(), WorkerError> {
         self.app
             .storage
@@ -457,7 +471,6 @@ pub async fn run_worker(worker: Worker) {
     }
     tokio::spawn(claim_tasks(arc_worker.clone(), send.clone()));
 
-    // TODO This should run the state-machine cleanup, not retention
     if config.worker_upkeep_inline {
         tokio::spawn(run_upkeep(arc_worker.clone()));
     }
@@ -612,20 +625,24 @@ mod tests {
         config::Config,
         context::{FlowControl, TaskContext},
         models::TaskState,
-        storage::{StorageError, TaskOptions},
+        storage::{Storage, StorageError, TaskOptions},
     };
 
     use super::TaskturbineApp;
 
-    async fn create_app() -> TaskturbineApp {
+    fn create_config() -> Config {
         let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
             .expect("Missing required TASKTURBINE_DATABASE_URL env var");
-        let config = Config {
+        Config {
             usecase: "test".to_string(),
             database_url: db_url,
             default_channel: "channel-one".into(),
             ..Config::default()
-        };
+        }
+    }
+
+    async fn create_app() -> TaskturbineApp {
+        let config = create_config();
         let app = TaskturbineApp::new(config);
         app.storage.update_schema().await.unwrap();
 
@@ -653,6 +670,15 @@ mod tests {
             .await
             .register_task("duplicate-task", |_ctx| async { Ok(None) })
             .register_task("duplicate-task", |_ctx| async { Ok(None) });
+    }
+
+    #[tokio::test]
+    async fn app_from_storage() {
+        let config = create_config();
+        let storage = Storage::new(config.clone());
+        let app = TaskturbineApp::from_storage(storage);
+        let app_config = app.config;
+        assert_eq!(config.database_url, app_config.database_url);
     }
 
     #[tokio::test]
@@ -963,7 +989,7 @@ mod tests {
     async fn worker_run_upkeep() {
         // TODO expand this test to check that it releases claims
         // and cancels old tasks
-        let channel = "worker_run_cleanup";
+        let channel = "worker_run_upkeep";
         let app = create_app_with_task(channel).await;
 
         let worker = app.create_worker("worker-1", vec![]);
