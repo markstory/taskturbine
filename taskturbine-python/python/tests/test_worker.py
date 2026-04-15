@@ -7,7 +7,7 @@ from taskturbine import Config, TaskContext, TaskturbineApp
 from tests.demo import app as demo_app
 from taskturbine.taskturbine import ClaimedTask
 
-from .conftest import fetch_all
+from .conftest import fetch_all, fetch_one
 
 Connection = psycopg2._psycopg.connection
 
@@ -217,8 +217,7 @@ def test_worker_cleanup(
             "SELECT * FROM taskturbine.runs WHERE task_id = %s",
             [first.task_id],
         )
-        row = cursor.fetchone()
-        breakpoint()
+        row = fetch_one(cursor)
         assert row
         assert row["state"] == "failed", "claimed task should be failed now"
 
@@ -226,7 +225,7 @@ def test_worker_cleanup(
             "SELECT * FROM taskturbine.tasks WHERE task_id = %s",
             [second.task_id],
         )
-        row = cursor.fetchone()
+        row = fetch_one(cursor)
         assert row
         assert row["state"] == "cancelled", "should be cancelled now"
 

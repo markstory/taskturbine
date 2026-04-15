@@ -312,11 +312,11 @@ class Worker:
                     if self._shutdown.is_set():
                         break
 
-                if not self._shutdown.is_set() and self._inner.should_run_cleanup(
+                if not self._shutdown.is_set() and self._inner.should_run_upkeep(
                     int(last_cleanup)
                 ):
-                    logger.debug("run_cleanup start")
-                    self._inner.run_cleanup()
+                    logger.debug("run_upkeep start")
+                    self._inner.run_upkeep()
                     last_cleanup = time.time()
 
     def _poll_inflight(self) -> int:
@@ -382,16 +382,16 @@ class Worker:
                 assert task_result.duration, "Failures should always have duration"
                 self._inner.fail_run(task_result.run_id, task_result.duration)
 
-    def run_cleanup(self) -> None:
+    def run_upkeep(self) -> None:
         """
         Run a worker cleanup loop.
 
         Intended to run in a while loop that the application
         starts. Will periodically sleep based on Config.
         """
-        interval = self._inner.worker_cleanup_interval_secs
+        interval = self._inner.worker_upkeep_interval_secs
         while True:
-            self._inner.run_cleanup()
+            self._inner.run_upkeep()
             time.sleep(interval)
 
     def claim_tasks(self) -> list[ClaimedTask]:
