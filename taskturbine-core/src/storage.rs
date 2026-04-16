@@ -89,6 +89,7 @@ impl Default for TaskOptions {
 /// tasks, runs, events, waits, and checkpoints. This layer is not aware
 /// of what task names, or channels exist and validation of those identifiers
 /// is the responsibility of the caller.
+#[derive(Clone)]
 pub struct Storage {
     config: Config,
     pool: PgPool,
@@ -217,7 +218,7 @@ impl Storage {
     /// {{{ Testing helpers
     /// Testing Helper: setting run + task to a specific state.
     #[cfg(test)]
-    async fn set_run_state(&self, task_id: TaskId, state: TaskState) -> Result<(), StorageError> {
+    pub async fn set_run_state(&self, task_id: TaskId, state: TaskState) -> Result<(), StorageError> {
         let res = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1
@@ -248,6 +249,7 @@ impl Storage {
     }
 
     /// Testing helper: reading task runs
+    // TODO make this return Result<Run, StorageError> instead.
     #[cfg(test)]
     pub async fn get_run(&self, run_id: RunId) -> Result<PgRow, StorageError> {
         let res = sqlx::query("SELECT * FROM taskturbine.runs WHERE run_id = $1")
@@ -259,9 +261,9 @@ impl Storage {
         Ok(res)
     }
 
-    // Testing helper: get waits for a run
+    /// Testing helper: get waits for a run
     #[cfg(test)]
-    async fn get_wait_by_run_id(&self, run_id: RunId) -> Result<Option<PgRow>, StorageError> {
+    pub async fn get_wait_by_run_id(&self, run_id: RunId) -> Result<Option<PgRow>, StorageError> {
         let res = sqlx::query("SELECT * FROM taskturbine.waits WHERE run_id = $1")
             .bind(run_id)
             .fetch_optional(&self.pool)
@@ -271,10 +273,10 @@ impl Storage {
         Ok(res)
     }
 
-    // Testing helper: get a task
+    /// Testing helper: get a task
     // TODO make this return Result<Task, StorageError> instead.
     #[cfg(test)]
-    async fn get_task(&self, task_id: TaskId) -> Result<Option<PgRow>, StorageError> {
+    pub async fn get_task(&self, task_id: TaskId) -> Result<Option<PgRow>, StorageError> {
         let res = sqlx::query("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
             .bind(task_id.0)
             .fetch_optional(&self.pool)
@@ -284,15 +286,15 @@ impl Storage {
         Ok(res)
     }
 
-    // Testing helper: Sometimes we need to mutate data directly.
+    /// Testing helper: Sometimes we need to mutate data directly.
     #[cfg(test)]
-    fn get_connection(&self) -> &Pool<Postgres> {
+    pub fn get_connection(&self) -> &Pool<Postgres> {
         &self.pool
     }
 
-    // Testing helper: get an event
+    /// Testing helper: get an event
     #[cfg(test)]
-    async fn get_event_row(&self, event_name: &str) -> Result<Option<PgRow>, StorageError> {
+    pub async fn get_event_row(&self, event_name: &str) -> Result<Option<PgRow>, StorageError> {
         let res = sqlx::query("SELECT * FROM taskturbine.events WHERE event_name = $1")
             .bind(event_name)
             .fetch_optional(&self.pool)
