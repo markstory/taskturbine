@@ -989,24 +989,29 @@ mod tests {
     #[tokio::test]
     async fn worker_run_upkeep() {
         let channel = "worker_run_upkeep";
-        let app = create_app_with_task(&channel).await;
+        let app = create_app_with_task(channel).await;
 
-        let res = app.channel(&channel).spawn_task("first-task", b"", None).await;
+        let res = app
+            .channel(channel)
+            .spawn_task("first-task", b"", None)
+            .await;
         let spawned = res.expect("spawn_task failed");
 
         // Simulate an expired claim
         let conn = app.storage.get_connection();
-        let res = sqlx::query("UPDATE taskturbine.runs 
+        let res = sqlx::query(
+            "UPDATE taskturbine.runs 
                 SET 
                 state = 'running',
                 claimed_by = 'worker-3',
                 claim_expires_at = $1
                 WHERE run_id = $2
-            ")
-            .bind(Utc::now() - Duration::from_secs(60 * 15))
-            .bind(spawned.run_id)
-            .execute(conn)
-            .await;
+            ",
+        )
+        .bind(Utc::now() - Duration::from_secs(60 * 15))
+        .bind(spawned.run_id)
+        .execute(conn)
+        .await;
         let _ = res.expect("Update failed");
 
         let storage = app.storage.clone();

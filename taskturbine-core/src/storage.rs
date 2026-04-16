@@ -218,7 +218,11 @@ impl Storage {
     /// {{{ Testing helpers
     /// Testing Helper: setting run + task to a specific state.
     #[cfg(test)]
-    pub async fn set_run_state(&self, task_id: TaskId, state: TaskState) -> Result<(), StorageError> {
+    pub async fn set_run_state(
+        &self,
+        task_id: TaskId,
+        state: TaskState,
+    ) -> Result<(), StorageError> {
         let res = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1
