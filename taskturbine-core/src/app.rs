@@ -618,6 +618,7 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 mod tests {
     use std::time::{Duration, SystemTime};
 
+    use chrono::Utc;
     use sqlx::Row;
     use uuid::Uuid;
 
@@ -987,13 +988,34 @@ mod tests {
 
     #[tokio::test]
     async fn worker_run_upkeep() {
-        // TODO expand this test to check that it releases claims
-        // and cancels old tasks
         let channel = "worker_run_upkeep";
-        let app = create_app_with_task(channel).await;
+        let app = create_app_with_task(&channel).await;
 
-        let worker = app.create_worker("worker-1", vec![]);
+        let res = app.channel(&channel).spawn_task("first-task", b"", None).await;
+        let spawned = res.expect("spawn_task failed");
+
+        // Simulate an expired claim
+        let conn = app.storage.get_connection();
+        let res = sqlx::query("UPDATE taskturbine.runs 
+                SET 
+                state = 'running',
+                claimed_by = 'worker-3',
+                claim_expires_at = $1
+                WHERE run_id = $2
+            ")
+            .bind(Utc::now() - Duration::from_secs(60 * 15))
+            .bind(spawned.run_id)
+            .execute(conn)
+            .await;
+        let _ = res.expect("Update failed");
+
+        let storage = app.storage.clone();
+        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
         let res = worker.run_upkeep().await;
         assert!(res.is_ok());
+
+        let run_res = storage.get_run(spawned.run_id).await;
+        let row = run_res.expect("get_run failed");
+        assert_eq!("failed", row.get::<String, _>("state"));
     }
 }
