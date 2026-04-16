@@ -2,6 +2,7 @@ use crate::CliError;
 use taskturbine_core::app::{TaskturbineApp, run_upkeep_worker};
 use taskturbine_core::storage::Storage;
 
+/// Perform periodic upkeep operations on all channels in a usecase.
 pub async fn upkeep(storage: Storage) -> Result<(), CliError> {
     log::info!("Starting upkeep worker");
 

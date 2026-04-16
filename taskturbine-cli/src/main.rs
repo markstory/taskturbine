@@ -57,6 +57,13 @@ enum Commands {
     /// Clears all data from storage.
     Clear(clear::ClearArgs),
     /// Run a upkeep worker
+    ///
+    /// Perform periodic upkeep operations on all channels in a usecase.
+    /// Upkeep operations include the following:
+    ///
+    /// * Release expired claims, and fail the run that expired.
+    ///
+    /// * Cancel tasks that are past their cancellation_max_age
     UpkeepWorker,
     /// Run a retention cleanup on event data.
     CleanupEvent,
