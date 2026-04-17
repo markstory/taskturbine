@@ -279,7 +279,6 @@ impl Storage {
     }
 
     /// Testing helper: get a task
-    // TODO make this return Result<Task, StorageError> instead.
     #[cfg(test)]
     pub async fn get_task(&self, task_id: TaskId) -> Result<Task, StorageError> {
         let res: Task = sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
@@ -717,7 +716,7 @@ impl Storage {
     ///
     /// Currently running tasks cannot be stopped as updating state in postgres
     /// will not terminate the worker process elsewhere in your system.
-    pub async fn cancel_task(&self, task_id: TaskId) -> Result<Task, StorageError> {
+    pub async fn cancel_task(&self, task_id: TaskId, reason: Option<&[u8]>) -> Result<Task, StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
         let task = self.get_locked_task(task_id, &mut atomic).await?;
         if task.state == TaskState::Running {
@@ -729,7 +728,6 @@ impl Storage {
             )));
         }
 
-        // TODO should this use failure_reason? if not that column should be removed
         // Use a CTE to update both tables at once and read the updated state
         let task: Task = sqlx::query_as(
             "
@@ -740,12 +738,14 @@ impl Storage {
             ),
             cancelled_run AS (
                 UPDATE taskturbine.runs 
-                SET state = 'cancelled', completed_at = NOW()
-                WHERE task_id = $1 RETURNING *
+                SET state = 'cancelled', completed_at = NOW(), failure_reason = $2
+                WHERE task_id = $3 AND state != 'completed' RETURNING *
             )
             SELECT * FROM task_result 
             ",
         )
+        .bind(task_id)
+        .bind(reason.unwrap_or(b""))
         .bind(task_id)
         .fetch_one(&mut *atomic)
         .await
@@ -2217,7 +2217,7 @@ mod tests {
     async fn cancel_task_success() {
         let (storage, spawned) = create_task().await.unwrap();
 
-        let res = storage.cancel_task(spawned.task_id).await;
+        let res = storage.cancel_task(spawned.task_id, Some("user request".as_bytes())).await;
         assert!(res.is_ok());
         let updated = res.unwrap();
         assert_eq!(updated.task_id, spawned.task_id);
@@ -2231,6 +2231,8 @@ mod tests {
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.state, TaskState::Cancelled);
         assert!(run.completed_at.is_some());
+        let value_bytes = b"user request";
+        assert_eq!(Some(value_bytes.to_vec()), run.failure_reason);
     }
 
     #[tokio::test]
@@ -2238,7 +2240,7 @@ mod tests {
         let (storage, _) = create_task().await.unwrap();
         let fake_task_id = TaskId(Uuid::now_v7());
 
-        let res = storage.cancel_task(fake_task_id).await;
+        let res = storage.cancel_task(fake_task_id, None).await;
         assert!(res.is_err());
         assert!(matches!(res.err().unwrap(), StorageError::NotFound(_)));
     }
@@ -2250,7 +2252,7 @@ mod tests {
             .set_run_state(spawned.task_id, TaskState::Running)
             .await;
 
-        let res = storage.cancel_task(spawned.task_id).await;
+        let res = storage.cancel_task(spawned.task_id, None).await;
         assert!(res.is_err());
 
         let task = storage.get_task(spawned.task_id).await.unwrap();

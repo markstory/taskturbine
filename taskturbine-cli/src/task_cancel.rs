@@ -8,13 +8,15 @@ use taskturbine_core::{models::TaskId, storage::Storage};
 pub struct CancelArgs {
     /// The task id to cancel
     pub task_id: Uuid,
+    #[arg(long, help = "The failure reason when cancelling the task")]
+    pub reason: Option<&str>,
 }
 
 pub async fn cancel(storage: Storage, args: CancelArgs) -> Result<(), CliError> {
     log::info!("Cancelling task {}", args.task_id);
 
     let task_id = TaskId(args.task_id);
-    let res = storage.cancel_task(task_id).await;
+    let res = storage.cancel_task(task_id, args.reason).await;
     match res {
         Ok(_) => {
             log::info!("Task cancelled");
