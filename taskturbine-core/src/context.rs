@@ -346,7 +346,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        app::{TaskResult, TaskturbineApp}, config::Config, models::TaskState, storage::{Storage, StorageError}
+        app::{TaskResult, TaskturbineApp},
+        config::Config,
+        models::TaskState,
+        storage::{Storage, StorageError},
     };
 
     #[derive(Debug)]

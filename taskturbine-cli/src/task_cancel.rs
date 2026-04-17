@@ -16,10 +16,7 @@ pub async fn cancel(storage: Storage, args: CancelArgs) -> Result<(), CliError> 
     log::info!("Cancelling task {}", args.task_id);
 
     let task_id = TaskId(args.task_id);
-    let reason = match args.reason {
-        Some(value) => Some(value.into_bytes()),
-        None => None,
-    };
+    let reason = args.reason.map(|value| value.into_bytes());
     let res = storage.cancel_task(task_id, reason).await;
     match res {
         Ok(_) => {

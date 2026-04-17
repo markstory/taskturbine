@@ -1,13 +1,17 @@
 use std::time::Duration;
 
-use clap::Args;
 use crate::CliError;
 use chrono::Utc;
+use clap::Args;
 use taskturbine_core::storage::Storage;
 
 #[derive(Args, Debug)]
 pub struct CleanupArgs {
-    #[arg(long, help = "The number of records to limit to.", default_value_t = 1000)]
+    #[arg(
+        long,
+        help = "The number of records to limit to.",
+        default_value_t = 1000
+    )]
     limit: i32,
 
     #[arg(

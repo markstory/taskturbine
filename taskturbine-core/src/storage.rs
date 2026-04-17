@@ -716,7 +716,11 @@ impl Storage {
     ///
     /// Currently running tasks cannot be stopped as updating state in postgres
     /// will not terminate the worker process elsewhere in your system.
-    pub async fn cancel_task(&self, task_id: TaskId, reason: Option<Vec<u8>>) -> Result<Task, StorageError> {
+    pub async fn cancel_task(
+        &self,
+        task_id: TaskId,
+        reason: Option<Vec<u8>>,
+    ) -> Result<Task, StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
         let task = self.get_locked_task(task_id, &mut atomic).await?;
         if task.state == TaskState::Running {
@@ -1548,10 +1552,7 @@ mod tests {
             .await;
         assert!(res.is_ok(), "Failed to fail run: {res:?}");
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        assert!(matches!(
-            run.state,
-            TaskState::Failed
-        ));
+        assert!(matches!(run.state, TaskState::Failed));
     }
 
     #[tokio::test]
@@ -2221,7 +2222,9 @@ mod tests {
     async fn cancel_task_success() {
         let (storage, spawned) = create_task().await.unwrap();
 
-        let res = storage.cancel_task(spawned.task_id, Some("user request".into())).await;
+        let res = storage
+            .cancel_task(spawned.task_id, Some("user request".into()))
+            .await;
         assert!(res.is_ok());
         let updated = res.unwrap();
         assert_eq!(updated.task_id, spawned.task_id);

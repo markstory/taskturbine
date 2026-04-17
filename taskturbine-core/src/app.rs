@@ -831,10 +831,7 @@ mod tests {
 
             let task = worker.app.storage.get_run(run_id).await.unwrap();
             assert_eq!(TaskState::Completed, task.state);
-            assert_eq!(
-                b"{\"some\":\"json\"}".to_vec(),
-                task.result.unwrap()
-            );
+            assert_eq!(b"{\"some\":\"json\"}".to_vec(), task.result.unwrap());
         }
     }
 
@@ -928,13 +925,11 @@ mod tests {
             let task = worker.app.storage.get_run(run_id).await.unwrap();
             assert_eq!(task.state, TaskState::Sleeping);
             assert_eq!(
-                task.claimed_by,
-                None,
+                task.claimed_by, None,
                 "claim should be released on suspension"
             );
             assert_eq!(
-                task.claim_expires_at,
-                None,
+                task.claim_expires_at, None,
                 "claim expiry should be cleared on suspension"
             );
         }
