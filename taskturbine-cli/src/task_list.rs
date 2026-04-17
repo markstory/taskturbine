@@ -51,7 +51,7 @@ pub async fn execute(storage: Storage, args: TaskListArgs) -> Result<(), CliErro
         println!();
     }
     if tasks.is_empty() {
-        println!("No tasks match those filtering options");
+        log::info!("No tasks match those filtering options");
     }
     Ok(())
 }

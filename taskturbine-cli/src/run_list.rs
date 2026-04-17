@@ -52,7 +52,7 @@ pub async fn execute(storage: Storage, args: RunListArgs) -> Result<(), CliError
         println!();
     }
     if runs.is_empty() {
-        println!("No runs match those filtering options");
+        log::info!("No runs match those filtering options");
     }
     Ok(())
 }
