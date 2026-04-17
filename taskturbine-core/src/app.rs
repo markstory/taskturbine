@@ -801,8 +801,8 @@ mod tests {
             let run_id = task.run_id;
             worker.execute_task(task).await;
 
-            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
-            assert_eq!(TaskState::Completed, task_data.get::<TaskState, _>("state"));
+            let task = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Completed, task.state);
         }
     }
 
@@ -830,12 +830,11 @@ mod tests {
             let run_id = task.run_id;
             worker.execute_task(task).await;
 
-            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
-            dbg!(&task_data);
-            assert_eq!(TaskState::Completed, task_data.get::<TaskState, _>("state"));
+            let task = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Completed, task.state);
             assert_eq!(
                 b"{\"some\":\"json\"}".to_vec(),
-                task_data.get::<Vec<u8>, _>("result")
+                task.result.unwrap()
             );
         }
     }
@@ -863,8 +862,8 @@ mod tests {
             let run_id = task.run_id;
             worker.execute_task(task).await;
 
-            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
-            assert_eq!(TaskState::Failed, task_data.get::<TaskState, _>("state"));
+            let task = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Failed, task.state);
         }
     }
 
@@ -893,8 +892,8 @@ mod tests {
             let run_id = task.run_id;
             worker.execute_task(task).await;
 
-            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
-            assert_eq!(TaskState::Failed, task_data.get::<TaskState, _>("state"));
+            let task = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Failed, task.state);
         }
     }
 
@@ -927,15 +926,15 @@ mod tests {
             let run_id = task.run_id;
             worker.execute_task(task).await;
 
-            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
-            assert_eq!(task_data.get::<TaskState, _>("state"), TaskState::Sleeping);
+            let task = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(task.state, TaskState::Sleeping);
             assert_eq!(
-                task_data.get::<Option<String>, _>("claimed_by"),
+                task.claimed_by,
                 None,
                 "claim should be released on suspension"
             );
             assert_eq!(
-                task_data.get::<Option<String>, _>("claim_expires_at"),
+                task.claim_expires_at,
                 None,
                 "claim expiry should be cleared on suspension"
             );
@@ -967,8 +966,8 @@ mod tests {
             let run_id = task.run_id;
             worker.execute_task(task).await;
 
-            let task_data = worker.app.storage.get_run(run_id).await.unwrap();
-            assert_eq!(TaskState::Sleeping, task_data.get::<TaskState, _>("state"));
+            let task = worker.app.storage.get_run(run_id).await.unwrap();
+            assert_eq!(TaskState::Sleeping, task.state);
         }
     }
 
@@ -1021,6 +1020,6 @@ mod tests {
 
         let run_res = storage.get_run(spawned.run_id).await;
         let row = run_res.expect("get_run failed");
-        assert_eq!("failed", row.get::<String, _>("state"));
+        assert_eq!(TaskState::Failed, row.state);
     }
 }

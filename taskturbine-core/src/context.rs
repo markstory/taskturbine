@@ -346,9 +346,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        app::{TaskResult, TaskturbineApp},
-        config::Config,
-        storage::{Storage, StorageError},
+        app::{TaskResult, TaskturbineApp}, config::Config, models::TaskState, storage::{Storage, StorageError}
     };
     use sqlx::Row;
 
@@ -492,8 +490,8 @@ mod tests {
         };
         assert!(matches!(err, FlowControl::Suspended));
         let run = app.storage.get_run(claim.run_id).await.unwrap();
-        assert_eq!(run.get::<String, _>("state"), "sleeping");
-        assert!(run.get::<Option<String>, _>("claimed_by").is_none());
+        assert_eq!(run.state, TaskState::Sleeping);
+        assert!(run.claimed_by.is_none());
     }
 
     #[tokio::test]

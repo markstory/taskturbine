@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::Config;
-use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
+use crate::models::{Checkpoint, ClaimedTask, Run, RunId, SpawnResult, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
 use sqlx::AssertSqlSafe;
 use sqlx::migrate::Migrator;
@@ -255,8 +255,8 @@ impl Storage {
     /// Testing helper: reading task runs
     // TODO make this return Result<Run, StorageError> instead.
     #[cfg(test)]
-    pub async fn get_run(&self, run_id: RunId) -> Result<PgRow, StorageError> {
-        let res = sqlx::query("SELECT * FROM taskturbine.runs WHERE run_id = $1")
+    pub async fn get_run(&self, run_id: RunId) -> Result<Run, StorageError> {
+        let res: Run = sqlx::query_as("SELECT * FROM taskturbine.runs WHERE run_id = $1")
             .bind(run_id)
             .fetch_one(&self.pool)
             .await
@@ -1544,7 +1544,7 @@ mod tests {
         assert!(res.is_ok(), "Failed to fail run: {res:?}");
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert!(matches!(
-            run.get::<TaskState, _>("state"),
+            run.state,
             TaskState::Failed
         ));
     }
@@ -1669,7 +1669,7 @@ mod tests {
         assert_eq!(await_result.payload, b"results");
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        assert_eq!(run.get::<String, _>("state"), "running");
+        assert_eq!(run.state, TaskState::Running);
     }
 
     #[tokio::test]
@@ -1696,7 +1696,7 @@ mod tests {
         assert_eq!(await_result.payload, b"");
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        assert_eq!(run.get::<String, _>("state"), "sleeping");
+        assert_eq!(run.state, TaskState::Sleeping);
     }
 
     #[tokio::test]
@@ -1728,7 +1728,7 @@ mod tests {
         assert!(!await_result.should_suspend);
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        assert_eq!(run.get::<String, _>("state"), "running");
+        assert_eq!(run.state, TaskState::Running);
 
         // A checkpoint should be created from the event.
         let checkpoint_opt = storage
@@ -1761,7 +1761,7 @@ mod tests {
         assert!(res.is_ok());
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        let claim_expires = run.get::<DateTime<Utc>, _>("claim_expires_at");
+        let claim_expires = run.claim_expires_at.unwrap();
         let delta = claim_expires - now;
         assert!(
             delta.num_seconds() >= 290,
@@ -1821,7 +1821,7 @@ mod tests {
         assert!(opt.is_none(), "no wait should remain");
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Pending);
+        assert_eq!(run.state, TaskState::Pending);
 
         let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
         assert_eq!(task.get::<TaskState, _>("state"), TaskState::Pending);
@@ -2117,11 +2117,8 @@ mod tests {
         );
 
         let run = storage.get_run(spawn.run_id).await.unwrap();
-        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(
-            run.get::<Option<DateTime<Utc>>, _>("completed_at")
-                .is_some()
-        );
+        assert_eq!(run.state, TaskState::Cancelled);
+        assert!(run.completed_at.is_some());
     }
 
     #[tokio::test]
@@ -2165,11 +2162,8 @@ mod tests {
         );
 
         let run = storage.get_run(spawn.run_id).await.unwrap();
-        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(
-            run.get::<Option<DateTime<Utc>>, _>("completed_at")
-                .is_some()
-        );
+        assert_eq!(run.state, TaskState::Cancelled);
+        assert!(run.completed_at.is_some());
     }
 
     #[tokio::test]
@@ -2202,7 +2196,7 @@ mod tests {
 
         let run = storage.get_run(claimed.run_id).await.unwrap();
         assert!(
-            run.get::<DateTime<Utc>, _>("claim_expires_at") >= now + Duration::from_secs(30),
+            run.claim_expires_at.unwrap() >= now + Duration::from_secs(30),
             "Should be after the original timeout."
         );
     }
@@ -2243,11 +2237,8 @@ mod tests {
         );
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(
-            run.get::<Option<DateTime<Utc>>, _>("completed_at")
-                .is_some()
-        );
+        assert_eq!(run.state, TaskState::Cancelled);
+        assert!(run.completed_at.is_some());
     }
 
     #[tokio::test]
@@ -2278,10 +2269,7 @@ mod tests {
         );
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
-        assert_eq!(run.get::<TaskState, _>("state"), TaskState::Running);
-        assert!(
-            run.get::<Option<DateTime<Utc>>, _>("completed_at")
-                .is_none()
-        );
+        assert_eq!(run.state, TaskState::Running);
+        assert!(run.completed_at.is_none());
     }
 }
