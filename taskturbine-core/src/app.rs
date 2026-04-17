@@ -391,7 +391,7 @@ impl Worker {
             let res = self
                 .app
                 .storage
-                .fail_run(task.run_id, reason.into_bytes(), None)
+                .fail_run(task.run_id, reason.as_bytes(), None)
                 .await;
             if let Err(schedule_err) = res {
                 log::error!("Unable to fail run {schedule_err:?}");
@@ -438,7 +438,7 @@ impl Worker {
         let res = self
             .app
             .storage
-            .fail_run(task.run_id, vec![], Some(retry_at))
+            .fail_run(task.run_id, b"", Some(retry_at))
             .await;
         if let Err(schedule_err) = res {
             log::error!("Failed to fail run {schedule_err:?}");

@@ -578,7 +578,7 @@ impl Storage {
         for run in res.iter() {
             let run_id: RunId = run.get("run_id");
             let failure_reason = b"{\"reason\":\"claim timeout\"}";
-            self.do_fail_run(&mut atomic, run_id, failure_reason.to_vec(), None, false)
+            self.do_fail_run(&mut atomic, run_id, failure_reason, None, false)
                 .await?;
         }
         atomic.commit().await.map_err(StorageError::SqlError)?;
@@ -782,7 +782,7 @@ impl Storage {
     pub async fn fail_run(
         &self,
         run_id: RunId,
-        reason: Vec<u8>,
+        reason: &[u8],
         retry_at: Option<Duration>,
     ) -> Result<(), StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
@@ -801,7 +801,7 @@ impl Storage {
         &self,
         conn: &mut PgConnection,
         run_id: RunId,
-        reason: Vec<u8>,
+        reason: &[u8],
         retry_in: Option<Duration>,
         validate_running: bool,
     ) -> Result<(), StorageError> {
@@ -984,7 +984,6 @@ impl Storage {
         task_id: TaskId,
         run_id: RunId,
         step_name: &str,
-        // TODO should this be Vec?
         state: &[u8],
         extend_claim: Option<Duration>,
     ) -> Result<(), StorageError> {
@@ -1149,7 +1148,6 @@ impl Storage {
         task_id: &TaskId,
         run_id: &RunId,
         step_name: &str,
-        // TODO should this be Vec?
         state: &[u8],
     ) -> Result<(), StorageError> {
         sqlx::query(
@@ -1238,7 +1236,6 @@ impl Storage {
     /// to complete.
     ///
     /// Tasks can wait for events with [`Storage::await_event()`]
-    // TODO should this be Vec?
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
 
@@ -1503,7 +1500,7 @@ mod tests {
     async fn fail_run_missing() {
         let storage = create_storage().await;
         let id = RunId(Uuid::now_v7());
-        let res = storage.fail_run(id, vec![], None).await;
+        let res = storage.fail_run(id, b"", None).await;
         assert!(res.is_err());
         let err = res.err().unwrap();
         assert!(matches!(err, StorageError::NotFound { .. }));
@@ -1519,7 +1516,7 @@ mod tests {
         let res = storage
             .fail_run(
                 spawned.run_id,
-                "{\"error\": \"something went wrong\"}".into(),
+                b"{\"error\": \"something went wrong\"}",
                 None,
             )
             .await;
@@ -1544,7 +1541,7 @@ mod tests {
         let res = storage
             .fail_run(
                 spawned.run_id,
-                "{\"error\": \"something went wrong\"}".into(),
+                b"{\"error\": \"something went wrong\"}",
                 None,
             )
             .await;
@@ -1564,7 +1561,7 @@ mod tests {
         let res = storage
             .fail_run(
                 spawned.run_id,
-                "{\"error\": \"something went wrong\"}".into(),
+                b"{\"error\": \"something went wrong\"}",
                 Some(retry_at),
             )
             .await;
@@ -1596,7 +1593,7 @@ mod tests {
         let res = storage
             .fail_run(
                 spawned.run_id,
-                "{\"error\": \"something went wrong\"}".into(),
+                b"{\"error\": \"something went wrong\"}",
                 None,
             )
             .await;
@@ -1950,7 +1947,7 @@ mod tests {
         let _ = storage
             .set_run_state(failed.task_id, TaskState::Running)
             .await;
-        let _ = storage.fail_run(failed.run_id, vec![], None).await;
+        let _ = storage.fail_run(failed.run_id, b"", None).await;
 
         let pending = storage
             .spawn_task("ns", "task1", b"{}", None)
