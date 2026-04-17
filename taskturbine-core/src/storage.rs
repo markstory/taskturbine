@@ -778,6 +778,7 @@ impl Storage {
     pub async fn fail_run(
         &self,
         run_id: RunId,
+        // TODO should this be Vec?
         reason: &[u8],
         retry_at: Option<Duration>,
     ) -> Result<(), StorageError> {
@@ -797,6 +798,7 @@ impl Storage {
         &self,
         conn: &mut PgConnection,
         run_id: RunId,
+        // TODO should this be Vec?
         reason: &[u8],
         retry_in: Option<Duration>,
         validate_running: bool,
@@ -980,6 +982,7 @@ impl Storage {
         task_id: TaskId,
         run_id: RunId,
         step_name: &str,
+        // TODO should this be Vec?
         state: &[u8],
         extend_claim: Option<Duration>,
     ) -> Result<(), StorageError> {
@@ -1144,6 +1147,7 @@ impl Storage {
         task_id: &TaskId,
         run_id: &RunId,
         step_name: &str,
+        // TODO should this be Vec?
         state: &[u8],
     ) -> Result<(), StorageError> {
         sqlx::query(
@@ -1232,6 +1236,7 @@ impl Storage {
     /// to complete.
     ///
     /// Tasks can wait for events with [`Storage::await_event()`]
+    // TODO should this be Vec?
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
 
