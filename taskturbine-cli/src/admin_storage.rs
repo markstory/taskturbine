@@ -18,8 +18,7 @@ pub struct RunGetOptions {
 /// Filtering options for task_list()
 #[derive(Debug, Clone)]
 pub struct TaskListOptions {
-    /// A substring to match task names against.
-    /// TODO make this a glob pattern
+    /// A regexp pattern to match task names against.
     pub taskname: Option<String>,
 
     /// The task state to filter by
@@ -35,8 +34,7 @@ pub struct TaskListOptions {
 /// Filtering options for task_get()
 #[derive(Debug, Clone)]
 pub struct TaskGetOptions {
-    pub task_id: String,
-    pub show_results: bool,
+    pub task_id: TaskId,
 }
 
 /// Container for a Task and its relations.
@@ -87,7 +85,7 @@ impl AdminStorage {
         clauses.push_bind_unseparated(&self.config.usecase);
 
         if let Some(name) = options.taskname {
-            clauses.push("task_name = ");
+            clauses.push("task_name ~ ");
             clauses.push_bind_unseparated(name);
         }
         if let Some(state) = options.state {
@@ -192,5 +190,123 @@ impl AdminStorage {
         .map_err(StorageError::SqlError)?;
 
         Ok(RunDetails { run, checkpoints })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use taskturbine_core::storage::Storage;
+
+    use super::*;
+
+    fn now() -> u64 {
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    }
+
+    fn create_config() -> Config {
+        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
+            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
+        Config {
+            usecase: "test".to_string(),
+            database_url: db_url,
+            database_log_queries: true,
+            ..Config::default()
+        }
+    }
+
+    async fn create_storage() -> Storage {
+        let config = create_config();
+        let storage = Storage::new(config);
+
+        // Ensure migrations have been applied and that storage is cleared.
+        storage.update_schema().await.unwrap();
+
+        storage
+    }
+
+    async fn create_admin_storage() -> AdminStorage {
+        let config = create_config();
+
+        AdminStorage::new(config)
+    }
+
+    #[tokio::test]
+    async fn task_list_name_regexp() {
+        let ts = now();
+        let channel = format!("task_list_name_regexp_{ts}");
+        let storage = create_storage().await;
+        let admin_storage = create_admin_storage().await;
+        let _ = storage.spawn_task(&channel, "register-user", b"", None).await;
+        let _ = storage.spawn_task(&channel, "foo-user", b"", None).await;
+        let _ = storage.spawn_task(&channel, "other-task", b"", None).await;
+
+        let options = TaskListOptions {
+            taskname: Some(".*-user".to_string()),
+            state: None,
+            channel: Some(channel.clone()),
+            limit: 100,
+        };
+        let res = admin_storage.task_list(options).await;
+        let tasks = res.expect("should be ok");
+        assert_eq!(2, tasks.len());
+
+        let options = TaskListOptions {
+            taskname: Some(".*-nope".to_string()),
+            state: None,
+            channel: Some(channel),
+            limit: 100,
+        };
+        let res = admin_storage.task_list(options).await;
+        let tasks = res.expect("should be ok");
+        assert_eq!(0, tasks.len());
+    }
+
+    #[tokio::test]
+    async fn task_get() {
+        let channel = "task_get";
+        let storage = create_storage().await;
+        let admin_storage = create_admin_storage().await;
+        let spawn_res = storage.spawn_task(&channel, "register-user", b"", None).await;
+        let spawned = spawn_res.expect("should be ok");
+
+        let options = TaskGetOptions {
+            task_id: spawned.task_id,
+        };
+        let res = admin_storage.task_get(options).await;
+        let details = res.expect("should be ok");
+        assert_eq!(details.task.task_id, spawned.task_id);
+
+        let options = TaskListOptions {
+            taskname: Some(".*-nope".to_string()),
+            state: None,
+            channel: Some(channel.to_string()),
+            limit: 100,
+        };
+        let res = admin_storage.task_list(options).await;
+        let tasks = res.expect("should be ok");
+        assert_eq!(0, tasks.len());
+    }
+
+    #[tokio::test]
+    async fn run_list_name_regexp() {
+        let channel = "run_list_name_regexp";
+        let storage = create_storage().await;
+        let admin_storage = create_admin_storage().await;
+        let spawn_res = storage.spawn_task(channel, "register-user", b"", None).await;
+        let spawned = spawn_res.expect("should be ok");
+        let _ = storage.spawn_task(channel, "foo-user", b"", None).await;
+
+        let options = RunListOptions {
+            task_id: Some(spawned.task_id),
+        };
+        let res = admin_storage.run_list(options).await;
+        let runs = res.expect("should be ok");
+
+        assert_eq!(1, runs.len());
     }
 }
