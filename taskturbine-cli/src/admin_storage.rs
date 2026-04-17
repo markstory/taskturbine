@@ -241,7 +241,9 @@ mod tests {
         let channel = format!("task_list_name_regexp_{ts}");
         let storage = create_storage().await;
         let admin_storage = create_admin_storage().await;
-        let _ = storage.spawn_task(&channel, "register-user", b"", None).await;
+        let _ = storage
+            .spawn_task(&channel, "register-user", b"", None)
+            .await;
         let _ = storage.spawn_task(&channel, "foo-user", b"", None).await;
         let _ = storage.spawn_task(&channel, "other-task", b"", None).await;
 
@@ -271,7 +273,9 @@ mod tests {
         let channel = "task_get";
         let storage = create_storage().await;
         let admin_storage = create_admin_storage().await;
-        let spawn_res = storage.spawn_task(&channel, "register-user", b"", None).await;
+        let spawn_res = storage
+            .spawn_task(channel, "register-user", b"", None)
+            .await;
         let spawned = spawn_res.expect("should be ok");
 
         let options = TaskGetOptions {
@@ -297,7 +301,9 @@ mod tests {
         let channel = "run_list_name_regexp";
         let storage = create_storage().await;
         let admin_storage = create_admin_storage().await;
-        let spawn_res = storage.spawn_task(channel, "register-user", b"", None).await;
+        let spawn_res = storage
+            .spawn_task(channel, "register-user", b"", None)
+            .await;
         let spawned = spawn_res.expect("should be ok");
         let _ = storage.spawn_task(channel, "foo-user", b"", None).await;
 

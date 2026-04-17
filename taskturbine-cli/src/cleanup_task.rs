@@ -1,5 +1,5 @@
-use std::time::Duration;
 use clap::Args;
+use std::time::Duration;
 
 use crate::CliError;
 use chrono::Utc;

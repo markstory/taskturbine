@@ -5,7 +5,10 @@ use crate::{
     admin_storage::{AdminStorage, TaskGetOptions},
     formatters,
 };
-use taskturbine_core::{models::TaskId, storage::{Storage, StorageError}};
+use taskturbine_core::{
+    models::TaskId,
+    storage::{Storage, StorageError},
+};
 
 #[derive(Args, Debug)]
 pub struct TaskGetArgs {
