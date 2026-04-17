@@ -387,7 +387,8 @@ impl Worker {
             // We could be in a cross deploy situation, and following
             // the retry schedule of the task allows for recovery on the next
             // attempt.
-            let res = self.app.storage.fail_run(task.run_id, b"", None).await;
+            let reason = format!("{{\"reason\":\"No task named {taskname}\"}}");
+            let res = self.app.storage.fail_run(task.run_id, reason.into_bytes(), None).await;
             if let Err(schedule_err) = res {
                 log::error!("Unable to fail run {schedule_err:?}");
             }
@@ -433,7 +434,7 @@ impl Worker {
         let res = self
             .app
             .storage
-            .fail_run(task.run_id, b"", Some(retry_at))
+            .fail_run(task.run_id, vec![], Some(retry_at))
             .await;
         if let Err(schedule_err) = res {
             log::error!("Failed to fail run {schedule_err:?}");
