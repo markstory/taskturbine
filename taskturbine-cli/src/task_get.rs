@@ -5,7 +5,7 @@ use crate::{
     admin_storage::{AdminStorage, TaskGetOptions},
     formatters,
 };
-use taskturbine_core::storage::{Storage, StorageError};
+use taskturbine_core::{models::TaskId, storage::{Storage, StorageError}};
 
 #[derive(Args, Debug)]
 pub struct TaskGetArgs {
@@ -21,18 +21,22 @@ pub struct TaskGetArgs {
 }
 
 /// Implement into/from to convert into the storage interface struct
-impl From<TaskGetArgs> for TaskGetOptions {
-    fn from(value: TaskGetArgs) -> Self {
-        TaskGetOptions {
-            task_id: value.task_id,
-            show_results: value.show_results,
-        }
+impl TryFrom<TaskGetArgs> for TaskGetOptions {
+    type Error = String;
+    fn try_from(value: TaskGetArgs) -> Result<Self, Self::Error> {
+        let task_id: TaskId = value
+            .task_id
+            .try_into()
+            .map_err(|_| "Invalid task_id".to_string())?;
+
+        Ok(TaskGetOptions { task_id })
     }
 }
 
 pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError> {
     let admin_storage = AdminStorage::new(storage.get_config());
-    let options: TaskGetOptions = args.into();
+    let show_results = args.show_results;
+    let options: TaskGetOptions = args.try_into().map_err(CliError::Message)?;
 
     let details = admin_storage
         .task_get(options.clone())
@@ -46,14 +50,14 @@ pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError
     println!("== Runs ==");
     println!();
     for run in details.runs.iter() {
-        formatters::dump_run(run, options.show_results, false);
+        formatters::dump_run(run, show_results, false);
     }
     println!();
 
     println!("== Checkpoints ==");
     println!();
     for checkpoint in details.checkpoints.iter() {
-        formatters::dump_checkpoint(checkpoint, options.show_results);
+        formatters::dump_checkpoint(checkpoint, show_results);
     }
 
     Ok(())

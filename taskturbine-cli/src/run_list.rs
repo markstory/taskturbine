@@ -12,7 +12,6 @@ use taskturbine_core::{
 
 #[derive(Args, Debug)]
 pub struct RunListArgs {
-    /// TODO make this a glob pattern
     #[arg(long, help = "The task to get runs for")]
     pub task_id: Option<String>,
 

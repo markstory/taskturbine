@@ -12,8 +12,7 @@ use taskturbine_core::{
 
 #[derive(Args, Debug)]
 pub struct TaskListArgs {
-    /// TODO make this a glob pattern
-    #[arg(long, help = "A substring to match task names against")]
+    #[arg(long, help = "A regexp pattern to match task names against")]
     pub taskname: Option<String>,
 
     #[arg(long, help = "The task state value to filter by")]
