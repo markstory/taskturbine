@@ -6,7 +6,7 @@ use clap::Args;
 use taskturbine_core::storage::Storage;
 
 #[derive(Args, Debug)]
-pub struct CleanupArgs {
+pub struct CleanupEventArgs {
     #[arg(
         long,
         help = "The number of records to limit to.",
@@ -22,7 +22,7 @@ pub struct CleanupArgs {
     cutoff_secs: i32,
 }
 
-pub async fn execute(storage: Storage, args: CleanupArgs) -> Result<(), CliError> {
+pub async fn execute(storage: Storage, args: CleanupEventArgs) -> Result<(), CliError> {
     let cutoff = Duration::from_secs(args.cutoff_secs as u64);
     let older_than = Utc::now() - cutoff;
     let limit = args.limit;

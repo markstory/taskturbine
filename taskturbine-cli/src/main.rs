@@ -66,9 +66,9 @@ enum Commands {
     /// * Cancel tasks that are past their cancellation_max_age
     UpkeepWorker,
     /// Run a retention cleanup on event data.
-    CleanupEvent(cleanup_event::CleanupArgs),
+    CleanupEvent(cleanup_event::CleanupEventArgs),
     /// Run a retention cleanup on task, run and checkpoint data.
-    CleanupTask,
+    CleanupTask(cleanup_task::CleanupTaskArgs),
     /// Emit an event to storage.
     EmitEvent(emit_event::EmitEventArgs),
     /// Run migrations for the taskturbine schema.
@@ -109,7 +109,7 @@ async fn main() {
     let storage = Storage::new(config);
     let result = match args.command {
         Commands::CleanupEvent(args) => cleanup_event::execute(storage, args).await,
-        Commands::CleanupTask => cleanup_task::execute(storage).await,
+        Commands::CleanupTask(args) => cleanup_task::execute(storage, args).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
         Commands::Migrate => migrate::run_migrations(storage).await,
