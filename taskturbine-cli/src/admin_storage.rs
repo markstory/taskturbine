@@ -109,14 +109,9 @@ impl AdminStorage {
 
     /// Get a task and related runs and checkpoint state
     pub async fn task_get(&self, options: TaskGetOptions) -> Result<TaskDetails, StorageError> {
-        let task_id: TaskId = options
-            .task_id
-            .try_into()
-            .map_err(|_| StorageError::ValidationError("invalid task_id".to_string()))?;
-
         let task: Task =
             sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1 AND usecase = $2")
-                .bind(task_id)
+                .bind(options.task_id)
                 .bind(&self.config.usecase)
                 .fetch_one(&self.pool)
                 .await
@@ -125,7 +120,7 @@ impl AdminStorage {
         let runs: Vec<Run> = sqlx::query_as(
             "SELECT * FROM taskturbine.runs WHERE task_id = $1 ORDER BY attempt, created_at",
         )
-        .bind(task_id)
+        .bind(options.task_id)
         .fetch_all(&self.pool)
         .await
         .map_err(StorageError::SqlError)?;
@@ -133,7 +128,7 @@ impl AdminStorage {
         let checkpoints: Vec<Checkpoint> = sqlx::query_as(
             "SELECT * FROM taskturbine.checkpoints WHERE task_id = $1 ORDER BY updated_at",
         )
-        .bind(task_id)
+        .bind(options.task_id)
         .fetch_all(&self.pool)
         .await
         .map_err(StorageError::SqlError)?;
