@@ -619,7 +619,6 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     use chrono::Utc;
-    use sqlx::Row;
     use uuid::Uuid;
 
     use crate::{

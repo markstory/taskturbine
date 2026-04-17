@@ -348,7 +348,6 @@ mod tests {
     use crate::{
         app::{TaskResult, TaskturbineApp}, config::Config, models::TaskState, storage::{Storage, StorageError}
     };
-    use sqlx::Row;
 
     #[derive(Debug)]
     enum TestError {

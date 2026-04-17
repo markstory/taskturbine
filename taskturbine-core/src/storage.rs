@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::config::Config;
-use crate::models::{Checkpoint, ClaimedTask, Run, RunId, SpawnResult, Task, TaskId, TaskState};
+use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
 use sqlx::AssertSqlSafe;
 use sqlx::migrate::Migrator;
@@ -14,6 +14,8 @@ use sqlx::{
 use std::time::Duration;
 use uuid::Uuid;
 
+#[cfg(test)]
+use crate::models::Run;
 #[cfg(test)]
 use sqlx::{Pool, Postgres};
 
@@ -253,7 +255,6 @@ impl Storage {
     }
 
     /// Testing helper: reading task runs
-    // TODO make this return Result<Run, StorageError> instead.
     #[cfg(test)]
     pub async fn get_run(&self, run_id: RunId) -> Result<Run, StorageError> {
         let res: Run = sqlx::query_as("SELECT * FROM taskturbine.runs WHERE run_id = $1")
@@ -280,10 +281,10 @@ impl Storage {
     /// Testing helper: get a task
     // TODO make this return Result<Task, StorageError> instead.
     #[cfg(test)]
-    pub async fn get_task(&self, task_id: TaskId) -> Result<Option<PgRow>, StorageError> {
-        let res = sqlx::query("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
+    pub async fn get_task(&self, task_id: TaskId) -> Result<Task, StorageError> {
+        let res: Task = sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
             .bind(task_id.0)
-            .fetch_optional(&self.pool)
+            .fetch_one(&self.pool)
             .await
             .map_err(StorageError::SqlError)?;
 
@@ -1823,8 +1824,8 @@ mod tests {
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.state, TaskState::Pending);
 
-        let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
-        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Pending);
+        let task = storage.get_task(spawned.task_id).await.unwrap();
+        assert_eq!(task.state, TaskState::Pending);
     }
 
     #[tokio::test]
@@ -1960,8 +1961,8 @@ mod tests {
         assert!(res.is_ok());
         assert_eq!(1, res.unwrap());
 
-        let task = storage.get_task(pending.task_id).await.unwrap().unwrap();
-        assert_eq!(task.get::<Option<DateTime<Utc>>, _>("completed_at"), None);
+        let task = storage.get_task(pending.task_id).await.unwrap();
+        assert_eq!(task.completed_at, None);
     }
 
     #[tokio::test]
@@ -2053,9 +2054,9 @@ mod tests {
         let res = storage.complete_run(claimed[0].run_id, b"").await;
         assert!(res.is_ok());
 
-        let task = storage.get_task(claimed[0].task_id).await.unwrap().unwrap();
-        assert_eq!(task.get::<String, _>("task_name"), "hello-world");
-        assert_eq!(task.get::<String, _>("state"), "completed");
+        let task = storage.get_task(claimed[0].task_id).await.unwrap();
+        assert_eq!(task.task_name, "hello-world");
+        assert_eq!(task.state, TaskState::Completed);
     }
 
     #[tokio::test]
@@ -2109,12 +2110,9 @@ mod tests {
         let updated = res.unwrap();
         assert_eq!(updated, 1);
 
-        let task = storage.get_task(spawn.task_id).await.unwrap().unwrap();
-        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(
-            task.get::<Option<DateTime<Utc>>, _>("completed_at")
-                .is_some()
-        );
+        let task = storage.get_task(spawn.task_id).await.unwrap();
+        assert_eq!(task.state, TaskState::Cancelled);
+        assert!(task.completed_at.is_some());
 
         let run = storage.get_run(spawn.run_id).await.unwrap();
         assert_eq!(run.state, TaskState::Cancelled);
@@ -2154,12 +2152,9 @@ mod tests {
         let updated = res.unwrap();
         assert_eq!(updated, 1);
 
-        let task = storage.get_task(spawn.task_id).await.unwrap().unwrap();
-        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(
-            task.get::<Option<DateTime<Utc>>, _>("completed_at")
-                .is_some()
-        );
+        let task = storage.get_task(spawn.task_id).await.unwrap();
+        assert_eq!(task.state, TaskState::Cancelled);
+        assert!(task.completed_at.is_some());
 
         let run = storage.get_run(spawn.run_id).await.unwrap();
         assert_eq!(run.state, TaskState::Cancelled);
@@ -2229,12 +2224,9 @@ mod tests {
         assert_eq!(updated.state, TaskState::Cancelled);
 
         // Double check against stored state.
-        let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
-        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Cancelled);
-        assert!(
-            task.get::<Option<DateTime<Utc>>, _>("completed_at")
-                .is_some()
-        );
+        let task = storage.get_task(spawned.task_id).await.unwrap();
+        assert_eq!(task.state, TaskState::Cancelled);
+        assert!(task.completed_at.is_some());
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.state, TaskState::Cancelled);
@@ -2261,12 +2253,9 @@ mod tests {
         let res = storage.cancel_task(spawned.task_id).await;
         assert!(res.is_err());
 
-        let task = storage.get_task(spawned.task_id).await.unwrap().unwrap();
-        assert_eq!(task.get::<TaskState, _>("state"), TaskState::Running);
-        assert!(
-            task.get::<Option<DateTime<Utc>>, _>("completed_at")
-                .is_none()
-        );
+        let task = storage.get_task(spawned.task_id).await.unwrap();
+        assert_eq!(task.state, TaskState::Running);
+        assert!(task.completed_at.is_none());
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.state, TaskState::Running);
