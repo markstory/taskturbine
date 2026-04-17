@@ -451,6 +451,5 @@ class Worker:
                 logger.exception(fail)
 
             retry_at = claimed.next_retry_in()
-            self._inner.fail_run(
-                claimed.run_id, json.dumps({"reason": str(fail)}), retry_at
-            )
+            fail_reason = json.dumps({"reason": str(fail)}).encode()
+            self._inner.fail_run(claimed.run_id, fail_reason, retry_at)

@@ -287,7 +287,7 @@ class WorkerInner:
     """
 
     def fail_run(
-        self, run_id: str, reason: str | None = None, retry_at: timedelta | None = None
+        self, run_id: str, reason: bytes | None = None, retry_at: timedelta | None = None
     ) -> None: ...
     """Mark a run as having failed"""
 
