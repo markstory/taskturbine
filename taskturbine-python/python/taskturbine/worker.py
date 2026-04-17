@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import dataclasses
 import importlib
+import json
 import logging
 import queue
 import threading
@@ -224,14 +225,16 @@ class Worker:
                         message = "unknown"
                         if task_result.payload:
                             message = task_result.payload.decode()
-                        logger.warning(f"Worker crashed with: {message}")
-                        inner.fail_run(task_result.run_id, None)
+                        reason_message = f"Worker crashed with: {message}"
+                        inner.fail_run(task_result.run_id, json.dumps({"reason": reason_message}), None)
+                        logger.warning(reason_message)
                     case TaskOutcome.Missing:
                         message = "unknown"
                         if task_result.payload:
                             message = task_result.payload.decode()
-                        logger.warning(f"Task with name {message} was not registered")
-                        inner.fail_run(task_result.run_id, None)
+                        reason_message = f"Task with name {message} was not registered"
+                        inner.fail_run(task_result.run_id, json.dumps({"reason": reason_message}), None)
+                        logger.warning(reason_message)
                     case TaskOutcome.Complete:
                         inner.complete_run(
                             task_result.run_id, task_result.payload or b""
@@ -248,7 +251,7 @@ class Worker:
                             )
                             inner.schedule_run(task_result.run_id, duration)
                     case TaskOutcome.Failure:
-                        inner.fail_run(task_result.run_id, task_result.duration)
+                        inner.fail_run(task_result.run_id, json.dumps({"reason": "failure outcome"}), task_result.duration)
 
                 result_queue.task_done()
 
@@ -436,4 +439,4 @@ class Worker:
                 logger.exception(fail)
 
             retry_at = claimed.next_retry_in()
-            self._inner.fail_run(claimed.run_id, retry_at)
+            self._inner.fail_run(claimed.run_id, json.dumps({"reason": str(fail)}), retry_at)
