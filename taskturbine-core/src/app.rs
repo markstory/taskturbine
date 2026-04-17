@@ -388,7 +388,11 @@ impl Worker {
             // the retry schedule of the task allows for recovery on the next
             // attempt.
             let reason = format!("{{\"reason\":\"No task named {taskname}\"}}");
-            let res = self.app.storage.fail_run(task.run_id, reason.into_bytes(), None).await;
+            let res = self
+                .app
+                .storage
+                .fail_run(task.run_id, reason.into_bytes(), None)
+                .await;
             if let Err(schedule_err) = res {
                 log::error!("Unable to fail run {schedule_err:?}");
             }

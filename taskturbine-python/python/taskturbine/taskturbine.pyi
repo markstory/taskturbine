@@ -286,7 +286,9 @@ class WorkerInner:
     - cancels tasks past cancellation_max_age
     """
 
-    def fail_run(self, run_id: str, reason: str | None = None, retry_at: timedelta | None = None) -> None: ...
+    def fail_run(
+        self, run_id: str, reason: str | None = None, retry_at: timedelta | None = None
+    ) -> None: ...
     """Mark a run as having failed"""
 
     def complete_run(self, run_id: str, run_result: bytes) -> None: ...
