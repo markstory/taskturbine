@@ -716,7 +716,7 @@ impl Storage {
     ///
     /// Currently running tasks cannot be stopped as updating state in postgres
     /// will not terminate the worker process elsewhere in your system.
-    pub async fn cancel_task(&self, task_id: TaskId, reason: Option<&[u8]>) -> Result<Task, StorageError> {
+    pub async fn cancel_task(&self, task_id: TaskId, reason: Option<Vec<u8>>) -> Result<Task, StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
         let task = self.get_locked_task(task_id, &mut atomic).await?;
         if task.state == TaskState::Running {
@@ -745,7 +745,7 @@ impl Storage {
             ",
         )
         .bind(task_id)
-        .bind(reason.unwrap_or(b""))
+        .bind(reason.unwrap_or(vec![]))
         .bind(task_id)
         .fetch_one(&mut *atomic)
         .await
@@ -775,7 +775,6 @@ impl Storage {
     /// Mark a run as failed with the provided reason.
     /// If an retry_at is not provided, the next retry time will be calculated
     /// based on the task's retry_ attributes.
-    /// TODO convert retry times into Duration across the lib
     pub async fn fail_run(
         &self,
         run_id: RunId,
@@ -2217,7 +2216,7 @@ mod tests {
     async fn cancel_task_success() {
         let (storage, spawned) = create_task().await.unwrap();
 
-        let res = storage.cancel_task(spawned.task_id, Some("user request".as_bytes())).await;
+        let res = storage.cancel_task(spawned.task_id, Some("user request".into())).await;
         assert!(res.is_ok());
         let updated = res.unwrap();
         assert_eq!(updated.task_id, spawned.task_id);

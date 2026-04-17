@@ -66,7 +66,7 @@ enum Commands {
     /// * Cancel tasks that are past their cancellation_max_age
     UpkeepWorker,
     /// Run a retention cleanup on event data.
-    CleanupEvent,
+    CleanupEvent(cleanup_event::CleanupArgs),
     /// Run a retention cleanup on task, run and checkpoint data.
     CleanupTask,
     /// Emit an event to storage.
@@ -108,7 +108,7 @@ async fn main() {
 
     let storage = Storage::new(config);
     let result = match args.command {
-        Commands::CleanupEvent => cleanup_event::execute(storage).await,
+        Commands::CleanupEvent(args) => cleanup_event::execute(storage, args).await,
         Commands::CleanupTask => cleanup_task::execute(storage).await,
         Commands::Clear(args) => clear::clear_storage(storage, args).await,
         Commands::EmitEvent(args) => emit_event::emit_event(storage, args).await,
