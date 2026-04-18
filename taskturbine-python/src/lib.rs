@@ -210,11 +210,10 @@ impl WorkerInner {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
         self.runtime
-            .block_on(self.storage.fail_run(
-                run_id,
-                reason.unwrap_or(b""),
-                retry_at,
-            ))
+            .block_on(
+                self.storage
+                    .fail_run(run_id, reason.unwrap_or(b""), retry_at),
+            )
             .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
     }
 
