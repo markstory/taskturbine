@@ -151,8 +151,7 @@ You can also use the CLI tool to create schema with `migrate`, clear all state w
 
 ## Comparisons
 
-- [Absurd](https://github.com/earendil-works/absurd/) Directly inspired this library. 
-- The schema used in taskturbine was derived from absurd's, as was the naming of the core storage interface.
+- [Absurd](https://github.com/earendil-works/absurd/) Directly inspired this library. The schema used in taskturbine was derived from absurd's, as was the naming of the core storage interface.
 - [Cadence](https://github.com/cadence-workflow/cadence) One of the original projects in durable execution. It has inspired many systems since then. 
 - [Temporal](https://temporal.io) in addition to durable execution, temporal integrates deeply with the runtime environment to help build detemerministic workflows.
 - [Inngest](https://www.inngest.com) a self-hostable event driven workflow system. It's self-hostable, can be run locally.
@@ -171,4 +170,5 @@ more languages planned in the future.
 Apache 2.0 License
 
 Copyright 2025 earendil-works
+
 Copyright 2025 Mark Story
