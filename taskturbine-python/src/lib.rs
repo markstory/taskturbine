@@ -12,6 +12,7 @@ use taskturbine_core::{
     storage::Storage,
 };
 
+mod asynclib;
 mod config;
 mod models;
 
@@ -444,6 +445,8 @@ impl TaskOptions {
 mod taskturbine {
     #[pymodule_export]
     use super::AppInner;
+    #[pymodule_export]
+    use super::asynclib::AsyncAppInner;
     #[pymodule_export]
     use super::ClaimedTask;
     #[pymodule_export]
