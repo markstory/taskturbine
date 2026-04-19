@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 chrono.workspace = true
-pyo3 = { version = "0.27.2", features = ["extension-module"] }
+pyo3 = { version = "0.27.2", features = ["experimental-async", "extension-module"] }
 taskturbine-core = { version = "0.1.0", path = "../taskturbine-core" }
 tokio.workspace = true
 uuid.workspace = true
