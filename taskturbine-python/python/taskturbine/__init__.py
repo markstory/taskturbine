@@ -32,6 +32,7 @@ from .worker import Worker
 
 __all__ = [
     "Config",
+    "JsonSerializer",
     "TaskturbineApp",
     "Task",
     "TaskContext",
