@@ -31,8 +31,9 @@ struct AppInner {
     channels: HashSet<String>,
 
     /// A blocking wrapper on taskturbine_core::storage::Storage
-    // storage: Arc<blockingstorage::BlockingStorage>,
     storage: Arc<Storage>,
+
+    /// Tokio runtime for running storage operations.
     runtime: Arc<tokio::runtime::Runtime>,
 }
 
