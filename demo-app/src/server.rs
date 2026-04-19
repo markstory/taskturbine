@@ -25,8 +25,7 @@ struct AppState<'a> {
 
 fn create_template_env() -> Environment<'static> {
     let mut env = Environment::new();
-    // env.add_template("register", "register html goes here {{ name }}").unwrap();
-    // env.add_template("process-register", "{{ name }}. Your registration is processing.").unwrap();
+
     env.set_loader(path_loader("templates"));
 
     env
