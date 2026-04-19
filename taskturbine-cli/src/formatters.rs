@@ -42,7 +42,9 @@ pub fn dump_task(task: &Task) {
     println!("  attempts:     {}", &task.attempts);
     println!("  max_attempts: {}", &task.max_attempts);
     println!(" cancellation_max_age:  {}", &task.cancellation_max_age);
-    if task.state == TaskState::Completed && let Some(completed_at) = task.completed_at {
+    if task.state == TaskState::Completed
+        && let Some(completed_at) = task.completed_at
+    {
         let duration = completed_at - task.created_at;
         println!(" time to completion: {} seconds", duration.num_seconds());
     }
