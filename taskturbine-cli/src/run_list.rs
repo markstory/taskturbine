@@ -47,6 +47,7 @@ pub async fn execute(storage: Storage, args: RunListArgs) -> Result<(), CliError
         .await
         .map_err(<StorageError as Into<CliError>>::into)?;
 
+    println!();
     for run in runs.iter() {
         formatters::dump_run(run, false, true);
         println!();
