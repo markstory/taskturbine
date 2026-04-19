@@ -446,8 +446,6 @@ mod taskturbine {
     #[pymodule_export]
     use super::AppInner;
     #[pymodule_export]
-    use super::asynclib::AsyncAppInner;
-    #[pymodule_export]
     use super::ClaimedTask;
     #[pymodule_export]
     use super::Config;
@@ -459,4 +457,6 @@ mod taskturbine {
     use super::TaskOptions;
     #[pymodule_export]
     use super::WorkerInner;
+    #[pymodule_export]
+    use super::asynclib::AsyncAppInner;
 }

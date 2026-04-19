@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc};
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::storage::Storage;
 
-use crate::{config::Config, models::SpawnResult, TaskOptions};
+use crate::{TaskOptions, config::Config, models::SpawnResult};
 
 #[pyclass]
 pub struct AsyncAppInner {
@@ -57,7 +57,13 @@ impl AsyncAppInner {
         params: Vec<u8>,
         options: TaskOptions,
     ) -> PyResult<SpawnResult> {
-        self.channel_spawn_task(self.config.default_channel.clone(), task_name, params, options).await
+        self.channel_spawn_task(
+            self.config.default_channel.clone(),
+            task_name,
+            params,
+            options,
+        )
+        .await
     }
 
     async fn channel_spawn_task(
@@ -68,14 +74,19 @@ impl AsyncAppInner {
         options: TaskOptions,
     ) -> PyResult<SpawnResult> {
         let storage = self.storage.clone();
-        let result = self.runtime.spawn(async move {
-            storage.spawn_task(
-                &channel,
-                &task_name,
-                params.as_slice(),
-                Some(options.into()),
-            ).await
-        }).await;
+        let result = self
+            .runtime
+            .spawn(async move {
+                storage
+                    .spawn_task(
+                        &channel,
+                        &task_name,
+                        params.as_slice(),
+                        Some(options.into()),
+                    )
+                    .await
+            })
+            .await;
 
         let Ok(spawn_task_res) = result else {
             let e = result.err().unwrap();
@@ -89,12 +100,15 @@ impl AsyncAppInner {
 
     async fn emit_event(&self, event_name: String, payload: Vec<u8>) -> PyResult<()> {
         let storage = self.storage.clone();
-        let result = self.runtime.spawn(async move {
-            storage.emit_event(&event_name, payload.as_slice()).await
-        }).await;
+        let result = self
+            .runtime
+            .spawn(async move { storage.emit_event(&event_name, payload.as_slice()).await })
+            .await;
         let Ok(emit_res) = result else {
             let e = result.err().unwrap();
-            return Err(PyValueError::new_err(format!("Could not store event {e:?}")));
+            return Err(PyValueError::new_err(format!(
+                "Could not store event {e:?}"
+            )));
         };
 
         emit_res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
@@ -102,12 +116,15 @@ impl AsyncAppInner {
 
     async fn update_schema(&self) -> PyResult<()> {
         let storage = self.storage.clone();
-        let result = self.runtime.spawn(async move {
-            storage.update_schema().await
-        }).await;
+        let result = self
+            .runtime
+            .spawn(async move { storage.update_schema().await })
+            .await;
         let Ok(update_res) = result else {
             let e = result.err().unwrap();
-            return Err(PyValueError::new_err(format!("Could not store event {e:?}")));
+            return Err(PyValueError::new_err(format!(
+                "Could not store event {e:?}"
+            )));
         };
 
         update_res.map_err(|v| PyValueError::new_err(format!("Could not update_schema: {v:?}")))

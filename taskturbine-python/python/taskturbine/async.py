@@ -1,5 +1,3 @@
-
-
 from typing import Any, Callable, MutableMapping
 from taskturbine import JsonSerializer, TaskSerializer
 from taskturbine.models import Task
