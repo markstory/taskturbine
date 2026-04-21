@@ -1,7 +1,7 @@
 from typing import Any, Callable, MutableMapping
-from taskturbine import JsonSerializer, TaskSerializer
 from taskturbine.models import Task
 from taskturbine.taskturbine import AsyncAppInner, Config, TaskOptions
+from taskturbine.serializer import JsonSerializer, TaskSerializer
 
 
 class AsyncTaskturbineApp:

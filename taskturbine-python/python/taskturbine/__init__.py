@@ -7,14 +7,12 @@ with rust, the parts of tasks that interact directly with your code
 are in python.
 """
 
-import json
 import logging
 from typing import (
     Any,
     Callable,
     MutableMapping,
     ParamSpec,
-    Protocol,
     TypeVar,
 )
 
@@ -28,6 +26,7 @@ from .taskturbine import (
 )
 from .context import TaskContext
 from .models import Task
+from .serializer import TaskSerializer, JsonSerializer
 from .worker import Worker
 
 __all__ = [
@@ -44,28 +43,6 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 logger = logging.getLogger(__name__)
-
-
-class TaskSerializer(Protocol):
-    """Interface for task serialization"""
-
-    def serialize(self, value: Any) -> bytes: ...
-
-    """Convert parameter and result values into bytes"""
-
-    def deserialize(self, value: bytes) -> Any: ...
-
-    """Convert bytes into structures for parameters and results"""
-
-
-class JsonSerializer(TaskSerializer):
-    """JSON encoding TaskSerializer"""
-
-    def serialize(self, value: Any) -> bytes:
-        return json.dumps(value).encode()
-
-    def deserialize(self, value: bytes) -> Any:
-        return json.loads(value)
 
 
 class TaskturbineApp:
