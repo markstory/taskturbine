@@ -131,6 +131,7 @@ def test_spawn_task_uses_task_options(
         retry_factor=2.0,
         retry_max_seconds=200,
         cancellation_max_age=75,
+        idempotency_key=None,
     )
 
     @app.register_task(name="first-task", options=options)
