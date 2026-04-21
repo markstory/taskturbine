@@ -13,7 +13,10 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 JsonData = dict[str, Any]
+
 OptionalJsonData = JsonData | None
+
+ClaimedTaskDict = dict[str, Any]
 
 
 class SuspendError(Exception):

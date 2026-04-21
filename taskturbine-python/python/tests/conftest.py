@@ -10,6 +10,7 @@ from taskturbine import Config, TaskturbineApp
 
 Connection = psycopg2._psycopg.connection
 Cursor = psycopg2._psycopg.cursor
+Column = psycopg2._psycopg.Column
 
 
 def pytest_sessionstart() -> None:
@@ -60,7 +61,7 @@ def db_connection(database_url: str) -> Connection:
 
 
 def row_factory(
-    columns: list[tuple[str]], row: tuple[Any, ...] | None
+    columns: tuple[Column, ...] | None, row: tuple[Any, ...] | None
 ) -> dict[str, Any]:
     d: dict[str, Any] = {}
     if not row or not columns:

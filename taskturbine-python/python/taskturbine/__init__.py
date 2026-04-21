@@ -36,6 +36,7 @@ __all__ = [
     "Task",
     "TaskContext",
     "TaskSerializer",
+    "TaskOptions",
     "Worker",
 ]
 

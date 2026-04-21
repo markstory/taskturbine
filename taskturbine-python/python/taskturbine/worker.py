@@ -1,3 +1,8 @@
+"""
+Thread & Multiprocess based worker.
+
+For more CPU heavy workloads, multiprocessing + threads yield better utilization.
+"""
 from __future__ import annotations
 
 import enum
@@ -13,11 +18,11 @@ from multiprocessing.pool import AsyncResult, Pool
 from typing import Any, Callable, Mapping, TYPE_CHECKING
 
 from taskturbine.context import TaskContext
-from taskturbine.models import Task, SuspendError
+from taskturbine.models import Task, SuspendError, ClaimedTaskDict
 from taskturbine.taskturbine import ClaimedTask, WorkerInner
 
 if TYPE_CHECKING:
-    from taskturbine import TaskturbineApp, ClaimedTaskDict
+    from taskturbine import TaskturbineApp
 
 
 logger = logging.getLogger(__name__)
@@ -45,7 +50,6 @@ class TaskResult:
 def load_app(app_module: str) -> TaskturbineApp:
     # Need for assertion, but TYPE_CHECKING guard above hides runtime error.
     from . import TaskturbineApp
-    from .asynclib import AsyncTaskturbineApp
 
     if ":" not in app_module:
         raise ValueError("Invalid module name. Expected app.tasks.runtime:app format")
@@ -55,9 +59,10 @@ def load_app(app_module: str) -> TaskturbineApp:
         raise ValueError(f"Could not access `{var_name}` in {module_name}")
     app = getattr(module, var_name)
 
-    assert isinstance(app, TaskturbineApp, AsyncTaskturbineApp), (
+    assert isinstance(app, TaskturbineApp), (
         f"`{var_name}` must be a TaskturbineApp instance"
     )
+
     return app
 
 
@@ -115,7 +120,6 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
             run_id=claimed.run_id,
         )
     except Exception as fail:
-        breakpoint()
         logger.exception("Task execution failed")
         retry_at = claimed.next_retry_in()
         if app.error_handler:
@@ -165,7 +169,7 @@ class Worker:
             shutdown: threading.Event,
             claim_queue: queue.Queue[ClaimedTaskDict],
             inner: WorkerInner,
-        ):
+        ) -> None:
             last_fetch = None
             while True:
                 # During graceful shutdown we want to immediately
@@ -210,7 +214,7 @@ class Worker:
             shutdown: threading.Event,
             result_queue: queue.Queue[TaskResult],
             inner: WorkerInner,
-        ):
+        ) -> None:
             while True:
                 try:
                     task_result = result_queue.get(timeout=1.0)
@@ -399,7 +403,7 @@ class Worker:
                     self._inner.schedule_run(task_result.run_id, duration)
             case TaskOutcome.Failure:
                 assert task_result.duration, "Failures should always have duration"
-                self._inner.fail_run(task_result.run_id, task_result.duration)
+                self._inner.fail_run(task_result.run_id, b"", task_result.duration)
 
     def run_upkeep(self) -> None:
         """
