@@ -28,10 +28,10 @@ class TaskOutcome(enum.Enum):
     Suspend = "suspend"
     Failure = "failure"
     Missing = "missing"
-    # Expects a payload of strbytes
+    """The missing outcome expects a payload of bytes"""
 
     Fatal = "fatal"
-    # Expects a payload of strbytes
+    """The fatal outcome expects a payload of bytes"""
 
 
 @dataclasses.dataclass
@@ -44,7 +44,8 @@ class TaskResult:
 
 def load_app(app_module: str) -> TaskturbineApp:
     # Need for assertion, but TYPE_CHECKING guard above hides runtime error.
-    from taskturbine import TaskturbineApp
+    from . import TaskturbineApp
+    from .asynclib import AsyncTaskturbineApp
 
     if ":" not in app_module:
         raise ValueError("Invalid module name. Expected app.tasks.runtime:app format")
@@ -53,7 +54,8 @@ def load_app(app_module: str) -> TaskturbineApp:
     if not hasattr(module, var_name):
         raise ValueError(f"Could not access `{var_name}` in {module_name}")
     app = getattr(module, var_name)
-    assert isinstance(app, TaskturbineApp), (
+
+    assert isinstance(app, TaskturbineApp, AsyncTaskturbineApp), (
         f"`{var_name}` must be a TaskturbineApp instance"
     )
     return app
