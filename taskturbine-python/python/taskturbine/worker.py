@@ -108,12 +108,14 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
             outcome=TaskOutcome.Complete, run_id=claimed.run_id, payload=res_bytes
         )
     except SuspendError as suspend:
+        logger.debug("Task suspended")
         return TaskResult(
             outcome=TaskOutcome.Suspend,
             duration=suspend.duration,
             run_id=claimed.run_id,
         )
     except Exception as fail:
+        breakpoint()
         logger.exception("Task execution failed")
         retry_at = claimed.next_retry_in()
         if app.error_handler:
@@ -230,7 +232,7 @@ class Worker:
                         reason_message = f"Worker crashed with: {message}"
                         inner.fail_run(
                             task_result.run_id,
-                            json.dumps({"reason": reason_message}),
+                            json.dumps({"reason": reason_message}).encode(),
                             None,
                         )
                         logger.warning(reason_message)
@@ -241,7 +243,7 @@ class Worker:
                         reason_message = f"Task with name {message} was not registered"
                         inner.fail_run(
                             task_result.run_id,
-                            json.dumps({"reason": reason_message}),
+                            json.dumps({"reason": reason_message}).encode(),
                             None,
                         )
                         logger.warning(reason_message)
@@ -263,7 +265,7 @@ class Worker:
                     case TaskOutcome.Failure:
                         inner.fail_run(
                             task_result.run_id,
-                            json.dumps({"reason": "failure outcome"}),
+                            json.dumps({"reason": "failure outcome"}).encode(),
                             task_result.duration,
                         )
 
