@@ -1,7 +1,8 @@
 import json
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
+@runtime_checkable
 class TaskSerializer(Protocol):
     """Interface for task serialization"""
 

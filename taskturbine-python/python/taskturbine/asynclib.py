@@ -1,7 +1,11 @@
-from typing import Any, Callable, MutableMapping
+from typing import Any, Callable, MutableMapping, ParamSpec, TypeVar
 from taskturbine.models import Task
-from taskturbine.taskturbine import AsyncAppInner, Config, TaskOptions
+from taskturbine.taskturbine import AsyncAppInner, Config, SpawnResult, TaskOptions
 from taskturbine.serializer import JsonSerializer, TaskSerializer
+
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class AsyncTaskturbineApp:
@@ -41,6 +45,8 @@ class AsyncTaskturbineApp:
         self.error_handler = error_handler
         if serializer is None:
             serializer = JsonSerializer()
+        assert isinstance(serializer, TaskSerializer), "serializer must extend `TaskSerializer`"
+
         self.serializer = serializer
 
     def set_spawn_options(
@@ -67,11 +73,11 @@ class AsyncTaskturbineApp:
             idempotency_key=idempotency_key,
         )
 
-    def update_schema(self) -> None:
+    async def update_schema(self) -> None:
         """
         Create or update the taskturbine schema and tables.
         """
-        self._inner.update_schema()
+        await self._inner.update_schema()
 
     def add_channel(self, name: str) -> None:
         """
@@ -86,7 +92,7 @@ class AsyncTaskturbineApp:
         """Get the list of channels"""
         return self._inner.channels
 
-    def register_task(
+    async def register_task(
         self,
         name: str,
         *,
@@ -131,7 +137,7 @@ class AsyncTaskturbineApp:
             return None
         return self.serializer.deserialize(blob)
 
-    def spawn_task(
+    async def spawn_task(
         self,
         taskname: str,
         params: dict[str, Any],
@@ -180,15 +186,15 @@ class AsyncTaskturbineApp:
             idempotency_key=idempotency_key,
         )
         if channel:
-            return self._inner.channel_spawn_task(
+            return await self._inner.channel_spawn_task(
                 channel, taskname, self.serialize_value(params), options
             )
         else:
-            return self._inner.spawn_task(
+            return await self._inner.spawn_task(
                 taskname, self.serialize_value(params), options
             )
 
-    def emit_event(
+    async def emit_event(
         self,
         event_name: str,
         payload: dict[str, Any],
@@ -199,31 +205,31 @@ class AsyncTaskturbineApp:
         Payload can be an arbitrary JSON encodable value that
         can be retrieved later.
         """
-        self._inner.emit_event(event_name, self.serialize_value(payload))
+        await self._inner.emit_event(event_name, self.serialize_value(payload))
 
-    def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
-        """
-        Create a TaskContext with links to the rust context.
-        """
-        context = TaskContext(
-            inner=self._inner.create_context(claimed_task),
-            serialize=self.serialize_value,
-            deserialize=self.deserialize_value,
-        )
-        return context
+    # def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
+    #     """
+    #     Create a TaskContext with links to the rust context.
+    #     """
+    #     context = TaskContext(
+    #         inner=self._inner.create_context(claimed_task),
+    #         serialize=self.serialize_value,
+    #         deserialize=self.deserialize_value,
+    #     )
+    #     return context
 
-    def create_worker(
-        self,
-        worker_id: str,
-        channels: list[str],
-    ) -> Worker:
-        """
-        Create a Worker that is connected to Rust storage API.
-        """
-        worker = Worker(
-            inner=self._inner.create_worker(worker_id, channels),
-            tasks=self._tasks,
-            context_factory=self.create_context,
-            error_handler=self.error_handler,
-        )
-        return worker
+    # def create_worker(
+    #     self,
+    #     worker_id: str,
+    #     channels: list[str],
+    # ) -> Worker:
+    #     """
+    #     Create a Worker that is connected to Rust storage API.
+    #     """
+    #     worker = Worker(
+    #         inner=self._inner.create_worker(worker_id, channels),
+    #         tasks=self._tasks,
+    #         context_factory=self.create_context,
+    #         error_handler=self.error_handler,
+    #     )
+    #     return worker
