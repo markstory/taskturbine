@@ -1,5 +1,5 @@
-from typing import Any, Callable, MutableMapping, ParamSpec, TypeVar
-from taskturbine.models import Task
+from typing import Any, Awaitable, Callable, MutableMapping, ParamSpec, TypeVar
+from taskturbine.models import AsyncTask
 from taskturbine.taskturbine import AsyncAppInner, Config, SpawnResult, TaskOptions
 from taskturbine.serializer import JsonSerializer, TaskSerializer
 
@@ -33,7 +33,7 @@ class AsyncTaskturbineApp:
         error_handler: Callable[[Exception], None] | None = None,
     ) -> None:
         self._inner = AsyncAppInner(config)
-        self._tasks: MutableMapping[str, Task[..., Any]] = {}
+        self._tasks: MutableMapping[str, AsyncTask[..., Any]] = {}
         self._default_spawn_options = TaskOptions(
             max_attempts=5,
             retry_seconds=30,
@@ -92,12 +92,12 @@ class AsyncTaskturbineApp:
         """Get the list of channels"""
         return self._inner.channels
 
-    async def register_task(
+    def register_task(
         self,
         name: str,
         *,
         options: TaskOptions | None = None,
-    ) -> Callable[[Callable[P, R]], Task[P, R]]:
+    ) -> Callable[[Callable[P, Awaitable[R]]], AsyncTask[P, R]]:
         """
         Decorator to register task functions.
 
@@ -112,8 +112,8 @@ class AsyncTaskturbineApp:
         logic.
         """
 
-        def wrapped(func: Callable[P, R]) -> Task[P, R]:
-            task = Task(name=name, func=func, options=options)
+        def wrapped(func: Callable[P, Awaitable[R]]) -> AsyncTask[P, R]:
+            task = AsyncTask(name=name, func=func, options=options)
             self._tasks[name] = task
             return task
 
@@ -123,7 +123,7 @@ class AsyncTaskturbineApp:
         """Check if a task is defined"""
         return name in self._tasks
 
-    def get_task(self, name: str) -> Task[..., Any]:
+    def get_task(self, name: str) -> AsyncTask[..., Any]:
         """Get a task by name. Raises KeyError on unknown values"""
         return self._tasks[name]
 
