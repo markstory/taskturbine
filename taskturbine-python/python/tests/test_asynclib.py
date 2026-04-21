@@ -2,8 +2,8 @@ import json
 from typing import Any
 import psycopg2
 import pytest
-from taskturbine import Config, Task, TaskSerializer, TaskturbineApp, TaskOptions
-from taskturbine.asynclib import AsyncTaskturbineApp
+from taskturbine import Config, TaskSerializer, TaskturbineApp, TaskOptions
+from taskturbine.asynclib import AsyncTaskturbineApp, AsyncTask
 
 from .conftest import fetch_one
 
@@ -35,11 +35,11 @@ async def test_register_task(config: Config) -> None:
 
     # Task functions get wrapped in decorator objects
     task = app.get_task("first-task")
-    assert isinstance(task, Task)
+    assert isinstance(task, AsyncTask)
     # Name attribute is added
     assert task.name == "first-task"
     # The class will proxy to the wrapped function
-    assert task("one") == "called one"
+    assert await task("one") == "called one"
 
 
 @pytest.mark.asyncio
@@ -50,17 +50,18 @@ async def test_spawn_task_unregistered(config: Config) -> None:
     assert "task `undefined` is not registered" in str(err.value)
 
 
-# def test_spawn_task(config: Config) -> None:
-#     app = TaskturbineApp(config)
+@pytest.mark.asyncio
+async def test_spawn_task(config: Config) -> None:
+    app = AsyncTaskturbineApp(config)
 
-#     @app.register_task(name="first-task")
-#     def first_task(a: str) -> str:
-#         return f"called {a}"
+    @app.register_task(name="first-task")
+    async def first_task(a: str) -> str:
+        return f"called {a}"
 
-#     res = app.spawn_task("first-task", {})
-#     assert res
-#     assert res.task_id
-#     assert res.run_id
+    res = await app.spawn_task("first-task", {})
+    assert res
+    assert res.task_id
+    assert res.run_id
 
 
 # def test_spawn_task_uses_serialize_hooks(
