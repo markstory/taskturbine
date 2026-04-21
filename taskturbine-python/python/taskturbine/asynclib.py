@@ -1,11 +1,25 @@
-from typing import Any, Awaitable, Callable, MutableMapping, ParamSpec, TypeVar
-from taskturbine.models import AsyncTask
+from typing import Any, Awaitable, Callable, Generic, MutableMapping, ParamSpec, TypeVar
 from taskturbine.taskturbine import AsyncAppInner, Config, SpawnResult, TaskOptions
 from taskturbine.serializer import JsonSerializer, TaskSerializer
 
 
 P = ParamSpec("P")
 R = TypeVar("R")
+
+
+class AsyncTask(Generic[P, R]):
+    def __init__(
+        self, name: str, func: Callable[P, Awaitable[R]], options: TaskOptions | None = None
+    ):
+        self.name = name
+        self._func = func
+        self.options = options
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> Awaitable[R]:
+        """
+        Call the task function immediately.
+        """
+        return self._func(*args, **kwargs)
 
 
 class AsyncTaskturbineApp:

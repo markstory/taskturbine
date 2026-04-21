@@ -2,7 +2,6 @@ from functools import update_wrapper
 from datetime import timedelta
 from typing import (
     Any,
-    Awaitable,
     Callable,
     Generic,
     ParamSpec,
@@ -38,21 +37,6 @@ class Task(Generic[P, R]):
         update_wrapper(self, func)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        """
-        Call the task function immediately.
-        """
-        return self._func(*args, **kwargs)
-
-
-class AsyncTask(Generic[P, R]):
-    def __init__(
-        self, name: str, func: Callable[P, Awaitable[R]], options: TaskOptions | None = None
-    ):
-        self.name = name
-        self._func = func
-        self.options = options
-
-    async def __await__(self, *args: P.args, **kwargs: P.kwargs) -> Awaitable[R]:
         """
         Call the task function immediately.
         """
