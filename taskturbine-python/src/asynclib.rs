@@ -10,7 +10,7 @@ use taskturbine_core::storage::Storage;
 
 use crate::{TaskOptions, config::Config, models::SpawnResult};
 
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 pub struct AsyncAppInner {
     #[pyo3(get)]
     config: Config,
@@ -51,53 +51,65 @@ impl AsyncAppInner {
         self.channels.insert(value);
     }
 
-    async fn spawn_task(
+    fn spawn_task<'p>(
         &self,
+        py: Python<'p>,
         task_name: String,
         params: Vec<u8>,
         options: TaskOptions,
-    ) -> PyResult<SpawnResult> {
-        self.channel_spawn_task(
-            self.config.default_channel.clone(),
-            task_name,
-            params,
-            options,
-        )
-        .await
+    ) -> PyResult<Bound<'p, PyAny>> {
+        let storage = self.storage.clone();
+        pyo3_async_runtimes::tokio::future_into_py::<_, SpawnResult>(py, async move {
+            let spawn_result = storage
+                .spawn_task(
+                    "default",
+                    &task_name,
+                    params.as_slice(),
+                    Some(options.into()),
+                )
+                .await;
+
+            match spawn_result {
+                Ok(value) => Ok(Into::<SpawnResult>::into(value)),
+                Err(msg) => Err(PyValueError::new_err(format!("Could not spawn task {msg:?}"))),
+            }
+        })
     }
 
-    async fn channel_spawn_task(
+    /*
+    fn channel_spawn_task(
         &self,
+        py: Python,
         channel: String,
         task_name: String,
         params: Vec<u8>,
         options: TaskOptions,
-    ) -> PyResult<SpawnResult> {
+    ) -> PyAny {
         let storage = self.storage.clone();
-        let result = self
-            .runtime
-            .spawn(async move {
-                storage
-                    .spawn_task(
-                        &channel,
-                        &task_name,
-                        params.as_slice(),
-                        Some(options.into()),
-                    )
-                    .await
-            })
-            .await;
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let spawn_result = storage
+                .spawn_task(
+                    &channel,
+                    &task_name,
+                    params.as_slice(),
+                    Some(options.into()),
+                )
+                .await;
 
-        let Ok(spawn_task_res) = result else {
-            let e = result.err().unwrap();
-            return Err(PyValueError::new_err(format!("Could not spawn task {e:?}")));
-        };
-
-        spawn_task_res
-            .map(|v| v.into())
-            .map_err(|e| PyValueError::new_err(format!("Could not spawn task {e:?}")))
+            match spawn_result {
+                Ok(value) => value.into(),
+                Err(msg) => PyValueError::new_err(format!("Could not spawn task {e:?}")),
+            }
+            /*
+            spawn_result
+                .map(|v| v.into())
+                .map_err(|e| PyValueError::new_err(format!("Could not spawn task {e:?}")))
+            */
+        })
     }
+*/
 
+    /*
     async fn emit_event(&self, event_name: String, payload: Vec<u8>) -> PyResult<()> {
         let storage = self.storage.clone();
         let result = self
@@ -129,6 +141,7 @@ impl AsyncAppInner {
 
         update_res.map_err(|v| PyValueError::new_err(format!("Could not update_schema: {v:?}")))
     }
+    */
 
     /*
     fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
