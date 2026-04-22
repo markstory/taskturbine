@@ -9,7 +9,10 @@ R = TypeVar("R")
 
 class AsyncTask(Generic[P, R]):
     def __init__(
-        self, name: str, func: Callable[P, Awaitable[R]], options: TaskOptions | None = None
+        self,
+        name: str,
+        func: Callable[P, Awaitable[R]],
+        options: TaskOptions | None = None,
     ):
         self.name = name
         self._func = func
@@ -59,7 +62,9 @@ class AsyncTaskturbineApp:
         self.error_handler = error_handler
         if serializer is None:
             serializer = JsonSerializer()
-        assert isinstance(serializer, TaskSerializer), "serializer must extend `TaskSerializer`"
+        assert isinstance(serializer, TaskSerializer), (
+            "serializer must extend `TaskSerializer`"
+        )
 
         self.serializer = serializer
 

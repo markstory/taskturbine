@@ -23,5 +23,3 @@ class JsonSerializer(TaskSerializer):
 
     def deserialize(self, value: bytes) -> Any:
         return json.loads(value)
-
-

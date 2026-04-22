@@ -21,9 +21,6 @@ pub struct AsyncAppInner {
 
     /// A blocking wrapper on taskturbine_core::storage::Storage
     storage: Arc<Storage>,
-
-    /// Tokio runtime for running storage operations.
-    runtime: Arc<tokio::runtime::Runtime>,
 }
 
 #[pymethods]
@@ -32,6 +29,9 @@ impl AsyncAppInner {
     fn py_new(config: Config) -> Self {
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
+
+        // Make a throwaway runtime to get started.
+        // TODO figure out if there is a more efficient solution to this.
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -43,7 +43,6 @@ impl AsyncAppInner {
             config,
             channels,
             storage: Arc::new(storage),
-            runtime: Arc::new(runtime),
         }
     }
 
@@ -91,7 +90,12 @@ impl AsyncAppInner {
         })
     }
 
-    fn emit_event<'p>(&self, py: Python<'p>, event_name: String, payload: Vec<u8>) -> PyResult<Bound<'p, PyAny>> {
+    fn emit_event<'p>(
+        &self,
+        py: Python<'p>,
+        event_name: String,
+        payload: Vec<u8>,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let storage = self.storage.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = storage.emit_event(&event_name, payload.as_slice()).await;

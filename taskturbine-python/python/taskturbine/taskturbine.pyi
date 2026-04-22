@@ -378,7 +378,6 @@ class AppInner:
     def create_context(self, claimed_task: ClaimedTask) -> ContextInner: ...
     """Create a ContextInner which bridges into the python client."""
 
-
 class AsyncAppInner:
     """
     The asyncio compatible rust/python interface.

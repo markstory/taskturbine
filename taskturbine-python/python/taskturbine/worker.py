@@ -3,6 +3,7 @@ Thread & Multiprocess based worker.
 
 For more CPU heavy workloads, multiprocessing + threads yield better utilization.
 """
+
 from __future__ import annotations
 
 import enum
