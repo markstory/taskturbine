@@ -58,35 +58,25 @@ impl AsyncAppInner {
         params: Vec<u8>,
         options: TaskOptions,
     ) -> PyResult<Bound<'p, PyAny>> {
-        let storage = self.storage.clone();
-        pyo3_async_runtimes::tokio::future_into_py::<_, SpawnResult>(py, async move {
-            let spawn_result = storage
-                .spawn_task(
-                    "default",
-                    &task_name,
-                    params.as_slice(),
-                    Some(options.into()),
-                )
-                .await;
-
-            match spawn_result {
-                Ok(value) => Ok(Into::<SpawnResult>::into(value)),
-                Err(msg) => Err(PyValueError::new_err(format!("Could not spawn task {msg:?}"))),
-            }
-        })
+        self.channel_spawn_task(
+            py,
+            self.config.default_channel.clone(),
+            task_name,
+            params,
+            options,
+        )
     }
 
-    /*
-    fn channel_spawn_task(
+    fn channel_spawn_task<'p>(
         &self,
-        py: Python,
+        py: Python<'p>,
         channel: String,
         task_name: String,
         params: Vec<u8>,
         options: TaskOptions,
-    ) -> PyAny {
+    ) -> PyResult<Bound<'p, PyAny>> {
         let storage = self.storage.clone();
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py::<_, SpawnResult>(py, async move {
             let spawn_result = storage
                 .spawn_task(
                     &channel,
@@ -95,53 +85,27 @@ impl AsyncAppInner {
                     Some(options.into()),
                 )
                 .await;
-
-            match spawn_result {
-                Ok(value) => value.into(),
-                Err(msg) => PyValueError::new_err(format!("Could not spawn task {e:?}")),
-            }
-            /*
             spawn_result
-                .map(|v| v.into())
+                .map(Into::<SpawnResult>::into)
                 .map_err(|e| PyValueError::new_err(format!("Could not spawn task {e:?}")))
-            */
         })
     }
-*/
 
-    /*
-    async fn emit_event(&self, event_name: String, payload: Vec<u8>) -> PyResult<()> {
+    fn emit_event<'p>(&self, py: Python<'p>, event_name: String, payload: Vec<u8>) -> PyResult<Bound<'p, PyAny>> {
         let storage = self.storage.clone();
-        let result = self
-            .runtime
-            .spawn(async move { storage.emit_event(&event_name, payload.as_slice()).await })
-            .await;
-        let Ok(emit_res) = result else {
-            let e = result.err().unwrap();
-            return Err(PyValueError::new_err(format!(
-                "Could not store event {e:?}"
-            )));
-        };
-
-        emit_res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = storage.emit_event(&event_name, payload.as_slice()).await;
+            result.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
+        })
     }
 
-    async fn update_schema(&self) -> PyResult<()> {
+    fn update_schema<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let storage = self.storage.clone();
-        let result = self
-            .runtime
-            .spawn(async move { storage.update_schema().await })
-            .await;
-        let Ok(update_res) = result else {
-            let e = result.err().unwrap();
-            return Err(PyValueError::new_err(format!(
-                "Could not store event {e:?}"
-            )));
-        };
-
-        update_res.map_err(|v| PyValueError::new_err(format!("Could not update_schema: {v:?}")))
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let result = storage.update_schema().await;
+            result.map_err(|v| PyValueError::new_err(format!("Could not update_schema: {v:?}")))
+        })
     }
-    */
 
     /*
     fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
