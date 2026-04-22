@@ -22,7 +22,7 @@ use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult};
 ///! See taskturbine.pyi for docstrings
 
 // Container for configuration, storage and tokio runtime.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 struct AppInner {
     #[pyo3(get)]
     config: Config,
@@ -124,7 +124,8 @@ impl AppInner {
 }
 
 /// Expose the minimal worker API to be used by the python worker.
-#[pyclass]
+#[pyclass(from_py_object)]
+#[derive(Clone)]
 struct WorkerInner {
     config: Config,
     storage: Arc<Storage>,
@@ -241,7 +242,7 @@ impl WorkerInner {
 }
 
 /// See taskturbine.pyi for docstrings
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 struct ContextInner {
     storage: Arc<Storage>,
     runtime: Arc<tokio::runtime::Runtime>,
@@ -333,7 +334,7 @@ impl ContextInner {
 }
 
 /// See taskturbine.pyi for docstrings
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Debug, PartialEq, Clone)]
 struct TaskOptions {
     pub idempotency_key: Option<String>,

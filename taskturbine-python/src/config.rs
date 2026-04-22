@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 /// See taskturbine.pyi for docstrings
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Debug, Clone)]
 pub struct Config {
     #[pyo3(get, set)]
