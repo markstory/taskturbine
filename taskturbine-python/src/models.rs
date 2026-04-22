@@ -5,7 +5,7 @@ use taskturbine_core::models::{RunId, TaskId};
 
 /// See taskturbine.pyi for docstrings
 #[derive(Clone, Debug, PartialEq)]
-#[pyclass]
+#[pyclass(from_py_object)]
 pub struct ClaimedTask {
     #[pyo3(get)]
     pub task_id: String,
@@ -161,7 +161,7 @@ impl From<taskturbine_core::models::ClaimedTask> for ClaimedTask {
 }
 
 /// See taskturbine.pyi for docsstrings
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Debug, PartialEq, Clone)]
 pub struct AwaitResult {
     #[pyo3(get)]
@@ -185,7 +185,7 @@ impl From<taskturbine_core::storage::AwaitResult> for AwaitResult {
 }
 
 /// See taskturbine.pyi for docstrings
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Debug, PartialEq, Clone)]
 pub struct SpawnResult {
     #[pyo3(get)]
@@ -223,7 +223,8 @@ impl From<taskturbine_core::models::SpawnResult> for SpawnResult {
 }
 
 /// See taskturbine.pyi for docstrings
-#[pyclass]
+#[pyclass(from_py_object)]
+#[derive(Clone)]
 pub struct Checkpoint {
     #[pyo3(get)]
     pub task_id: String,
