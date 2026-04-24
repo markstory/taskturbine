@@ -1,5 +1,10 @@
-from typing import Any, Awaitable, Callable, Generic, MutableMapping, ParamSpec, TypeVar
-from taskturbine.taskturbine import AsyncAppInner, Config, SpawnResult, TaskOptions
+from datetime import timedelta
+import functools
+import json
+from typing import Any, Awaitable, Callable, Coroutine, Generic, MutableMapping, ParamSpec, TypeVar, override
+from python.taskturbine.context import TaskContext
+from python.taskturbine.models import JsonData, OptionalJsonData, SuspendError
+from taskturbine.taskturbine import AsyncContexInner, AsyncAppInner, Config, SpawnResult, TaskOptions
 from taskturbine.serializer import JsonSerializer, TaskSerializer
 
 
@@ -23,6 +28,149 @@ class AsyncTask(Generic[P, R]):
         Call the task function immediately.
         """
         return self._func(*args, **kwargs)
+
+
+class AsyncTaskContext(TaskContext):
+    """
+    Re-define all IO methods with async implementations
+    """
+    def __init__(
+        self,
+        inner: AsyncContextInner,
+        serialize: Callable[[JsonData], bytes],
+        deserialize: Callable[[bytes], JsonData | None],
+    ) -> None:
+        self._inner = inner
+        self._serialize = serialize
+        self._deserialize = deserialize
+        self._checkpoint_counters: dict[str, int] = {}
+        self._claimed_task = inner.claimed_task
+
+    async def await_event(
+        self, event_name: str, timeout: float | timedelta | None = None
+    ) -> Any:
+        """
+        Wait for an event. Will return the event payload if the event has been
+        emit. If the event has not happened, a SuspendError will be raised.
+        """
+        if timeout is None:
+            timeout = self._inner.await_event_default_timeout_secs
+        if isinstance(timeout, (float, int)):
+            timeout = timedelta(seconds=timeout)
+        assert isinstance(timeout, timedelta)
+
+        wait = await self._inner.get_event_payload(event_name, timeout)
+        if wait.should_suspend:
+            raise SuspendError()
+        return json.loads(wait.payload)
+
+    async def emit_event(self, event_name: str, payload: JsonData) -> Awaitable[None]:
+        """
+        Record an external event that a task/run is waiting for.
+
+        Payload can be an arbitrary JSON encodable value that
+        can be retrieved later.
+        """
+        return await self._inner.emit_event(event_name, self._serialize(payload))
+
+    async def sleep_for(self, step_name: str, duration: timedelta) -> Awaitable[None]:
+        """
+        Pause the current task until `duration` has elapsed.
+
+        Will create a checkpoint, and raise a SuspendError with
+        the duration the current task should sleep for.
+        """
+        checkpoint_name = self._checkpoint_name(step_name)
+        try:
+            await self._inner.get_checkpoint(checkpoint_name)
+            return
+        except ValueError:
+            # An exception here means that the checkpoint was not found.
+            pass
+        await self._inner.set_checkpoint(checkpoint_name, step_name.encode(), None)
+
+        raise SuspendError(duration=duration)
+
+    def step(
+        self, name: str
+    ) -> Callable[
+        [Callable[P, Awaitable[OptionalJsonData]]],
+        Callable[P, Awaitable[OptionalJsonData]]
+    ]:
+        """
+        Decorate a function as a durable step.
+
+        Wrap a function with a decorator that makes it a durable step of the current task. The
+        decorated function can then be called by application logic as required, giving you control
+        of the parameters and return values.
+
+        If the step's name is used more than once, a suffix will be added
+        based on the order steps are defined.
+
+        If the step has been completed the captured state from the completed run
+        will be used. If the step raises an error the run is considered 'failed'
+        and a retry will be scheduled according to the task's retry configuration.
+        """
+        checkpoint_name = self._checkpoint_name(name)
+
+        def decorator(
+            func: Callable[P, Awaitable[OptionalJsonData]],
+        ) -> Callable[P, Awaitable[OptionalJsonData]]:
+            async def wrapper(*args: P.args, **kwargs: P.kwargs) -> OptionalJsonData:
+                return await self._execute_step(checkpoint_name, func, *args, **kwargs)
+
+            functools.update_wrapper(wrapper, func)
+            return wrapper
+
+        return decorator
+
+    async def step_run(
+        self,
+        step_name: str,
+        func: Callable[P, Awaitable[OptionalJsonData]],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> JsonData | None:
+        """
+        Run a function as a durable step
+
+        Create a step with the given name. If a name is used multiple times, a suffix
+        will be added based on call order.
+
+        If the step has been completed the captured state will be used. If the step raises an error
+        it will be considered 'failed' and a retry will be scheduled according to the task's retry
+        configuration.
+        """
+        checkpoint_name = self._checkpoint_name(step_name)
+        return await self._execute_step(checkpoint_name, func, *args, **kwargs)
+
+    async def _execute_step(
+        self,
+        checkpoint_name: str,
+        func: Callable[P, Awaitable[OptionalJsonData]],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> JsonData | None:
+        """
+        Execute a step function.
+        """
+        try:
+            checkpoint = await self._inner.get_checkpoint(checkpoint_name)
+            return self._deserialize(checkpoint.state)
+        except ValueError:
+            # No checkpoint data.
+            pass
+
+        # Step functions may raise, but worker.execute_task will catch
+        step_result = await func(*args, **kwargs)
+
+        result_bytes = b""
+        if step_result:
+            result_bytes = self._serialize(step_result)
+        await self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
+
+        return step_result
+
 
 
 class AsyncTaskturbineApp:
@@ -226,16 +374,16 @@ class AsyncTaskturbineApp:
         """
         await self._inner.emit_event(event_name, self.serialize_value(payload))
 
-    # def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
-    #     """
-    #     Create a TaskContext with links to the rust context.
-    #     """
-    #     context = TaskContext(
-    #         inner=self._inner.create_context(claimed_task),
-    #         serialize=self.serialize_value,
-    #         deserialize=self.deserialize_value,
-    #     )
-    #     return context
+    def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
+        """
+        Create a TaskContext with links to the rust context.
+        """
+        context = AsyncTaskContext(
+            inner=self._inner.create_context(claimed_task),
+            serialize=self.serialize_value,
+            deserialize=self.deserialize_value,
+        )
+        return context
 
     # def create_worker(
     #     self,
