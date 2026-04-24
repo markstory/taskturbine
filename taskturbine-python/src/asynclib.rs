@@ -3,12 +3,12 @@
 //! These structs mirror the interface defined by AppInner, WorkerInner, ContextInner
 //! but use async signatures that integrate with python's asyncio runtime.
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use pyo3::{exceptions::PyValueError, prelude::*};
-use taskturbine_core::storage::Storage;
+use taskturbine_core::{models::{RunId, TaskId}, storage::Storage};
 
-use crate::{TaskOptions, config::Config, models::SpawnResult};
+use crate::{TaskOptions, config::Config, models::{ClaimedTask, SpawnResult}};
 
 #[pyclass(skip_from_py_object)]
 pub struct AsyncAppInner {
@@ -121,13 +121,117 @@ impl AsyncAppInner {
             channels,
         }
     }
+    */
 
-    fn create_context(&self, claimed_task: ClaimedTask) -> ContextInner {
-        ContextInner {
+    fn create_context(&self, claimed_task: ClaimedTask) -> AsyncContextInner {
+        AsyncContextInner {
             storage: self.storage.clone(),
-            runtime: self.runtime.clone(),
             claimed_task,
         }
     }
-    */
 }
+
+
+/// See taskturbine.pyi for docstrings
+#[pyclass(skip_from_py_object)]
+struct AsyncContextInner {
+    storage: Arc<Storage>,
+    claimed_task: ClaimedTask,
+}
+#[pymethods]
+impl AsyncContextInner {
+    #[getter(await_event_default_timeout_secs)]
+    fn await_event_default_timeout_secs(&self) -> i32 {
+        self.storage.get_config().await_event_default_timeout_secs
+    }
+
+    // there is a 'fun' bug hiding here.
+    #[getter(claimed_task)]
+    fn get_claimed_task(&self) -> ClaimedTask {
+        self.claimed_task.clone()
+    }
+
+    fn emit_event<'p>(&self, py: Python<'p>, event_name: String, payload: Vec<u8>) -> PyResult<Bound<'p, PyAny>> {
+        let storage = self.storage.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let event_name = event_name.clone();
+            let res = storage.emit_event(&event_name, payload.as_slice()).await;
+            res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
+        })
+    }
+
+    fn get_checkpoint<'p>(&self, py: Python<'p>, checkpoint_name: String) -> PyResult<Bound<'p, PyAny>> {
+        let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        let storage = self.storage.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let res = storage.get_checkpoint(task_id, &checkpoint_name).await;
+            if let Ok(Some(checkpoint)) = res {
+                Ok(checkpoint.into())
+            } else {
+                Err(PyValueError::new_err(
+                    "Checkpoint not found, or read failed",
+                ))
+            }
+        })
+    }
+
+    fn set_checkpoint<'p>(
+        &self,
+        py: Python<'p>,
+        checkpoint_name: String,
+        state: Vec<u8>,
+        extend_claim: Option<Duration>,
+    ) -> PyResult<Bound<'p, PyAny>> {
+        let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        let Ok(run_id) = TryInto::<RunId>::try_into(&self.claimed_task.run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        let storage = self.storage.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let res = storage.set_checkpoint(
+                task_id,
+                run_id,
+                checkpoint_name.as_ref(),
+                state.as_slice(),
+                extend_claim,
+            ).await;
+
+            res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
+        })
+    }
+
+    fn get_event_payload<'p>(&self, py: Python<'p>, event_name: String, timeout: Duration) -> PyResult<Bound<'p, PyAny>> {
+        let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        let Ok(run_id) = TryInto::<RunId>::try_into(&self.claimed_task.run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        let storage = self.storage.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let step_name = format!("$awaitEvent:{event_name}");
+            let payload_res = storage.await_event(
+                task_id,
+                run_id,
+                &step_name,
+                event_name.as_ref(),
+                Some(timeout),
+            ).await;
+            match payload_res {
+                // TODO need another Into implementation
+                Ok(result) => Ok(result.into()),
+                Err(err) => Err(PyValueError::new_err(format!(
+                    "Could not await_event: {err:?}"
+                ))),
+            }
+        })
+    }
+}
+
