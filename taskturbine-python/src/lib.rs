@@ -460,4 +460,8 @@ mod taskturbine {
     use super::WorkerInner;
     #[pymodule_export]
     use super::asynclib::AsyncAppInner;
+    #[pymodule_export]
+    use super::asynclib::AsyncContextInner;
+    #[pymodule_export]
+    use super::asynclib::AsyncWorkerInner;
 }
