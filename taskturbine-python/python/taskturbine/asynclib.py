@@ -1,10 +1,10 @@
 from datetime import timedelta
 import functools
 import json
-from typing import Any, Awaitable, Callable, Coroutine, Generic, MutableMapping, ParamSpec, TypeVar, override
+from typing import Any, Awaitable, Callable, Generic, Mapping, MutableMapping, ParamSpec, TypeVar, override
 from python.taskturbine.context import TaskContext
 from python.taskturbine.models import JsonData, OptionalJsonData, SuspendError
-from taskturbine.taskturbine import AsyncContexInner, AsyncAppInner, Config, SpawnResult, TaskOptions
+from taskturbine.taskturbine import AsyncContextInner, AsyncAppInner, AsyncWorkerInner, ClaimedTask, Config, SpawnResult, TaskOptions
 from taskturbine.serializer import JsonSerializer, TaskSerializer
 
 
@@ -385,18 +385,39 @@ class AsyncTaskturbineApp:
         )
         return context
 
-    # def create_worker(
-    #     self,
-    #     worker_id: str,
-    #     channels: list[str],
-    # ) -> Worker:
-    #     """
-    #     Create a Worker that is connected to Rust storage API.
-    #     """
-    #     worker = Worker(
-    #         inner=self._inner.create_worker(worker_id, channels),
-    #         tasks=self._tasks,
-    #         context_factory=self.create_context,
-    #         error_handler=self.error_handler,
-    #     )
-    #     return worker
+    def create_worker(
+        self,
+        worker_id: str,
+        channels: list[str],
+    ) -> AsyncWorker:
+        """
+        Create a AsyncWorker that is connected to Rust storage API.
+        """
+        worker = AsyncWorker(
+            inner=self._inner.create_worker(worker_id, channels),
+            tasks=self._tasks,
+            context_factory=self.create_context,
+            error_handler=self.error_handler,
+        )
+        return worker
+
+
+class AsyncWorker:
+    """
+    Used to operate a worker.
+
+    Workers are best created by TaskturbineApp.create_worker()
+    as Worker depends on rust internals.
+    """
+
+    def __init__(
+        self,
+        inner: AsyncWorkerInner,
+        tasks: Mapping[str, AsyncTask[..., Any]],
+        context_factory: Callable[[ClaimedTask], TaskContext],
+        error_handler: Callable[[Exception], None] | None = None,
+    ) -> None:
+        self._inner = inner
+        self._tasks = tasks
+        self._context_factory = context_factory
+        self._error_handler = error_handler

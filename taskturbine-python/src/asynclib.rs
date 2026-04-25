@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{models::{RunId, TaskId}, storage::Storage};
 
-use crate::{TaskOptions, config::Config, models::{ClaimedTask, SpawnResult}};
+use crate::{TaskOptions, config::Config, models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult}};
 
 #[pyclass(skip_from_py_object)]
 pub struct AsyncAppInner {
@@ -111,17 +111,14 @@ impl AsyncAppInner {
         })
     }
 
-    /*
-    fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
-        WorkerInner {
+    fn create_worker(&self, worker_id: String, channels: Vec<String>) -> AsyncWorkerInner {
+        AsyncWorkerInner {
             config: self.config.clone(),
             storage: self.storage.clone(),
-            runtime: self.runtime.clone(),
             worker_id,
             channels,
         }
     }
-    */
 
     fn create_context(&self, claimed_task: ClaimedTask) -> AsyncContextInner {
         AsyncContextInner {
@@ -169,7 +166,7 @@ impl AsyncContextInner {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let res = storage.get_checkpoint(task_id, &checkpoint_name).await;
             if let Ok(Some(checkpoint)) = res {
-                Ok(checkpoint.into())
+                Ok(Into::<Checkpoint>::into(checkpoint))
             } else {
                 Err(PyValueError::new_err(
                     "Checkpoint not found, or read failed",
@@ -225,8 +222,7 @@ impl AsyncContextInner {
                 Some(timeout),
             ).await;
             match payload_res {
-                // TODO need another Into implementation
-                Ok(result) => Ok(result.into()),
+                Ok(result) => Ok(Into::<AwaitResult>::into(result)),
                 Err(err) => Err(PyValueError::new_err(format!(
                     "Could not await_event: {err:?}"
                 ))),
@@ -235,3 +231,128 @@ impl AsyncContextInner {
     }
 }
 
+/// Expose the minimal worker API to be used by the python worker.
+#[pyclass(from_py_object)]
+#[derive(Clone)]
+struct AsyncWorkerInner {
+    config: Config,
+    storage: Arc<Storage>,
+    channels: Vec<String>,
+    worker_id: String,
+}
+
+#[pymethods]
+impl AsyncWorkerInner {
+    #[getter(app_module)]
+    pub fn app_module(&self) -> String {
+        self.config.app_module.clone()
+    }
+
+    #[getter(worker_sleep_secs)]
+    pub fn worker_sleep_secs(&self) -> i32 {
+        self.config.worker_sleep_secs
+    }
+
+    #[getter(worker_upkeep_interval_secs)]
+    pub fn worker_upkeep_interval_secs(&self) -> i32 {
+        self.config.worker_upkeep_interval_secs
+    }
+
+    #[getter(worker_concurrency)]
+    pub fn worker_concurrency(&self) -> i32 {
+        self.config.worker_concurrency
+    }
+
+    #[getter(worker_max_tasks_per_child)]
+    pub fn worker_max_tasks_per_child(&self) -> i32 {
+        self.config.worker_max_tasks_per_child
+    }
+
+    /// Claim a collection tasks for timeout seconds.
+    fn claim_tasks<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
+        let channels: Vec<String> = self.channels.iter().map(|c| c.clone()).collect();
+        let timeout = Duration::from_secs(self.config.worker_claim_timeout_secs as u64);
+        let storage = self.storage.clone();
+        let worker_id = self.worker_id.clone();
+        let limit = self.config.worker_concurrency;
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let channels = channels.iter().map(|c| c.as_ref()).collect();
+            let claim_res = storage.claim_task(
+                channels,
+                &worker_id,
+                timeout,
+                limit,
+            ).await;
+
+            claim_res
+                .map(|v| {
+                    let mapped: Vec<ClaimedTask> = v.into_iter().map(|task| task.into()).collect();
+                    mapped
+                })
+                .map_err(|e| PyValueError::new_err(format!("Could not claim tasks: {e:?}")))
+        })
+    }
+
+    /*
+    /// Run all the upkeep operations on the database.
+    fn run_upkeep(&self) -> PyResult<()> {
+        self.runtime
+            .block_on(self.storage.run_upkeep())
+            .map_err(|e| PyValueError::new_err(format!("Upkeep failed: {e:?}")))
+    }
+
+    // Should upkeep be run right now by a Worker?
+    // Set `config.worker_upkeep_inline` to false if you are running a dedicated
+    // upkeep worker.
+    fn should_run_upkeep(&self, timestamp: i64) -> bool {
+        if !self.config.worker_upkeep_inline {
+            return false;
+        }
+        let now = Utc::now().timestamp();
+        let delta = now - timestamp;
+        if delta < self.config.worker_upkeep_interval_secs as i64 {
+            return false;
+        }
+        true
+    }
+
+    /// Mark a run as failed.
+    fn fail_run(
+        &self,
+        run_id: String,
+        reason: Option<&[u8]>,
+        retry_at: Option<Duration>,
+    ) -> PyResult<()> {
+        let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        self.runtime
+            .block_on(
+                self.storage
+                    .fail_run(run_id, reason.unwrap_or(b""), retry_at),
+            )
+            .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
+    }
+
+    /// Mark a run as complete.
+    fn complete_run(&self, run_id: String, run_result: Vec<u8>) -> PyResult<()> {
+        let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        self.runtime
+            .block_on(self.storage.complete_run(run_id, &run_result))
+            .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
+    }
+
+    /// Re-schedule a task to run in the future.
+    fn schedule_run(&self, run_id: String, wait_for: Duration) -> PyResult<()> {
+        let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
+            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+        };
+        self.runtime
+            .block_on(self.storage.schedule_run(run_id, wait_for))
+            .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
+    }
+    */
+}

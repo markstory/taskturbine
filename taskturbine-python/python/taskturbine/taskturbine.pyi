@@ -422,5 +422,34 @@ class AsyncAppInner:
     If `channels` is empty, tasks in all channels will be processed.
     """
 
-    def create_context(self, claimed_task: ClaimedTask) -> ContextInner: ...
-    """Create a ContextInner which bridges into the python client."""
+    def create_context(self, claimed_task: ClaimedTask) -> AsyncContextInner: ...
+    """Create a AsyncContextInner which bridges into the python client."""
+
+class AsyncContextInner:
+    claimed_task: ClaimedTask
+    """The task that was claimed for this context"""
+
+    await_event_default_timeout_secs: int
+    """The number of seconds await_event should use as a timeout by default"""
+
+    async def emit_event(self, event_name: str, payload: bytes) -> None: ...
+    """Record an event taking place."""
+
+    async def get_checkpoint(self, checkpoint_name: str) -> Checkpoint: ...
+    """
+    Get a checkpoint by name for a task.
+    `checkpoint_name` is expected to be a unique name.
+    """
+
+    async def set_checkpoint(
+        self, checkpoint_name: str, state: bytes, extend_claim: timedelta | None
+    ) -> None: ...
+    """
+    Set the state for a named checkpoint.
+    The caller is responsible for making checkpoint_names unique.
+    """
+
+    async def get_event_payload(self, event_name: str, timeout: timedelta) -> AwaitResult: ...
+    """
+    Read the payload for an event. Will raise an exception if the read fails
+    """
