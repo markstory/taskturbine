@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Awaitable, Self
+from typing import Any, Self
 
 class AwaitResult:
     """The metadata for the result of await_event"""

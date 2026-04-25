@@ -24,7 +24,7 @@ from taskturbine.taskturbine import (
     SpawnResult,
     TaskOptions,
 )
-from taskturbine.serializer import JsonSerializer, TaskSerializer
+from taskturbine.serializer import TaskSerializer
 
 
 P = ParamSpec("P")

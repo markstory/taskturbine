@@ -2,8 +2,8 @@ import json
 from typing import Any
 import psycopg2
 import pytest
-from taskturbine import Config, TaskSerializer, TaskturbineApp, TaskOptions
-from taskturbine.asynclib import AsyncTaskturbineApp, AsyncTask, AsyncTaskContext
+from taskturbine import Config, TaskSerializer, TaskOptions
+from taskturbine.asynclib import AsyncTaskturbineApp, AsyncTask
 
 from .conftest import fetch_one
 
