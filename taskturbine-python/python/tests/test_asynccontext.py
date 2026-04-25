@@ -5,7 +5,7 @@ import psycopg2
 import pytest
 
 from taskturbine import Config
-from taskturbine.asynclib AsyncTaskturbineApp
+from taskturbine.asynclib import AsyncTaskturbineApp
 from taskturbine.context import TaskContext
 from taskturbine.models import SuspendError
 
@@ -14,7 +14,6 @@ Connection = psycopg2._psycopg.connection
 five_min = timedelta(minutes=5)
 
 
-@pytest.mark.skip(reason="no create_worker yet")
 @pytest.mark.asyncio
 async def test_context_attributes(config: Config, channel: str) -> None:
     app = AsyncTaskturbineApp(config)
@@ -37,7 +36,6 @@ async def test_context_attributes(config: Config, channel: str) -> None:
     assert context.params_bytes == b'{"str": "value", "int": 123}'
 
 
-@pytest.mark.skip(reason="no create_worker yet")
 @pytest.mark.asyncio
 async def test_context_await_event_event_present(config: Config) -> None:
     app = AsyncTaskturbineApp(config)
@@ -62,7 +60,6 @@ async def test_context_await_event_event_present(config: Config) -> None:
     assert result["status"] == "ok"
 
 
-@pytest.mark.skip(reason="no create_worker yet")
 @pytest.mark.asyncio
 async def test_context_await_event_no_event(config: Config) -> None:
     app = AsyncTaskturbineApp(config)
@@ -88,7 +85,6 @@ async def test_context_await_event_no_event(config: Config) -> None:
     assert err.value.duration is None
 
 
-@pytest.mark.skip(reason="no create_worker yet")
 @pytest.mark.asyncio
 async def test_context_emit_event(config: Config, channel: str) -> None:
     app = AsyncTaskturbineApp(config)
@@ -139,7 +135,7 @@ async def test_context_sleep_for(config: Config, channel: str) -> None:
     context = app.create_context(claims[0])
 
     with pytest.raises(SuspendError) as err:
-        context.sleep_for("sleep-timer", timedelta(minutes=3))
+        await context.sleep_for("sleep-timer", timedelta(minutes=3))
     assert err.value
     assert err.value.duration == timedelta(minutes=3)
 
@@ -249,7 +245,7 @@ async def test_context_step_run_return_result(config: Config, channel: str) -> N
             assert isinstance(ctx, TaskContext)
             return {"step": "one"}
 
-        step_data = await ctx.step_run("first-step", async lambda: step_one(ctx))
+        step_data = await ctx.step_run("first-step", lambda: step_one(ctx))
         assert isinstance(step_data, dict)
         assert step_data["step"] == "one"
 
@@ -280,7 +276,7 @@ async def test_context_step_run_raise_error(config: Config, channel: str) -> Non
             assert isinstance(ctx, TaskContext)
             raise KeyError("oh no")
 
-        step_data = await ctx.step_run("first-step", async lambda: step_one(ctx))
+        step_data = await ctx.step_run("first-step", lambda: step_one(ctx))
         assert isinstance(step_data, dict)
         assert step_data["step"] == "one"
 

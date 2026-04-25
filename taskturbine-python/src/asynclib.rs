@@ -131,7 +131,7 @@ impl AsyncAppInner {
 
 /// See taskturbine.pyi for docstrings
 #[pyclass(skip_from_py_object)]
-struct AsyncContextInner {
+pub struct AsyncContextInner {
     storage: Arc<Storage>,
     claimed_task: ClaimedTask,
 }
@@ -234,7 +234,7 @@ impl AsyncContextInner {
 /// Expose the minimal worker API to be used by the python worker.
 #[pyclass(from_py_object)]
 #[derive(Clone)]
-struct AsyncWorkerInner {
+pub struct AsyncWorkerInner {
     config: Config,
     storage: Arc<Storage>,
     channels: Vec<String>,

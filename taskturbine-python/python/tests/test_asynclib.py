@@ -64,137 +64,143 @@ async def test_spawn_task(config: Config) -> None:
     assert res.run_id
 
 
-# def test_spawn_task_uses_serialize_hooks(
-#     config: Config, db_connection: Connection
-# ) -> None:
-#     class Serializer(TaskSerializer):
-#         def serialize(self, value: Any) -> bytes:
-#             return f"--{json.dumps(value)}--".encode()
+@pytest.mark.asyncio
+async def test_spawn_task_uses_serialize_hooks(
+    config: Config, db_connection: Connection
+) -> None:
+    class Serializer(TaskSerializer):
+        def serialize(self, value: Any) -> bytes:
+            return f"--{json.dumps(value)}--".encode()
 
-#         def deserialize(self, value: bytes) -> Any | None:
-#             content = value[2:-2]
-#             return json.loads(content)
+        def deserialize(self, value: bytes) -> Any | None:
+            content = value[2:-2]
+            return json.loads(content)
 
-#     app = TaskturbineApp(config, serializer=Serializer())
+    app = AsyncTaskturbineApp(config, serializer=Serializer())
 
-#     @app.register_task(name="first-task")
-#     def first_task(a: str) -> str:
-#         return f"called {a}"
+    @app.register_task(name="first-task")
+    async def first_task(a: str) -> str:
+        return f"called {a}"
 
-#     res = app.spawn_task("first-task", {"a": 123})
-#     assert res
-#     assert res.task_id
+    res = await app.spawn_task("first-task", {"a": 123})
+    assert res
+    assert res.task_id
 
-#     cur = db_connection.cursor()
-#     cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
-#     row = fetch_one(cur)
-#     assert row
-#     assert row["task_id"] == res.task_id
-#     assert row["params"].tobytes() == b'--{"a": 123}--'
-
-
-# def test_spawn_task_with_options(config: Config, db_connection: Connection) -> None:
-#     app = TaskturbineApp(config)
-
-#     @app.register_task(name="first-task")
-#     def first_task(a: str) -> str:
-#         return f"called {a}"
-
-#     res = app.spawn_task(
-#         "first-task",
-#         {},
-#         retry_seconds=5,
-#         max_attempts=10,
-#         retry_factor=2.0,
-#         retry_max_seconds=320,
-#         cancellation_max_age=150,
-#     )
-#     assert res
-#     assert res.task_id
-#     assert res.run_id
-
-#     cur = db_connection.cursor()
-#     cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
-#     row = fetch_one(cur)
-#     assert row
-#     assert row["task_id"] == res.task_id
-#     assert row["retry_seconds"] == 5
-#     assert row["max_attempts"] == 10
-#     assert row["retry_factor"] == 2.0
-#     assert row["retry_max_seconds"] == 320
-#     assert row["cancellation_max_age"] == 150
+    cur = db_connection.cursor()
+    cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
+    row = fetch_one(cur)
+    assert row
+    assert row["task_id"] == res.task_id
+    assert row["params"].tobytes() == b'--{"a": 123}--'
 
 
-# def test_spawn_task_uses_task_options(
-#     config: Config, db_connection: Connection
-# ) -> None:
-#     app = TaskturbineApp(config)
-#     options = TaskOptions(
-#         retry_seconds=5,
-#         max_attempts=10,
-#         retry_factor=2.0,
-#         retry_max_seconds=200,
-#         cancellation_max_age=75,
-#     )
+@pytest.mark.asyncio
+async def test_spawn_task_with_options(config: Config, db_connection: Connection) -> None:
+    app = AsyncTaskturbineApp(config)
 
-#     @app.register_task(name="first-task", options=options)
-#     def first_task(a: str) -> str:
-#         return f"called {a}"
+    @app.register_task(name="first-task")
+    async def first_task(a: str) -> str:
+        return f"called {a}"
 
-#     res = app.spawn_task("first-task", {})
-#     assert res
-#     assert res.task_id
+    res = await app.spawn_task(
+        "first-task",
+        {},
+        retry_seconds=5,
+        max_attempts=10,
+        retry_factor=2.0,
+        retry_max_seconds=320,
+        cancellation_max_age=150,
+    )
+    assert res
+    assert res.task_id
+    assert res.run_id
 
-#     cur = db_connection.cursor()
-#     cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
-#     row = fetch_one(cur)
-#     assert row
-#     assert row["task_id"] == res.task_id
-#     assert row["retry_seconds"] == 5
-#     assert row["max_attempts"] == 10
-#     assert row["retry_factor"] == 2.0
-#     assert row["retry_max_seconds"] == 200
-#     assert row["cancellation_max_age"] == 75
-
-
-# def test_set_spawn_options(config: Config, db_connection: Connection) -> None:
-#     app = TaskturbineApp(config)
-#     app.set_spawn_options(
-#         retry_seconds=5,
-#         max_attempts=10,
-#         retry_factor=2.0,
-#         retry_max_seconds=200,
-#         cancellation_max_age=75,
-#     )
-
-#     @app.register_task(name="first-task")
-#     def first_task(a: str) -> str:
-#         return f"called {a}"
-
-#     res = app.spawn_task("first-task", {})
-#     assert res
-#     assert res.task_id
-
-#     cur = db_connection.cursor()
-#     cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
-#     row = fetch_one(cur)
-#     assert row
-#     assert row["task_id"] == res.task_id
-#     assert row["retry_seconds"] == 5
-#     assert row["max_attempts"] == 10
-#     assert row["retry_factor"] == 2.0
-#     assert row["retry_max_seconds"] == 200
-#     assert row["cancellation_max_age"] == 75
+    cur = db_connection.cursor()
+    cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
+    row = fetch_one(cur)
+    assert row
+    assert row["task_id"] == res.task_id
+    assert row["retry_seconds"] == 5
+    assert row["max_attempts"] == 10
+    assert row["retry_factor"] == 2.0
+    assert row["retry_max_seconds"] == 320
+    assert row["cancellation_max_age"] == 150
 
 
-# def test_emit_event(config: Config, db_connection: Connection) -> None:
-#     app = TaskturbineApp(config)
+@pytest.mark.asyncio
+async def test_spawn_task_uses_task_options(
+    config: Config, db_connection: Connection
+) -> None:
+    app = AsyncTaskturbineApp(config)
+    options = TaskOptions(
+        retry_seconds=5,
+        max_attempts=10,
+        retry_factor=2.0,
+        retry_max_seconds=200,
+        cancellation_max_age=75,
+        idempotency_key=None,
+    )
 
-#     data = {"key": "value"}
-#     app.emit_event("event-1", data)
+    @app.register_task(name="first-task", options=options)
+    async def first_task(a: str) -> str:
+        return f"called {a}"
 
-#     cur = db_connection.cursor()
-#     cur.execute("SELECT * FROM taskturbine.events WHERE event_name = %s", ["event-1"])
-#     row = fetch_one(cur)
-#     assert row
-#     assert row["payload"].tobytes() == json.dumps(data).encode()
+    res = await app.spawn_task("first-task", {})
+    assert res
+    assert res.task_id
+
+    cur = db_connection.cursor()
+    cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
+    row = fetch_one(cur)
+    assert row
+    assert row["task_id"] == res.task_id
+    assert row["retry_seconds"] == 5
+    assert row["max_attempts"] == 10
+    assert row["retry_factor"] == 2.0
+    assert row["retry_max_seconds"] == 200
+    assert row["cancellation_max_age"] == 75
+
+
+@pytest.mark.asyncio
+async def test_set_spawn_options(config: Config, db_connection: Connection) -> None:
+    app = AsyncTaskturbineApp(config)
+    app.set_spawn_options(
+        retry_seconds=5,
+        max_attempts=10,
+        retry_factor=2.0,
+        retry_max_seconds=200,
+        cancellation_max_age=75,
+    )
+
+    @app.register_task(name="first-task")
+    async def first_task(a: str) -> str:
+        return f"called {a}"
+
+    res = await app.spawn_task("first-task", {})
+    assert res
+    assert res.task_id
+
+    cur = db_connection.cursor()
+    cur.execute("SELECT * FROM taskturbine.tasks WHERE task_id = %s", [res.task_id])
+    row = fetch_one(cur)
+    assert row
+    assert row["task_id"] == res.task_id
+    assert row["retry_seconds"] == 5
+    assert row["max_attempts"] == 10
+    assert row["retry_factor"] == 2.0
+    assert row["retry_max_seconds"] == 200
+    assert row["cancellation_max_age"] == 75
+
+
+@pytest.mark.asyncio
+async def test_emit_event(config: Config, db_connection: Connection) -> None:
+    app = AsyncTaskturbineApp(config)
+
+    data = {"key": "value"}
+    await app.emit_event("event-1", data)
+
+    cur = db_connection.cursor()
+    cur.execute("SELECT * FROM taskturbine.events WHERE event_name = %s", ["event-1"])
+    row = fetch_one(cur)
+    assert row
+    assert row["payload"].tobytes() == json.dumps(data).encode()

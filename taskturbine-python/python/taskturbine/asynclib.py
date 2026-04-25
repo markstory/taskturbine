@@ -1,9 +1,10 @@
+from __future__ import annotations
 from datetime import timedelta
 import functools
 import json
 from typing import Any, Awaitable, Callable, Generic, Mapping, MutableMapping, ParamSpec, TypeVar, override
-from python.taskturbine.context import TaskContext
-from python.taskturbine.models import JsonData, OptionalJsonData, SuspendError
+from taskturbine.context import TaskContext
+from taskturbine.models import JsonData, OptionalJsonData, SuspendError
 from taskturbine.taskturbine import AsyncContextInner, AsyncAppInner, AsyncWorkerInner, ClaimedTask, Config, SpawnResult, TaskOptions
 from taskturbine.serializer import JsonSerializer, TaskSerializer
 
@@ -421,3 +422,6 @@ class AsyncWorker:
         self._tasks = tasks
         self._context_factory = context_factory
         self._error_handler = error_handler
+
+    async def claim_tasks(self) -> list[ClaimedTask]:
+        return await self._inner.claim_tasks()
