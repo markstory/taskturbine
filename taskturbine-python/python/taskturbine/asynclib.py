@@ -153,7 +153,7 @@ class AsyncTaskContext(BaseContext):
         **kwargs: P.kwargs,
     ) -> JsonData | None:
         """
-        Execute a step function.
+        Execute an async step function.
         """
         try:
             checkpoint = await self._inner.get_checkpoint(checkpoint_name)
@@ -241,10 +241,10 @@ class AsyncTaskturbineApp(BaseApp):
         Tasks are expected to implement a signature of:
 
         ```
-        def func_name(context: TaskContext) -> models.JsonData | None
+        async def func_name(context: AsyncTaskContext) -> models.JsonData | None
         ```
 
-        The `context` parameter enables you to use :py:class:`TaskContext`
+        The `context` parameter enables you to use :py:class:`AsyncTaskContext`
         to define steps and then call your steps within your flow control
         logic.
         """
@@ -328,7 +328,7 @@ class AsyncTaskturbineApp(BaseApp):
 
     def create_context(self, claimed_task: ClaimedTask) -> AsyncTaskContext:
         """
-        Create a TaskContext with links to the rust context.
+        Create an AsyncTaskContext with links to the rust context.
         """
         context = AsyncTaskContext(
             inner=self._inner.create_context(claimed_task),
