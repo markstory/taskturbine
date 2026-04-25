@@ -202,6 +202,27 @@ class AsyncTaskturbineApp(BaseApp):
         self._tasks: MutableMapping[str, AsyncTask[..., Any]] = {}
         super().__init__(serializer, error_handler)
 
+    def add_channel(self, name: str) -> None:
+        """
+        Add a channel that tasks can be spawned on.
+
+        Channels let you separate backlogs and worker pools
+        """
+        self._inner.add_channel(name)
+
+    @property
+    def channels(self) -> set[str]:
+        """Get the list of channels"""
+        return self._inner.channels
+
+    def has_task(self, name: str) -> bool:
+        """Check if a task is defined"""
+        return name in self._tasks
+
+    def get_task(self, name: str) -> AsyncTask[..., Any]:
+        """Get a task by name. Raises KeyError on unknown values"""
+        return self._tasks[name]
+
     async def update_schema(self) -> None:
         """
         Create or update the taskturbine schema and tables.
@@ -234,14 +255,6 @@ class AsyncTaskturbineApp(BaseApp):
             return task
 
         return wrapped
-
-    def has_task(self, name: str) -> bool:
-        """Check if a task is defined"""
-        return name in self._tasks
-
-    def get_task(self, name: str) -> AsyncTask[..., Any]:
-        """Get a task by name. Raises KeyError on unknown values"""
-        return self._tasks[name]
 
     async def spawn_task(
         self,

@@ -47,19 +47,9 @@ R = TypeVar("R")
 
 logger = logging.getLogger(__name__)
 
-class AppInnerProtocol(Protocol):
-    """Protocol for application internal binding"""
-
-    def add_channel(self, name: str) -> None: ...
-
-    @property
-    def channels(self) -> set[str]: ...
-
 
 class BaseApp(abc.ABC):
     """Abstract base class for App implementations"""
-
-    _inner: AppInnerProtocol
 
     def __init__(
         self,
@@ -103,19 +93,6 @@ class BaseApp(abc.ABC):
             idempotency_key=idempotency_key,
         )
 
-    def add_channel(self, name: str) -> None:
-        """
-        Add a channel that tasks can be spawned on.
-
-        Channels let you separate backlogs and worker pools
-        """
-        self._inner.add_channel(name)
-
-    @property
-    def channels(self) -> set[str]:
-        """Get the list of channels"""
-        return self._inner.channels
-
     def serialize_value(self, params: dict[str, Any]) -> bytes:
         """Convert parameters into bytes"""
         return self.serializer.serialize(params)
@@ -156,11 +133,18 @@ class TaskturbineApp(BaseApp):
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
         super().__init__(serializer, error_handler)
 
-    def update_schema(self) -> None:
+    def add_channel(self, name: str) -> None:
         """
-        Create or update the taskturbine schema and tables.
+        Add a channel that tasks can be spawned on.
+
+        Channels let you separate backlogs and worker pools
         """
-        self._inner.update_schema()
+        self._inner.add_channel(name)
+
+    @property
+    def channels(self) -> set[str]:
+        """Get the list of channels"""
+        return self._inner.channels
 
     def has_task(self, name: str) -> bool:
         """Check if a task is defined"""
@@ -169,6 +153,12 @@ class TaskturbineApp(BaseApp):
     def get_task(self, name: str) -> Task[..., Any]:
         """Get a task by name. Raises KeyError on unknown values"""
         return self._tasks[name]
+
+    def update_schema(self) -> None:
+        """
+        Create or update the taskturbine schema and tables.
+        """
+        self._inner.update_schema()
 
     def register_task(
         self,
