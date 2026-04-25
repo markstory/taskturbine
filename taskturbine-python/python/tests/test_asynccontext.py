@@ -5,8 +5,7 @@ import psycopg2
 import pytest
 
 from taskturbine import Config
-from taskturbine.asynclib import AsyncTaskturbineApp
-from taskturbine.context import TaskContext
+from taskturbine.asynclib import AsyncTaskContext, AsyncTaskturbineApp
 from taskturbine.models import SuspendError
 
 Connection = psycopg2._psycopg.connection
@@ -20,7 +19,7 @@ async def test_context_attributes(config: Config, channel: str) -> None:
     app.add_channel(channel)
 
     @app.register_task(name="first-task")
-    def first_task(a: str) -> str:
+    async def first_task(a: str) -> str:
         return f"called {a}"
 
     await app.spawn_task("first-task", {"str": "value", "int": 123}, channel=channel)
@@ -50,7 +49,7 @@ async def test_context_await_event_event_present(config: Config) -> None:
 
     await app.emit_event("context_await_event", {"status": "ok"})
 
-    # Claim a task so that it is 'running' and TaskContext can wait for the event.
+    # Claim a task so that it is 'running' and AsyncTaskContext can wait for the event.
     claims = await app.create_worker("worker-1", ["default"]).claim_tasks()
     assert len(claims) >= 1
 
@@ -72,7 +71,7 @@ async def test_context_await_event_no_event(config: Config) -> None:
     assert res.task_id
     assert res.run_id
 
-    # Claim a task so that it is 'running' and TaskContext can wait for the event.
+    # Claim a task so that it is 'running' and AsyncTaskContext can wait for the event.
     claims = await app.create_worker("worker-1", ["default"]).claim_tasks()
     assert len(claims) >= 1
 
@@ -146,10 +145,10 @@ async def test_context_step_return_result(config: Config, channel: str) -> None:
     app.add_channel(channel)
 
     @app.register_task(name="first-task")
-    async def first_task(ctx: TaskContext) -> dict[str, Any]:
+    async def first_task(ctx: AsyncTaskContext) -> dict[str, Any]:
         @ctx.step(name="first-step")
-        async def step_one(ctx: TaskContext) -> dict[str, Any]:
-            assert isinstance(ctx, TaskContext)
+        async def step_one(ctx: AsyncTaskContext) -> dict[str, Any]:
+            assert isinstance(ctx, AsyncTaskContext)
             return {"step": "one"}
 
         step_data = await step_one(ctx)
@@ -178,10 +177,10 @@ async def test_context_step_raise_error(config: Config, channel: str) -> None:
     app.add_channel(channel)
 
     @app.register_task(name="first-task")
-    async def first_task(ctx: TaskContext) -> dict[str, Any]:
+    async def first_task(ctx: AsyncTaskContext) -> dict[str, Any]:
         @ctx.step("first-step")
-        async def step_one(ctx: TaskContext) -> None:
-            assert isinstance(ctx, TaskContext)
+        async def step_one(ctx: AsyncTaskContext) -> None:
+            assert isinstance(ctx, AsyncTaskContext)
             raise KeyError("oh no")
 
         step_data = await step_one(ctx)
@@ -209,9 +208,9 @@ async def test_context_step_duplicate_runs(config: Config, channel: str) -> None
     app.add_channel(channel)
 
     @app.register_task(name="context-step-duplicate-task")
-    async def first_task(ctx: TaskContext) -> dict[str, Any]:
+    async def first_task(ctx: AsyncTaskContext) -> dict[str, Any]:
         @ctx.step("first-step")
-        async def step_one(ctx: TaskContext) -> dict[str, Any]:
+        async def step_one(ctx: AsyncTaskContext) -> dict[str, Any]:
             return {"step": "first"}
 
         step_data = await step_one(ctx)
@@ -240,9 +239,9 @@ async def test_context_step_run_return_result(config: Config, channel: str) -> N
     app.add_channel(channel)
 
     @app.register_task(name="first-task")
-    async def first_task(ctx: TaskContext) -> dict[str, Any]:
-        async def step_one(ctx: TaskContext) -> dict[str, Any]:
-            assert isinstance(ctx, TaskContext)
+    async def first_task(ctx: AsyncTaskContext) -> dict[str, Any]:
+        async def step_one(ctx: AsyncTaskContext) -> dict[str, Any]:
+            assert isinstance(ctx, AsyncTaskContext)
             return {"step": "one"}
 
         step_data = await ctx.step_run("first-step", lambda: step_one(ctx))
@@ -271,9 +270,9 @@ async def test_context_step_run_raise_error(config: Config, channel: str) -> Non
     app.add_channel(channel)
 
     @app.register_task(name="first-task")
-    async def first_task(ctx: TaskContext) -> dict[str, Any]:
-        async def step_one(ctx: TaskContext) -> None:
-            assert isinstance(ctx, TaskContext)
+    async def first_task(ctx: AsyncTaskContext) -> dict[str, Any]:
+        async def step_one(ctx: AsyncTaskContext) -> None:
+            assert isinstance(ctx, AsyncTaskContext)
             raise KeyError("oh no")
 
         step_data = await ctx.step_run("first-step", lambda: step_one(ctx))
@@ -301,8 +300,8 @@ async def test_context_step_cb_duplicate_runs(config: Config, channel: str) -> N
     app.add_channel(channel)
 
     @app.register_task(name="context-step-duplicate-task")
-    async def first_task(ctx: TaskContext) -> dict[str, Any]:
-        async def step_one(ctx: TaskContext) -> dict[str, Any]:
+    async def first_task(ctx: AsyncTaskContext) -> dict[str, Any]:
+        async def step_one(ctx: AsyncTaskContext) -> dict[str, Any]:
             return {"step": "first"}
 
         step_data = await ctx.step_run("first-step", lambda: step_one(ctx))
@@ -331,10 +330,10 @@ async def test_context_run_step_return_result(config: Config, channel: str) -> N
     app.add_channel(channel)
 
     @app.register_task(name="first-task")
-    async def first_task(ctx: TaskContext) -> dict[str, Any]:
+    async def first_task(ctx: AsyncTaskContext) -> dict[str, Any]:
         @ctx.step(name="first-step")
-        async def step_one(ctx: TaskContext) -> dict[str, Any]:
-            assert isinstance(ctx, TaskContext)
+        async def step_one(ctx: AsyncTaskContext) -> dict[str, Any]:
+            assert isinstance(ctx, AsyncTaskContext)
             return {"step": "one"}
 
         step_data = await ctx.step_run("first", lambda: step_one(ctx))

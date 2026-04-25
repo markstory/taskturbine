@@ -375,7 +375,7 @@ class AsyncTaskturbineApp:
         """
         await self._inner.emit_event(event_name, self.serialize_value(payload))
 
-    def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
+    def create_context(self, claimed_task: ClaimedTask) -> AsyncTaskContext:
         """
         Create a TaskContext with links to the rust context.
         """
@@ -415,7 +415,7 @@ class AsyncWorker:
         self,
         inner: AsyncWorkerInner,
         tasks: Mapping[str, AsyncTask[..., Any]],
-        context_factory: Callable[[ClaimedTask], TaskContext],
+        context_factory: Callable[[ClaimedTask], AsyncTaskContext],
         error_handler: Callable[[Exception], None] | None = None,
     ) -> None:
         self._inner = inner
