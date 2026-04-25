@@ -2,11 +2,28 @@ from __future__ import annotations
 from datetime import timedelta
 import functools
 import json
-from typing import Any, Awaitable, Callable, Generic, Mapping, MutableMapping, ParamSpec, TypeVar
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Generic,
+    Mapping,
+    MutableMapping,
+    ParamSpec,
+    TypeVar,
+)
 from taskturbine import BaseApp
 from taskturbine.context import BaseContext
 from taskturbine.models import JsonData, OptionalJsonData, SuspendError
-from taskturbine.taskturbine import AsyncContextInner, AsyncAppInner, AsyncWorkerInner, ClaimedTask, Config, SpawnResult, TaskOptions
+from taskturbine.taskturbine import (
+    AsyncContextInner,
+    AsyncAppInner,
+    AsyncWorkerInner,
+    ClaimedTask,
+    Config,
+    SpawnResult,
+    TaskOptions,
+)
 from taskturbine.serializer import JsonSerializer, TaskSerializer
 
 
@@ -36,6 +53,7 @@ class AsyncTaskContext(BaseContext):
     """
     asyncio implementation of TaskContext
     """
+
     def __init__(
         self,
         inner: AsyncContextInner,
@@ -96,7 +114,7 @@ class AsyncTaskContext(BaseContext):
         self, name: str
     ) -> Callable[
         [Callable[P, Awaitable[OptionalJsonData]]],
-        Callable[P, Awaitable[OptionalJsonData]]
+        Callable[P, Awaitable[OptionalJsonData]],
     ]:
         """
         Decorate a function as a durable step.
@@ -171,7 +189,6 @@ class AsyncTaskContext(BaseContext):
         await self._inner.set_checkpoint(checkpoint_name, result_bytes, None)
 
         return step_result
-
 
 
 class AsyncTaskturbineApp(BaseApp):

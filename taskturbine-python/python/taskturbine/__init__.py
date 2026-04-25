@@ -104,7 +104,6 @@ class BaseApp(abc.ABC):
         return self.serializer.deserialize(blob)
 
 
-
 class TaskturbineApp(BaseApp):
     """
     The entry point to defining and executing tasks.

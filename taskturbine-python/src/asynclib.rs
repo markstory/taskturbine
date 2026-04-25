@@ -6,9 +6,16 @@
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use pyo3::{exceptions::PyValueError, prelude::*};
-use taskturbine_core::{models::{RunId, TaskId}, storage::Storage};
+use taskturbine_core::{
+    models::{RunId, TaskId},
+    storage::Storage,
+};
 
-use crate::{TaskOptions, config::Config, models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult}};
+use crate::{
+    TaskOptions,
+    config::Config,
+    models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult},
+};
 
 #[pyclass(skip_from_py_object)]
 pub struct AsyncAppInner {
@@ -128,7 +135,6 @@ impl AsyncAppInner {
     }
 }
 
-
 /// See taskturbine.pyi for docstrings
 #[pyclass(skip_from_py_object)]
 pub struct AsyncContextInner {
@@ -148,7 +154,12 @@ impl AsyncContextInner {
         self.claimed_task.clone()
     }
 
-    fn emit_event<'p>(&self, py: Python<'p>, event_name: String, payload: Vec<u8>) -> PyResult<Bound<'p, PyAny>> {
+    fn emit_event<'p>(
+        &self,
+        py: Python<'p>,
+        event_name: String,
+        payload: Vec<u8>,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let storage = self.storage.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let event_name = event_name.clone();
@@ -157,7 +168,11 @@ impl AsyncContextInner {
         })
     }
 
-    fn get_checkpoint<'p>(&self, py: Python<'p>, checkpoint_name: String) -> PyResult<Bound<'p, PyAny>> {
+    fn get_checkpoint<'p>(
+        &self,
+        py: Python<'p>,
+        checkpoint_name: String,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
@@ -191,19 +206,26 @@ impl AsyncContextInner {
         let storage = self.storage.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let res = storage.set_checkpoint(
-                task_id,
-                run_id,
-                checkpoint_name.as_ref(),
-                state.as_slice(),
-                extend_claim,
-            ).await;
+            let res = storage
+                .set_checkpoint(
+                    task_id,
+                    run_id,
+                    checkpoint_name.as_ref(),
+                    state.as_slice(),
+                    extend_claim,
+                )
+                .await;
 
             res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
         })
     }
 
-    fn get_event_payload<'p>(&self, py: Python<'p>, event_name: String, timeout: Duration) -> PyResult<Bound<'p, PyAny>> {
+    fn get_event_payload<'p>(
+        &self,
+        py: Python<'p>,
+        event_name: String,
+        timeout: Duration,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
@@ -214,13 +236,15 @@ impl AsyncContextInner {
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let step_name = format!("$awaitEvent:{event_name}");
-            let payload_res = storage.await_event(
-                task_id,
-                run_id,
-                &step_name,
-                event_name.as_ref(),
-                Some(timeout),
-            ).await;
+            let payload_res = storage
+                .await_event(
+                    task_id,
+                    run_id,
+                    &step_name,
+                    event_name.as_ref(),
+                    Some(timeout),
+                )
+                .await;
             match payload_res {
                 Ok(result) => Ok(Into::<AwaitResult>::into(result)),
                 Err(err) => Err(PyValueError::new_err(format!(
@@ -270,7 +294,7 @@ impl AsyncWorkerInner {
 
     /// Claim a collection tasks for timeout seconds.
     fn claim_tasks<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
-        let channels: Vec<String> = self.channels.iter().map(|c| c.clone()).collect();
+        let channels: Vec<String> = self.channels.to_vec();
         let timeout = Duration::from_secs(self.config.worker_claim_timeout_secs as u64);
         let storage = self.storage.clone();
         let worker_id = self.worker_id.clone();
@@ -278,12 +302,9 @@ impl AsyncWorkerInner {
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let channels = channels.iter().map(|c| c.as_ref()).collect();
-            let claim_res = storage.claim_task(
-                channels,
-                &worker_id,
-                timeout,
-                limit,
-            ).await;
+            let claim_res = storage
+                .claim_task(channels, &worker_id, timeout, limit)
+                .await;
 
             claim_res
                 .map(|v| {

@@ -340,7 +340,6 @@ class AppInner:
     channels: set[str]
 
     def __init__(self, config: Config) -> None: ...
-
     def update_schema(self) -> None: ...
     """
     Create or update the taskturbine schema and tables.
@@ -416,7 +415,9 @@ class AsyncAppInner:
     that can be recorded as events. Events can have a Payload of bytes.
     """
 
-    def create_worker(self, worker_id: str, channels: list[str]) -> AsyncWorkerInner: ...
+    def create_worker(
+        self, worker_id: str, channels: list[str]
+    ) -> AsyncWorkerInner: ...
     """
     Create a worker for the application tasks
     A worker will only claim tasks in `channels` if channels is not-empty.
@@ -425,7 +426,6 @@ class AsyncAppInner:
 
     def create_context(self, claimed_task: ClaimedTask) -> AsyncContextInner: ...
     """Create a AsyncContextInner which bridges into the python client."""
-
 
 class AsyncContextInner:
     claimed_task: ClaimedTask
@@ -451,7 +451,9 @@ class AsyncContextInner:
     The caller is responsible for making checkpoint_names unique.
     """
 
-    async def get_event_payload(self, event_name: str, timeout: timedelta) -> AwaitResult: ...
+    async def get_event_payload(
+        self, event_name: str, timeout: timedelta
+    ) -> AwaitResult: ...
     """
     Read the payload for an event. Will raise an exception if the read fails
     """

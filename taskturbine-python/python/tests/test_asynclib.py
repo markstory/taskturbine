@@ -95,7 +95,9 @@ async def test_spawn_task_uses_serialize_hooks(
 
 
 @pytest.mark.asyncio
-async def test_spawn_task_with_options(config: Config, db_connection: Connection) -> None:
+async def test_spawn_task_with_options(
+    config: Config, db_connection: Connection
+) -> None:
     app = AsyncTaskturbineApp(config)
 
     @app.register_task(name="first-task")
