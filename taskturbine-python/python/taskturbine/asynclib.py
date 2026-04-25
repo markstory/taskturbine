@@ -65,7 +65,7 @@ class AsyncTaskContext(TaskContext):
             raise SuspendError()
         return json.loads(wait.payload)
 
-    async def emit_event(self, event_name: str, payload: JsonData) -> Awaitable[None]:
+    async def emit_event(self, event_name: str, payload: JsonData) -> None:
         """
         Record an external event that a task/run is waiting for.
 
@@ -74,7 +74,7 @@ class AsyncTaskContext(TaskContext):
         """
         return await self._inner.emit_event(event_name, self._serialize(payload))
 
-    async def sleep_for(self, step_name: str, duration: timedelta) -> Awaitable[None]:
+    async def sleep_for(self, step_name: str, duration: timedelta) -> None:
         """
         Pause the current task until `duration` has elapsed.
 

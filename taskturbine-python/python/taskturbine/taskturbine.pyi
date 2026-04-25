@@ -415,7 +415,7 @@ class AsyncAppInner:
     that can be recorded as events. Events can have a Payload of bytes.
     """
 
-    def create_worker(self, worker_id: str, channels: list[str]) -> WorkerInner: ...
+    def create_worker(self, worker_id: str, channels: list[str]) -> AsyncWorkerInner: ...
     """
     Create a worker for the application tasks
     A worker will only claim tasks in `channels` if channels is not-empty.
@@ -424,6 +424,7 @@ class AsyncAppInner:
 
     def create_context(self, claimed_task: ClaimedTask) -> AsyncContextInner: ...
     """Create a AsyncContextInner which bridges into the python client."""
+
 
 class AsyncContextInner:
     claimed_task: ClaimedTask
@@ -453,3 +454,50 @@ class AsyncContextInner:
     """
     Read the payload for an event. Will raise an exception if the read fails
     """
+
+class AsyncWorkerInner:
+    """
+    The python -> rust binding boundary for a Worker that runs tasks in asyncio.
+    """
+
+    app_module: str
+    """Path to the module and variable that contain the application being run."""
+
+    worker_concurrency: int
+    """Number of child processes to spawn as task executors."""
+
+    worker_sleep_secs: int
+    """Number of seconds workers should sleep between run loops."""
+
+    worker_upkeep_interval_secs: int
+    """Number of seconds between cleanup operations."""
+
+    worker_max_tasks_per_child: int
+    """The number of tasks that a child should execute before shutting down."""
+
+    async def claim_tasks(self) -> list[ClaimedTask]: ...
+    """Claim a list of tasks based on configuration"""
+
+    def should_run_upkeep(self, timestamp: int) -> bool: ...
+    """Should the current worker run upkeep operations"""
+
+    async def run_upkeep(self) -> None: ...
+    """
+    Run a cleanup operation that:
+    - releases expired claims
+    - cancels tasks past cancellation_max_age
+    """
+
+    async def fail_run(
+        self,
+        run_id: str,
+        reason: bytes | None = None,
+        retry_at: timedelta | None = None,
+    ) -> None: ...
+    """Mark a run as having failed"""
+
+    async def complete_run(self, run_id: str, run_result: bytes) -> None: ...
+    """Mark a run as complete. The related task will also be marked complete."""
+
+    async def schedule_run(self, run_id: str, wait_for: timedelta) -> None: ...
+    """Schedule a run in the future."""
