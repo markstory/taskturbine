@@ -340,12 +340,13 @@ class AppInner:
     channels: set[str]
 
     def __init__(self, config: Config) -> None: ...
+
     def update_schema(self) -> None: ...
     """
     Create or update the taskturbine schema and tables.
     """
 
-    def add_channel(self, value: str) -> None: ...
+    def add_channel(self, name: str) -> None: ...
     """Add a channel to the list of channels this application can publish and consume from."""
 
     def spawn_task(

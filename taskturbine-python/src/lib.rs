@@ -59,8 +59,8 @@ impl AppInner {
         }
     }
 
-    fn add_channel(&mut self, value: String) {
-        self.channels.insert(value);
+    fn add_channel(&mut self, name: String) {
+        self.channels.insert(name);
     }
 
     fn spawn_task(

@@ -7,12 +7,14 @@ with rust, the parts of tasks that interact directly with your code
 are in python.
 """
 
+import abc
 import logging
 from typing import (
     Any,
     Callable,
     MutableMapping,
     ParamSpec,
+    Protocol,
     TypeVar,
 )
 
@@ -45,33 +47,25 @@ R = TypeVar("R")
 
 logger = logging.getLogger(__name__)
 
+class AppInnerProtocol(Protocol):
+    """Protocol for application internal binding"""
 
-class TaskturbineApp:
-    """
-    The entry point to defining and executing tasks.
+    def add_channel(self, name: str) -> None: ...
 
-    Your application should create a `TaskturbineApp` instance
-    using `Config` to define preferred behavior.
+    @property
+    def channels(self) -> set[str]: ...
 
-    Then you need to register your tasks, and include all the modules
-    that include your tasks. Your tasks define all the tasks you want to spawn.
 
-    Spawning tasks can be done with `spawn_task()`. You can run a Worker to execute tasks with
-    `create_worker()`. The worker will draw from the application config. You can run many workers
-    concurrently, to process larger workloads.
+class BaseApp(abc.ABC):
+    """Abstract base class for App implementations"""
 
-    At a large enough scale, you'll want to move cleanup operations to a dedicated worker.
-    Use `Worker.run_cleanup()`.
-    """
+    _inner: AppInnerProtocol
 
     def __init__(
         self,
-        config: Config,
         serializer: TaskSerializer | None = None,
         error_handler: Callable[[Exception], None] | None = None,
     ) -> None:
-        self._inner = AppInner(config)
-        self._tasks: MutableMapping[str, Task[..., Any]] = {}
         self._default_spawn_options = TaskOptions(
             max_attempts=5,
             retry_seconds=30,
@@ -109,12 +103,6 @@ class TaskturbineApp:
             idempotency_key=idempotency_key,
         )
 
-    def update_schema(self) -> None:
-        """
-        Create or update the taskturbine schema and tables.
-        """
-        self._inner.update_schema()
-
     def add_channel(self, name: str) -> None:
         """
         Add a channel that tasks can be spawned on.
@@ -127,6 +115,60 @@ class TaskturbineApp:
     def channels(self) -> set[str]:
         """Get the list of channels"""
         return self._inner.channels
+
+    def serialize_value(self, params: dict[str, Any]) -> bytes:
+        """Convert parameters into bytes"""
+        return self.serializer.serialize(params)
+
+    def deserialize_value(self, blob: bytes) -> Any | None:
+        """Convert a bytestring into a decoded value"""
+        if blob == b"":
+            return None
+        return self.serializer.deserialize(blob)
+
+
+
+class TaskturbineApp(BaseApp):
+    """
+    The entry point to defining and executing tasks.
+
+    Your application should create a `TaskturbineApp` instance
+    using `Config` to define preferred behavior.
+
+    Then you need to register your tasks, and include all the modules
+    that include your tasks. Your tasks define all the tasks you want to spawn.
+
+    Spawning tasks can be done with `spawn_task()`. You can run a Worker to execute tasks with
+    `create_worker()`. The worker will draw from the application config. You can run many workers
+    concurrently, to process larger workloads.
+
+    At a large enough scale, you'll want to move cleanup operations to a dedicated worker.
+    Use `Worker.run_cleanup()`.
+    """
+
+    def __init__(
+        self,
+        config: Config,
+        serializer: TaskSerializer | None = None,
+        error_handler: Callable[[Exception], None] | None = None,
+    ) -> None:
+        self._inner = AppInner(config)
+        self._tasks: MutableMapping[str, Task[..., Any]] = {}
+        super().__init__(serializer, error_handler)
+
+    def update_schema(self) -> None:
+        """
+        Create or update the taskturbine schema and tables.
+        """
+        self._inner.update_schema()
+
+    def has_task(self, name: str) -> bool:
+        """Check if a task is defined"""
+        return name in self._tasks
+
+    def get_task(self, name: str) -> Task[..., Any]:
+        """Get a task by name. Raises KeyError on unknown values"""
+        return self._tasks[name]
 
     def register_task(
         self,
@@ -154,24 +196,6 @@ class TaskturbineApp:
             return task
 
         return wrapped
-
-    def has_task(self, name: str) -> bool:
-        """Check if a task is defined"""
-        return name in self._tasks
-
-    def get_task(self, name: str) -> Task[..., Any]:
-        """Get a task by name. Raises KeyError on unknown values"""
-        return self._tasks[name]
-
-    def serialize_value(self, params: dict[str, Any]) -> bytes:
-        """Convert parameters into bytes"""
-        return self.serializer.serialize(params)
-
-    def deserialize_value(self, blob: bytes) -> Any | None:
-        """Convert a bytestring into a decoded value"""
-        if blob == b"":
-            return None
-        return self.serializer.deserialize(blob)
 
     def spawn_task(
         self,

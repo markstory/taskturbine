@@ -2,8 +2,9 @@ from __future__ import annotations
 from datetime import timedelta
 import functools
 import json
-from typing import Any, Awaitable, Callable, Generic, Mapping, MutableMapping, ParamSpec, TypeVar, override
-from taskturbine.context import TaskContext
+from typing import Any, Awaitable, Callable, Generic, Mapping, MutableMapping, ParamSpec, TypeVar
+from taskturbine import BaseApp
+from taskturbine.context import BaseContext
 from taskturbine.models import JsonData, OptionalJsonData, SuspendError
 from taskturbine.taskturbine import AsyncContextInner, AsyncAppInner, AsyncWorkerInner, ClaimedTask, Config, SpawnResult, TaskOptions
 from taskturbine.serializer import JsonSerializer, TaskSerializer
@@ -31,9 +32,9 @@ class AsyncTask(Generic[P, R]):
         return self._func(*args, **kwargs)
 
 
-class AsyncTaskContext(TaskContext):
+class AsyncTaskContext(BaseContext):
     """
-    Re-define all IO methods with async implementations
+    asyncio implementation of TaskContext
     """
     def __init__(
         self,
@@ -44,8 +45,7 @@ class AsyncTaskContext(TaskContext):
         self._inner = inner
         self._serialize = serialize
         self._deserialize = deserialize
-        self._checkpoint_counters: dict[str, int] = {}
-        self._claimed_task = inner.claimed_task
+        super().__init__(inner.claimed_task)
 
     async def await_event(
         self, event_name: str, timeout: float | timedelta | None = None
@@ -174,7 +174,7 @@ class AsyncTaskContext(TaskContext):
 
 
 
-class AsyncTaskturbineApp:
+class AsyncTaskturbineApp(BaseApp):
     """
     The entry point to defining and executing tasks in an async runtime.
 
@@ -200,65 +200,13 @@ class AsyncTaskturbineApp:
     ) -> None:
         self._inner = AsyncAppInner(config)
         self._tasks: MutableMapping[str, AsyncTask[..., Any]] = {}
-        self._default_spawn_options = TaskOptions(
-            max_attempts=5,
-            retry_seconds=30,
-            retry_factor=1.0,
-            retry_max_seconds=300,
-            cancellation_max_age=86400,
-            idempotency_key=None,
-        )
-        self.error_handler = error_handler
-        if serializer is None:
-            serializer = JsonSerializer()
-        assert isinstance(serializer, TaskSerializer), (
-            "serializer must extend `TaskSerializer`"
-        )
-
-        self.serializer = serializer
-
-    def set_spawn_options(
-        self,
-        *,
-        headers: dict[str, str] | None = None,
-        max_attempts: int | None = None,
-        retry_seconds: int | None = None,
-        retry_factor: float | None = None,
-        retry_max_seconds: int | None = None,
-        cancellation_max_age: int | None = None,
-        idempotency_key: str | None = None,
-    ) -> None:
-        """
-        Update the default options that are used to spawn tasks.
-        """
-        self._default_spawn_options = self._default_spawn_options.copy_with(
-            headers=headers,
-            max_attempts=max_attempts,
-            retry_seconds=retry_seconds,
-            retry_factor=retry_factor,
-            retry_max_seconds=retry_max_seconds,
-            cancellation_max_age=cancellation_max_age,
-            idempotency_key=idempotency_key,
-        )
+        super().__init__(serializer, error_handler)
 
     async def update_schema(self) -> None:
         """
         Create or update the taskturbine schema and tables.
         """
         await self._inner.update_schema()
-
-    def add_channel(self, name: str) -> None:
-        """
-        Add a channel that tasks can be spawned on.
-
-        Channels let you separate backlogs and worker pools
-        """
-        self._inner.add_channel(name)
-
-    @property
-    def channels(self) -> set[str]:
-        """Get the list of channels"""
-        return self._inner.channels
 
     def register_task(
         self,
@@ -294,16 +242,6 @@ class AsyncTaskturbineApp:
     def get_task(self, name: str) -> AsyncTask[..., Any]:
         """Get a task by name. Raises KeyError on unknown values"""
         return self._tasks[name]
-
-    def serialize_value(self, params: dict[str, Any]) -> bytes:
-        """Convert parameters into bytes"""
-        return self.serializer.serialize(params)
-
-    def deserialize_value(self, blob: bytes) -> Any | None:
-        """Convert a bytestring into a decoded value"""
-        if blob == b"":
-            return None
-        return self.serializer.deserialize(blob)
 
     async def spawn_task(
         self,

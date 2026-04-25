@@ -1,27 +1,23 @@
+import abc
 from datetime import timedelta
 import functools
 import json
 from typing import Any, Callable, ParamSpec
 from taskturbine.models import JsonData, OptionalJsonData, SuspendError
 from taskturbine.taskturbine import (
+    ClaimedTask,
     ContextInner,
 )
 
 P = ParamSpec("P")
 
 
-class TaskContext:
-    def __init__(
-        self,
-        inner: ContextInner,
-        serialize: Callable[[JsonData], bytes],
-        deserialize: Callable[[bytes], JsonData | None],
-    ) -> None:
-        self._inner = inner
-        self._serialize = serialize
-        self._deserialize = deserialize
+class BaseContext(abc.ABC):
+    """Abstract base class for Context implementations"""
+
+    def __init__(self, claimed_task: ClaimedTask) -> None:
         self._checkpoint_counters: dict[str, int] = {}
-        self._claimed_task = inner.claimed_task
+        self._claimed_task = claimed_task
 
     @property
     def task_id(self) -> str:
@@ -40,6 +36,33 @@ class TaskContext:
     def params_bytes(self) -> bytes:
         """Get the parameters a byte string"""
         return self._claimed_task.params
+
+    def _checkpoint_name(self, step_name: str) -> str:
+        """
+        Resolve a step name into a checkpoint name.
+        A task can contain steps with duplicate names, and each
+        instance of a name needs to resolve to a distinct checkpoint
+        """
+        if step_name not in self._checkpoint_counters:
+            self._checkpoint_counters[step_name] = 0
+        self._checkpoint_counters[step_name] += 1
+        value = self._checkpoint_counters[step_name]
+        if value == 1:
+            return step_name
+        return f"{step_name}#{value}"
+
+
+class TaskContext(BaseContext):
+    def __init__(
+        self,
+        inner: ContextInner,
+        serialize: Callable[[JsonData], bytes],
+        deserialize: Callable[[bytes], JsonData | None],
+    ) -> None:
+        self._inner = inner
+        self._serialize = serialize
+        self._deserialize = deserialize
+        super().__init__(inner.claimed_task)
 
     def await_event(
         self, event_name: str, timeout: float | timedelta | None = None
@@ -67,20 +90,6 @@ class TaskContext:
         can be retrieved later.
         """
         self._inner.emit_event(event_name, self._serialize(payload))
-
-    def _checkpoint_name(self, step_name: str) -> str:
-        """
-        Resolve a step name into a checkpoint name.
-        A task can contain steps with duplicate names, and each
-        instance of a name needs to resolve to a distinct checkpoint
-        """
-        if step_name not in self._checkpoint_counters:
-            self._checkpoint_counters[step_name] = 0
-        self._checkpoint_counters[step_name] += 1
-        value = self._checkpoint_counters[step_name]
-        if value == 1:
-            return step_name
-        return f"{step_name}#{value}"
 
     def sleep_for(self, step_name: str, duration: timedelta) -> None:
         """
