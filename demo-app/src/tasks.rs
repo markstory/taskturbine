@@ -150,10 +150,10 @@ pub async fn register_user(mut ctx: TaskContext) -> TaskResult {
         let db = create_db().await;
         let mut atomic = db.begin().await.unwrap();
 
-        // TODO: proper slug generation
+        // Note: This should be a more robust slug generation
         let slug = params.org_name.to_lowercase().replace(" ", "-");
 
-        // TODO: handle slug conflicts and generate unique slugs.
+        // Note: This should handle slug conflicts and generate unique slugs.
         let res = sqlx::query(
             "INSERT INTO organizations (name, slug, created) VALUES ($1, $2, NOW())
             RETURNING *"
