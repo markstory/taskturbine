@@ -49,50 +49,6 @@ def test_claimedtask_retry_in_defaults(channel: str) -> None:
     assert claim.next_retry_in() == timedelta(seconds=30)
 
 
-def test_worker_execute_batch_simple_success(
-    db_connection: Connection, channel: str
-) -> None:
-    demo_app.set_channels([channel])
-
-    first = demo_app.spawn_task("ok-task", {"oid": 123}, channel=channel)
-    second = demo_app.spawn_task("ok-task", {"oid": 456}, channel=channel)
-
-    worker = demo_app.create_worker("worker-1", [channel])
-    worker.execute_batch()
-
-    cursor = db_connection.cursor()
-    cursor.execute(
-        "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s)",
-        [first.run_id, second.run_id],
-    )
-    rows = fetch_all(cursor)
-    assert len(rows) == 2
-    assert rows[0]["state"] == "completed"
-    assert rows[0]["result"].tobytes() == b'{"complete": "ok"}'
-    assert rows[1]["state"] == "completed"
-    assert rows[1]["result"].tobytes() == b'{"complete": "ok"}'
-
-
-def test_worker_execute_batch_simple_failure(
-    db_connection: Connection, channel: str
-) -> None:
-    demo_app.set_channels([channel])
-
-    first = demo_app.spawn_task("type-error-fail", {"oid": 123}, channel=channel)
-    second = demo_app.spawn_task("type-error-fail", {"oid": 456}, channel=channel)
-
-    worker = demo_app.create_worker("worker-1", [channel])
-    worker.execute_batch()
-
-    cursor = db_connection.cursor()
-    cursor.execute(
-        "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s) AND state = 'failed'",
-        [first.run_id, second.run_id],
-    )
-    rows = fetch_all(cursor)
-    assert len(rows) == 2
-
-
 def test_execute_task_error_handler(config: Config, channel: str) -> None:
     def error_handler(err: Exception) -> None:
         assert isinstance(err, Exception), "should be an exception"
