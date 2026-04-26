@@ -6,8 +6,6 @@ import pytest
 
 from taskturbine import Config
 from taskturbine.asynclib import AsyncTaskContext, AsyncTaskturbineApp
-from tests.demo import app as demo_app
-from taskturbine.taskturbine import ClaimedTask
 
 from .conftest import fetch_all, fetch_one
 
