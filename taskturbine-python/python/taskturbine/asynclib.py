@@ -423,6 +423,17 @@ class AsyncWorker:
     async def claim_tasks(self) -> list[ClaimedTask]:
         return await self._inner.claim_tasks()
 
+    async def run_upkeep(self) -> None:
+        """
+        Run a worker upkeep loop.
+
+        The worker will run an upkeep operation each `Config.worker_upkeep_interval_secs`
+        """
+        interval = self._inner.worker_upkeep_interval_secs
+        while True:
+            await self._inner.run_upkeep()
+            await asyncio.sleep(interval)
+
     async def run(self, stop_on_idle: bool = False) -> None:
         """
         Run the worker mainloop.

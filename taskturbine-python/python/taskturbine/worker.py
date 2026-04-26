@@ -408,10 +408,9 @@ class Worker:
 
     def run_upkeep(self) -> None:
         """
-        Run a worker cleanup loop.
+        Run a worker upkeep loop.
 
-        Intended to run in a while loop that the application
-        starts. Will periodically sleep based on Config.
+        The worker will run an upkeep operation each `Config.worker_upkeep_interval_secs`
         """
         interval = self._inner.worker_upkeep_interval_secs
         while True:
