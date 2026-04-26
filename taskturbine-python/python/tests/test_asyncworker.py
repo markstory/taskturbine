@@ -16,9 +16,9 @@ Connection = psycopg2._psycopg.connection
 
 @pytest.mark.asyncio
 async def test_worker_run_simple_success(
-    async_config: Config, db_connection: Connection, channel: str
+    config: Config, db_connection: Connection, channel: str
 ) -> None:
-    app = AsyncTaskturbineApp(async_config)
+    app = AsyncTaskturbineApp(config)
     app.add_channel(channel)
 
     @app.register_task(name="worker-task")
@@ -46,9 +46,9 @@ async def test_worker_run_simple_success(
 
 @pytest.mark.asyncio
 async def test_worker_run_simple_failure(
-    async_config: Config, db_connection: Connection, channel: str
+    config: Config, db_connection: Connection, channel: str
 ) -> None:
-    app = AsyncTaskturbineApp(async_config)
+    app = AsyncTaskturbineApp(config)
     app.add_channel(channel)
 
     @app.register_task(name="worker-task-fail")
@@ -71,12 +71,12 @@ async def test_worker_run_simple_failure(
 
 
 @pytest.mark.asyncio
-async def test_worker_execute_batch_error_handler(async_config: Config, channel: str) -> None:
+async def test_worker_execute_batch_error_handler(config: Config, channel: str) -> None:
     def error_handler(err: Exception) -> None:
         assert isinstance(err, Exception), "should be an exception"
         assert str(err) == "oh no", "Should have the error from the step"
 
-    app = AsyncTaskturbineApp(async_config, error_handler=error_handler)
+    app = AsyncTaskturbineApp(config, error_handler=error_handler)
     app.add_channel(channel)
 
     @app.register_task(name="worker-task-fail")
@@ -91,9 +91,9 @@ async def test_worker_execute_batch_error_handler(async_config: Config, channel:
 
 @pytest.mark.asyncio
 async def test_worker_execute_batch_mixed_failure(
-    async_config: Config, db_connection: Connection, channel: str
+    config: Config, db_connection: Connection, channel: str
 ) -> None:
-    app = AsyncTaskturbineApp(async_config)
+    app = AsyncTaskturbineApp(config)
     app.add_channel(channel)
 
     @app.register_task(name="worker-task-fail")
@@ -121,12 +121,11 @@ async def test_worker_execute_batch_mixed_failure(
 
 @pytest.mark.asyncio
 async def test_worker_cleanup(
-    async_config: Config, db_connection: Connection, channel: str
+    config: Config, db_connection: Connection, channel: str
 ) -> None:
-    app = AsyncTaskturbineApp(async_config)
+    app = AsyncTaskturbineApp(config)
     app.add_channel(channel)
 
-    # TODO continue here, this test needs to be re-written
     @app.register_task(name="worker-cleanup")
     async def worker_task(ctx: AsyncTaskContext) -> dict[str, Any]:
         return {"ok": "ok"}

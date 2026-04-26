@@ -47,7 +47,6 @@ def channel(request: pytest.FixtureRequest) -> str:
 def config(database_url: str) -> Config:
     return Config(app_module="tests.demo:app", database_url=database_url)
 
-
 @pytest.fixture
 def database_url() -> str:
     value = os.getenv("TASKTURBINE_DATABASE_URL")
