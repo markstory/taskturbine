@@ -52,7 +52,9 @@ async def hello_world(ctx: AsyncTaskContext) -> None:
             raise ValueError("Too soon, die and retry")
 
     @ctx.step(name="process-complete")
-    async def process_complete(ctx: AsyncTaskContext, user: Payload, event: Payload) -> Payload:
+    async def process_complete(
+        ctx: AsyncTaskContext, user: Payload, event: Payload
+    ) -> Payload:
         logger.info("starting process_complete")
         # Do some IO
         user["complete"] = True
