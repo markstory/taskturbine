@@ -1,5 +1,4 @@
 import asyncio
-import atexit
 import functools
 import logging
 import os
@@ -115,14 +114,10 @@ async def loop_step(ctx: AsyncTaskContext) -> None:
 async def main() -> None:
     worker = app.create_worker("worker-1", ["default"])
 
-    def shutdown() -> None:
-        # TODO Add shutdown
-        pass
-        # worker.shutdown()
-
-    atexit.register(shutdown)
-    await worker.run()
-
+    try:
+        await worker.run()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        await worker.shutdown()
 
 if __name__ == "__main__":
     asyncio.run(main())

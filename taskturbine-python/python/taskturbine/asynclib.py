@@ -571,3 +571,24 @@ class AsyncWorker:
                     json.dumps({"reason": "failure outcome"}).encode(),
                     task_result.duration,
                 )
+
+    async def shutdown(self) -> None:
+        """
+        Perform graceful shutdown.
+        Drains any pending tasks that were started.
+        """
+        logger.info(f"Starting shutdown {len(self._pending_tasks)} running tasks")
+        while True:
+            done: set[asyncio.Task[TaskResult]] = set()
+            if len(self._pending_tasks):
+                done, self._pending_tasks = await asyncio.wait(
+                    self._pending_tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+            else:
+                logger.info("Shutdown complete")
+                return
+
+            for task in done:
+                result = task.result()
+                logger.debug(f"process_result for  {result.run_id}")
+                await self._process_result(result)
