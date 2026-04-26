@@ -67,11 +67,13 @@ For python:
 uv add taskturbine
 ```
 
-For python:
+For rust:
 
 ```bash
 cargo add taskturbine
 ```
+
+:warning: Packages are not published yet.
 
 ## Concepts
 
