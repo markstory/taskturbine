@@ -1,7 +1,11 @@
 from __future__ import annotations
+import asyncio
 from datetime import timedelta
 import functools
+import importlib
 import json
+import logging
+import time
 from typing import (
     Any,
     Awaitable,
@@ -25,8 +29,10 @@ from taskturbine.taskturbine import (
     TaskOptions,
 )
 from taskturbine.serializer import TaskSerializer
+from taskturbine.worker import TaskOutcome, TaskResult
 
 
+logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -364,12 +370,27 @@ class AsyncTaskturbineApp(BaseApp):
         """
         worker = AsyncWorker(
             inner=self._inner.create_worker(worker_id, channels),
-            tasks=self._tasks,
+            app=self,
             context_factory=self.create_context,
             error_handler=self.error_handler,
         )
         return worker
 
+
+def load_app(app_module: str) -> AsyncTaskturbineApp:
+    if ":" not in app_module:
+        raise ValueError("Invalid module name. Expected app.tasks.runtime:app format")
+    (module_name, var_name) = app_module.split(":", 2)
+    module = importlib.import_module(module_name)
+    if not hasattr(module, var_name):
+        raise ValueError(f"Could not access `{var_name}` in {module_name}")
+    app = getattr(module, var_name)
+
+    assert isinstance(app, AsyncTaskturbineApp), (
+        f"`{app_module}` must be a AsyncTaskturbineApp instance"
+    )
+
+    return app
 
 class AsyncWorker:
     """
@@ -381,15 +402,131 @@ class AsyncWorker:
 
     def __init__(
         self,
+        app: AsyncTaskturbineApp,
         inner: AsyncWorkerInner,
-        tasks: Mapping[str, AsyncTask[..., Any]],
         context_factory: Callable[[ClaimedTask], AsyncTaskContext],
         error_handler: Callable[[Exception], None] | None = None,
     ) -> None:
+        self._app = app
         self._inner = inner
-        self._tasks = tasks
         self._context_factory = context_factory
         self._error_handler = error_handler
 
     async def claim_tasks(self) -> list[ClaimedTask]:
         return await self._inner.claim_tasks()
+
+    async def run(self, stop_on_idle: bool = False) -> None:
+        """
+        Run the worker mainloop.
+
+        Setting `stop_on_idle = True`
+        """
+        last_cleanup = time.time() - 1
+        concurrent_task_limit = self._inner.worker_concurrency
+
+        logger.debug("Starting worker processes")
+
+        pending_tasks: set[asyncio.Task[TaskResult]] = set()
+        while len(pending_tasks) < concurrent_task_limit:
+            claimed = await self.claim_tasks()
+            if len(claimed) == 0 and len(pending_tasks) == 0 and stop_on_idle:
+                break
+            for claim in claimed:
+                task = asyncio.create_task(self.execute_task(claim))
+                pending_tasks.add(task)
+            done, pending_tasks = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                await self._process_result(task.result())
+
+            if self._inner.should_run_upkeep(int(last_cleanup)):
+                logger.debug("run_upkeep start")
+                await self._inner.run_upkeep()
+                last_cleanup = time.time()
+
+    async def execute_task(self, claimed: ClaimedTask) -> TaskResult:
+        """
+        Actually execute the task.
+
+        Requires a reference to the application so that registered tasks, and `create_context()`
+        can be accessed safely.
+        """
+        if not self._app.has_task(claimed.task_name):
+            logger.warning(f"Task with {claimed.task_name} is not registered")
+            return TaskResult(
+                outcome=TaskOutcome.Missing,
+                run_id=claimed.run_id,
+                payload=claimed.task_name.encode(),
+            )
+
+        task_fn = self._app.get_task(claimed.task_name)
+        context = self._app.create_context(claimed)
+        try:
+            # Call userland code
+            res = await task_fn(context)
+            res_bytes = b""
+            if res is not None:
+                res_bytes = context._serialize(res)
+            return TaskResult(
+                outcome=TaskOutcome.Complete, run_id=claimed.run_id, payload=res_bytes
+            )
+        except SuspendError as suspend:
+            logger.debug("Task suspended")
+            return TaskResult(
+                outcome=TaskOutcome.Suspend,
+                duration=suspend.duration,
+                run_id=claimed.run_id,
+            )
+        except Exception as fail:
+            logger.exception("Task execution failed")
+            retry_at = claimed.next_retry_in()
+            if self._app.error_handler:
+                self._app.error_handler(fail)
+            return TaskResult(
+                outcome=TaskOutcome.Failure, duration=retry_at, run_id=claimed.run_id
+            )
+
+    async def _process_result(self, task_result: TaskResult) -> None:
+        match task_result.outcome:
+            case TaskOutcome.Fatal:
+                message = "unknown"
+                if task_result.payload:
+                    message = task_result.payload.decode()
+                reason_message = f"Worker crashed with: {message}"
+                await self._inner.fail_run(
+                    task_result.run_id,
+                    json.dumps({"reason": reason_message}).encode(),
+                    None,
+                )
+                logger.warning(reason_message)
+            case TaskOutcome.Missing:
+                message = "unknown"
+                if task_result.payload:
+                    message = task_result.payload.decode()
+                reason_message = f"Task with name {message} was not registered"
+                await self._inner.fail_run(
+                    task_result.run_id,
+                    json.dumps({"reason": reason_message}).encode(),
+                    None,
+                )
+                logger.warning(reason_message)
+            case TaskOutcome.Complete:
+                await self._inner.complete_run(
+                    task_result.run_id, task_result.payload or b""
+                )
+            case TaskOutcome.Suspend:
+                duration = task_result.duration
+                if not duration:
+                    logger.debug(
+                        "Task suspended/waiting run_id={task_result.run_id}"
+                    )
+                else:
+                    logger.debug(
+                        "Task suspended for {duration.total_seconds()} seconds run_id={task_result.run_id}"
+                    )
+                    await self._inner.schedule_run(task_result.run_id, duration)
+            case TaskOutcome.Failure:
+                await self._inner.fail_run(
+                    task_result.run_id,
+                    json.dumps({"reason": "failure outcome"}).encode(),
+                    task_result.duration,
+                )

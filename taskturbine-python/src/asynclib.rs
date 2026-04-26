@@ -5,6 +5,7 @@
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
+use chrono::Utc;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{
     models::{RunId, TaskId},
@@ -315,12 +316,15 @@ impl AsyncWorkerInner {
         })
     }
 
-    /*
     /// Run all the upkeep operations on the database.
-    fn run_upkeep(&self) -> PyResult<()> {
-        self.runtime
-            .block_on(self.storage.run_upkeep())
-            .map_err(|e| PyValueError::new_err(format!("Upkeep failed: {e:?}")))
+    fn run_upkeep<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
+        let storage = self.storage.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            storage
+                .run_upkeep()
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Upkeep failed: {e:?}")))
+        })
     }
 
     // Should upkeep be run right now by a Worker?
@@ -339,41 +343,52 @@ impl AsyncWorkerInner {
     }
 
     /// Mark a run as failed.
-    fn fail_run(
+    fn fail_run<'p>(
         &self,
+        py: Python<'p>,
         run_id: String,
-        reason: Option<&[u8]>,
+        reason: Option<Vec<u8>>,
         retry_at: Option<Duration>,
-    ) -> PyResult<()> {
+    ) -> PyResult<Bound<'p, PyAny>> {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
-        self.runtime
-            .block_on(
-                self.storage
-                    .fail_run(run_id, reason.unwrap_or(b""), retry_at),
-            )
-            .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
+        let storage = self.storage.clone();
+        let reason = reason.unwrap_or(vec![]);
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            storage
+                .fail_run(run_id, &reason, retry_at)
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
+        })
     }
 
     /// Mark a run as complete.
-    fn complete_run(&self, run_id: String, run_result: Vec<u8>) -> PyResult<()> {
+    fn complete_run<'p>(&self, py: Python<'p>, run_id: String, run_result: Vec<u8>) -> PyResult<Bound<'p, PyAny>> {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
-        self.runtime
-            .block_on(self.storage.complete_run(run_id, &run_result))
-            .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
+        let storage = self.storage.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            storage
+                .complete_run(run_id, &run_result)
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
+        })
     }
 
     /// Re-schedule a task to run in the future.
-    fn schedule_run(&self, run_id: String, wait_for: Duration) -> PyResult<()> {
+    fn schedule_run<'p>(&self, py: Python<'p>, run_id: String, wait_for: Duration) -> PyResult<Bound<'p, PyAny>> {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
-        self.runtime
-            .block_on(self.storage.schedule_run(run_id, wait_for))
-            .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
+        let storage = self.storage.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            storage
+                .schedule_run(run_id, wait_for)
+                .await
+                .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
+        })
     }
-    */
 }

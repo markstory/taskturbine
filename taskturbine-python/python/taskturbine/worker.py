@@ -61,7 +61,7 @@ def load_app(app_module: str) -> TaskturbineApp:
     app = getattr(module, var_name)
 
     assert isinstance(app, TaskturbineApp), (
-        f"`{var_name}` must be a TaskturbineApp instance"
+        f"`{app_module}` must be a TaskturbineApp instance"
     )
 
     return app
