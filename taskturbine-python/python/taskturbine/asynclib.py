@@ -446,6 +446,7 @@ class AsyncWorker:
         logger.debug("Starting worker processes")
 
         pending_tasks: set[asyncio.Task[TaskResult]] = set()
+        # TODO handle draining pending_tasks when the worker needs to shutdown.
         while len(pending_tasks) < concurrent_task_limit:
             claimed = await self.claim_tasks()
             if len(claimed) == 0 and len(pending_tasks) == 0 and stop_on_idle:
