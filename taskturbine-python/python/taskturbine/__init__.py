@@ -14,7 +14,6 @@ from typing import (
     Callable,
     MutableMapping,
     ParamSpec,
-    Protocol,
     TypeVar,
 )
 
