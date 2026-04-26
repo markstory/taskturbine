@@ -43,6 +43,37 @@ async def test_worker_run_simple_success(
 
 
 @pytest.mark.asyncio
+async def test_worker_run_batch_mismatch(
+    config: Config, db_connection: Connection, channel: str
+) -> None:
+    config.worker_concurrency = 2
+    app = AsyncTaskturbineApp(config)
+    app.add_channel(channel)
+
+    @app.register_task(name="worker-task")
+    async def worker_task(ctx: AsyncTaskContext) -> dict[str, Any]:
+        return {"complete": "ok"}
+
+    first = await app.spawn_task("worker-task", {"oid": 1}, channel=channel)
+    second = await app.spawn_task("worker-task", {"oid": 2}, channel=channel)
+    third = await app.spawn_task("worker-task", {"oid": 3}, channel=channel)
+
+    worker = app.create_worker("worker-1", [channel])
+    await worker.run(stop_on_idle=True)
+
+    cursor = db_connection.cursor()
+    cursor.execute(
+        "SELECT * FROM taskturbine.runs WHERE run_id IN (%s, %s, %s)",
+        [first.run_id, second.run_id, third.run_id],
+    )
+    rows = fetch_all(cursor)
+    assert len(rows) == 3
+    assert rows[0]["state"] == "completed"
+    assert rows[1]["state"] == "completed"
+    assert rows[2]["state"] == "completed"
+
+
+@pytest.mark.asyncio
 async def test_worker_run_simple_failure(
     config: Config, db_connection: Connection, channel: str
 ) -> None:

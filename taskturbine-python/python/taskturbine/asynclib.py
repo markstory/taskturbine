@@ -419,6 +419,7 @@ class AsyncWorker:
         self._inner = inner
         self._context_factory = context_factory
         self._error_handler = error_handler
+        self._pending_tasks: set[asyncio.Task[TaskResult]] = set()
 
     async def claim_tasks(self) -> list[ClaimedTask]:
         return await self._inner.claim_tasks()
@@ -440,30 +441,50 @@ class AsyncWorker:
 
         Setting `stop_on_idle = True`
         """
+        logger.debug("Starting worker")
+
         last_cleanup = time.time() - 1
+        last_claim_miss: float | None = None
         concurrent_task_limit = self._inner.worker_concurrency
 
-        logger.debug("Starting worker processes")
+        while True:
+            done: set[asyncio.Task[TaskResult]] = set()
+            claimed: list[ClaimedTask] = []
 
-        pending_tasks: set[asyncio.Task[TaskResult]] = set()
-        # TODO handle draining pending_tasks when the worker needs to shutdown.
-        while len(pending_tasks) < concurrent_task_limit:
-            claimed = await self.claim_tasks()
-            if len(claimed) == 0 and len(pending_tasks) == 0 and stop_on_idle:
-                break
-            for claim in claimed:
-                task = asyncio.create_task(self.execute_task(claim))
-                pending_tasks.add(task)
-            done, pending_tasks = await asyncio.wait(
-                pending_tasks, return_when=asyncio.FIRST_COMPLETED
-            )
+            # If there is room in pending_tasks and we haven't missed,
+            # or the last miss was more than a second ago try to claim more tasks.
+            if (
+                len(self._pending_tasks) < concurrent_task_limit and
+                (last_claim_miss is None or time.time() - last_claim_miss > 1)
+            ):
+                logger.debug(f"claiming tasks")
+                claimed = await self.claim_tasks()
+                if not len(claimed):
+                    last_claim_miss = time.time()
+
+                for claim in claimed:
+                    logger.debug(f"starting {claim.run_id}")
+                    task = asyncio.create_task(self.execute_task(claim))
+                    self._pending_tasks.add(task)
+
+            if len(self._pending_tasks):
+                done, self._pending_tasks = await asyncio.wait(
+                    self._pending_tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+
             for task in done:
-                await self._process_result(task.result())
+                result = task.result()
+                logger.debug(f"process_result for  {result.run_id}")
+                await self._process_result(result)
 
             if self._inner.should_run_upkeep(int(last_cleanup)):
-                logger.debug("run_upkeep start")
+                logger.debug(f"run_upkeep. last_cleanup={last_cleanup}")
                 await self._inner.run_upkeep()
                 last_cleanup = time.time()
+
+            if len(claimed) == 0 and len(self._pending_tasks) == 0 and stop_on_idle:
+                logger.info("All tasks complete, shutting down.")
+                break
 
     async def execute_task(self, claimed: ClaimedTask) -> TaskResult:
         """
