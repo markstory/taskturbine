@@ -241,7 +241,7 @@ class AsyncTaskturbineApp(BaseApp):
         """
         Define the set of channels overwriting any defined channel names.
         """
-        self._inner.channels.clear();
+        self._inner.channels.clear()
         for name in names:
             self._inner.add_channel(name)
 
@@ -399,6 +399,7 @@ def load_app(app_module: str) -> AsyncTaskturbineApp:
 
     return app
 
+
 class AsyncWorker:
     """
     Used to operate a worker.
@@ -441,7 +442,9 @@ class AsyncWorker:
             for claim in claimed:
                 task = asyncio.create_task(self.execute_task(claim))
                 pending_tasks.add(task)
-            done, pending_tasks = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
+            done, pending_tasks = await asyncio.wait(
+                pending_tasks, return_when=asyncio.FIRST_COMPLETED
+            )
             for task in done:
                 await self._process_result(task.result())
 
@@ -523,9 +526,7 @@ class AsyncWorker:
             case TaskOutcome.Suspend:
                 duration = task_result.duration
                 if not duration:
-                    logger.debug(
-                        "Task suspended/waiting run_id={task_result.run_id}"
-                    )
+                    logger.debug("Task suspended/waiting run_id={task_result.run_id}")
                 else:
                     logger.debug(
                         "Task suspended for {duration.total_seconds()} seconds run_id={task_result.run_id}"

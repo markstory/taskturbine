@@ -49,7 +49,9 @@ def test_claimedtask_retry_in_defaults(channel: str) -> None:
     assert claim.next_retry_in() == timedelta(seconds=30)
 
 
-def test_worker_execute_batch_simple_success(db_connection: Connection, channel: str) -> None:
+def test_worker_execute_batch_simple_success(
+    db_connection: Connection, channel: str
+) -> None:
     demo_app.set_channels([channel])
 
     first = demo_app.spawn_task("ok-task", {"oid": 123}, channel=channel)
@@ -71,7 +73,9 @@ def test_worker_execute_batch_simple_success(db_connection: Connection, channel:
     assert rows[1]["result"].tobytes() == b'{"complete": "ok"}'
 
 
-def test_worker_execute_batch_simple_failure(db_connection: Connection, channel: str) -> None:
+def test_worker_execute_batch_simple_failure(
+    db_connection: Connection, channel: str
+) -> None:
     demo_app.set_channels([channel])
 
     first = demo_app.spawn_task("type-error-fail", {"oid": 123}, channel=channel)

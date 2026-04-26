@@ -372,7 +372,12 @@ impl AsyncWorkerInner {
     }
 
     /// Mark a run as complete.
-    fn complete_run<'p>(&self, py: Python<'p>, run_id: String, run_result: Vec<u8>) -> PyResult<Bound<'p, PyAny>> {
+    fn complete_run<'p>(
+        &self,
+        py: Python<'p>,
+        run_id: String,
+        run_result: Vec<u8>,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
@@ -386,7 +391,12 @@ impl AsyncWorkerInner {
     }
 
     /// Re-schedule a task to run in the future.
-    fn schedule_run<'p>(&self, py: Python<'p>, run_id: String, wait_for: Duration) -> PyResult<Bound<'p, PyAny>> {
+    fn schedule_run<'p>(
+        &self,
+        py: Python<'p>,
+        run_id: String,
+        wait_for: Duration,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let Ok(run_id) = TryInto::<RunId>::try_into(run_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };

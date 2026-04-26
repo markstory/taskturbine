@@ -149,7 +149,7 @@ class TaskturbineApp(BaseApp):
         """
         Define the set of channels overwriting any defined channel names.
         """
-        self._inner.channels.clear();
+        self._inner.channels.clear()
         for name in names:
             self._inner.add_channel(name)
 
