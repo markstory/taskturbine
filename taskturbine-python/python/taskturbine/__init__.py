@@ -145,6 +145,14 @@ class TaskturbineApp(BaseApp):
         """Get the list of channels"""
         return self._inner.channels
 
+    def set_channels(self, names: list[str]) -> None:
+        """
+        Define the set of channels overwriting any defined channel names.
+        """
+        self._inner.channels.clear();
+        for name in names:
+            self._inner.add_channel(name)
+
     def has_task(self, name: str) -> bool:
         """Check if a task is defined"""
         return name in self._tasks

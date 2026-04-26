@@ -348,6 +348,9 @@ class AppInner:
     def add_channel(self, name: str) -> None: ...
     """Add a channel to the list of channels this application can publish and consume from."""
 
+    def set_channels(self, value: list[str]) -> None: ...
+    """Overwrite the current channel list with a new list."""
+
     def spawn_task(
         self, task_name: str, params: bytes, options: TaskOptions
     ) -> SpawnResult: ...
@@ -394,6 +397,9 @@ class AsyncAppInner:
 
     def add_channel(self, value: str) -> None: ...
     """Add a channel to the list of channels this application can publish and consume from."""
+
+    def set_channels(self, value: list[str]) -> None: ...
+    """Overwrite the current channel list with a new list."""
 
     async def spawn_task(
         self, task_name: str, params: bytes, options: TaskOptions

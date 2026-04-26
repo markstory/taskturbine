@@ -63,6 +63,13 @@ impl AppInner {
         self.channels.insert(name);
     }
 
+    fn set_channels(&mut self, names: Vec<String>) {
+        self.channels.clear();
+        for name in names.iter() {
+            self.channels.insert(name.clone());
+        }
+    }
+
     fn spawn_task(
         &self,
         task_name: &str,

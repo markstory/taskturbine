@@ -58,6 +58,13 @@ impl AsyncAppInner {
         self.channels.insert(value);
     }
 
+    fn set_channels(&mut self, names: Vec<String>) {
+        self.channels.clear();
+        for name in names.iter() {
+            self.channels.insert(name.clone());
+        }
+    }
+
     fn spawn_task<'p>(
         &self,
         py: Python<'p>,

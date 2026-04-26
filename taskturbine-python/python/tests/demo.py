@@ -16,6 +16,18 @@ config = Config(app_module="tests.demo:app", database_url=db_url)
 app = TaskturbineApp(config)
 
 
-@app.register_task(name="worker-task")
+@app.register_task(name="ok-task")
 def worker_task(ctx: TaskContext) -> dict[str, Any]:
     return {"complete": "ok"}
+
+
+@app.register_task(name="type-error-fail")
+def type_error_fail(ctx: TaskContext) -> dict[str, Any]:
+    raise TypeError("oh no")
+
+
+@app.register_task(name="oid-partial-failure")
+def oid_partial_failure(ctx: TaskContext) -> dict[str, Any]:
+    if ctx.params["oid"] == 123:
+        raise TypeError("oh no")
+    return {"ok": "ok"}
