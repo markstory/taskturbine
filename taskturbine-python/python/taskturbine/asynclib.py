@@ -462,15 +462,15 @@ class AsyncWorker:
             claimed: list[ClaimedTask] = []
 
             if self._shutdown and len(self._pending_tasks) == 0:
-                logger.info('shutdown complete')
+                logger.info("shutdown complete")
                 return
 
             # If there is room in pending_tasks and we haven't missed,
             # or the last miss was more than a second ago try to claim more tasks.
             if (
-                not self._shutdown and
-                len(self._pending_tasks) < concurrent_task_limit and
-                (last_claim_miss is None or time.time() - last_claim_miss > 1)
+                not self._shutdown
+                and len(self._pending_tasks) < concurrent_task_limit
+                and (last_claim_miss is None or time.time() - last_claim_miss > 1)
             ):
                 logger.debug(f"Attempt to claim tasks")
                 claimed = await self.claim_tasks()
@@ -591,8 +591,11 @@ class AsyncWorker:
     def _setup_shutdown(self) -> None:
         """Attach signal handlers to the current asyncio loop"""
         loop = asyncio.get_running_loop()
+
         def handler():
-            logger.info(f"Shutdown signal received {len(self._pending_tasks)} tasks processing")
+            logger.info(
+                f"Shutdown signal received {len(self._pending_tasks)} tasks processing"
+            )
             self._shutdown = True
 
         for s in (signal.SIGINT, signal.SIGTERM):

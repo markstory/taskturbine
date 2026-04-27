@@ -112,10 +112,11 @@ async def loop_step(ctx: AsyncTaskContext) -> None:
 
 
 async def main() -> None:
-    print("Process ",  os.getpid())
+    print("Process ", os.getpid())
     worker = app.create_worker("worker-1", ["default"])
 
     await worker.run()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
