@@ -5,6 +5,7 @@ import functools
 import importlib
 import json
 import logging
+import signal
 import time
 from typing import (
     Any,
@@ -420,6 +421,7 @@ class AsyncWorker:
         self._context_factory = context_factory
         self._error_handler = error_handler
         self._pending_tasks: set[asyncio.Task[TaskResult]] = set()
+        self._shutdown = False
 
     async def claim_tasks(self) -> list[ClaimedTask]:
         return await self._inner.claim_tasks()
@@ -437,11 +439,19 @@ class AsyncWorker:
 
     async def run(self, stop_on_idle: bool = False) -> None:
         """
-        Run the worker mainloop.
+        Run the worker main loop.
 
-        Setting `stop_on_idle = True`
+        This method will register signal handlers for SIGINT and SIGTERM
+        to the currently running loop. When one of these signals is received
+        the worker will stop claiming new tasks and attempt to complete
+        all inflight tasks.
+
+        Setting `stop_on_idle = True` will make this method return
+        when there are no pending tasks and no tasks were claimed.
         """
         logger.debug("Starting worker")
+
+        self._setup_shutdown()
 
         last_cleanup = time.time() - 1
         last_claim_miss: float | None = None
@@ -451,19 +461,24 @@ class AsyncWorker:
             done: set[asyncio.Task[TaskResult]] = set()
             claimed: list[ClaimedTask] = []
 
+            if self._shutdown and len(self._pending_tasks) == 0:
+                logger.info('shutdown complete')
+                return
+
             # If there is room in pending_tasks and we haven't missed,
             # or the last miss was more than a second ago try to claim more tasks.
             if (
+                not self._shutdown and
                 len(self._pending_tasks) < concurrent_task_limit and
                 (last_claim_miss is None or time.time() - last_claim_miss > 1)
             ):
-                logger.debug(f"claiming tasks")
+                logger.debug(f"Attempt to claim tasks")
                 claimed = await self.claim_tasks()
                 if not len(claimed):
                     last_claim_miss = time.time()
 
                 for claim in claimed:
-                    logger.debug(f"starting {claim.run_id}")
+                    logger.debug(f"Starting run {claim.run_id}")
                     task = asyncio.create_task(self.execute_task(claim))
                     self._pending_tasks.add(task)
 
@@ -473,25 +488,22 @@ class AsyncWorker:
                 )
 
             for task in done:
-                result = task.result()
-                logger.debug(f"process_result for  {result.run_id}")
-                await self._process_result(result)
+                await self._process_result(task.result())
 
-            if self._inner.should_run_upkeep(int(last_cleanup)):
+            if not self._shutdown and self._inner.should_run_upkeep(int(last_cleanup)):
                 logger.debug(f"run_upkeep. last_cleanup={last_cleanup}")
                 await self._inner.run_upkeep()
                 last_cleanup = time.time()
 
             if len(claimed) == 0 and len(self._pending_tasks) == 0 and stop_on_idle:
                 logger.info("All tasks complete, shutting down.")
-                break
+                return
 
     async def execute_task(self, claimed: ClaimedTask) -> TaskResult:
         """
-        Actually execute the task.
+        Execute a claimed task and create a TaskResult.
 
-        Requires a reference to the application so that registered tasks, and `create_context()`
-        can be accessed safely.
+        This method traps all `Exception` and creates a TaskResult.
         """
         if not self._app.has_task(claimed.task_name):
             logger.warning(f"Task with {claimed.task_name} is not registered")
@@ -529,6 +541,10 @@ class AsyncWorker:
             )
 
     async def _process_result(self, task_result: TaskResult) -> None:
+        """
+        Process a TaskResult and update the store
+        """
+        logger.debug(f"process_result for {task_result.run_id}")
         match task_result.outcome:
             case TaskOutcome.Fatal:
                 message = "unknown"
@@ -572,23 +588,12 @@ class AsyncWorker:
                     task_result.duration,
                 )
 
-    async def shutdown(self) -> None:
-        """
-        Perform graceful shutdown.
-        Drains any pending tasks that were started.
-        """
-        logger.info(f"Starting shutdown {len(self._pending_tasks)} running tasks")
-        while True:
-            done: set[asyncio.Task[TaskResult]] = set()
-            if len(self._pending_tasks):
-                done, self._pending_tasks = await asyncio.wait(
-                    self._pending_tasks, return_when=asyncio.FIRST_COMPLETED
-                )
-            else:
-                logger.info("Shutdown complete")
-                return
+    def _setup_shutdown(self) -> None:
+        """Attach signal handlers to the current asyncio loop"""
+        loop = asyncio.get_running_loop()
+        def handler():
+            logger.info(f"Shutdown signal received {len(self._pending_tasks)} tasks processing")
+            self._shutdown = True
 
-            for task in done:
-                result = task.result()
-                logger.debug(f"process_result for  {result.run_id}")
-                await self._process_result(result)
+        for s in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(s, handler)

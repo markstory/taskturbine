@@ -112,12 +112,10 @@ async def loop_step(ctx: AsyncTaskContext) -> None:
 
 
 async def main() -> None:
+    print("Process ",  os.getpid())
     worker = app.create_worker("worker-1", ["default"])
 
-    try:
-        await worker.run()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        await worker.shutdown()
+    await worker.run()
 
 if __name__ == "__main__":
     asyncio.run(main())
