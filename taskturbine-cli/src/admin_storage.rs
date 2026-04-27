@@ -309,10 +309,37 @@ mod tests {
 
         let options = RunListOptions {
             task_id: Some(spawned.task_id),
+            state: None,
         };
         let res = admin_storage.run_list(options).await;
         let runs = res.expect("should be ok");
 
         assert_eq!(1, runs.len());
+    }
+
+    #[tokio::test]
+    async fn run_list_state() {
+        let channel = "run_list_state";
+        let storage = create_storage().await;
+        let admin_storage = create_admin_storage().await;
+        let _ = storage
+            .spawn_task(channel, "register-user", b"", None)
+            .await;
+
+        let options = RunListOptions {
+            task_id: None,
+            state: Some(TaskState::Running),
+        };
+        let res = admin_storage.run_list(options).await;
+        let runs = res.expect("should be ok");
+        assert_eq!(0, runs.len());
+
+        let options = RunListOptions {
+            task_id: None,
+            state: Some(TaskState::Pending),
+        };
+        let res = admin_storage.run_list(options).await;
+        let runs = res.expect("should be ok");
+        assert!(runs.len() > 1);
     }
 }
