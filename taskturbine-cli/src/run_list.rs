@@ -34,7 +34,7 @@ impl TryFrom<RunListArgs> for RunListOptions {
                 .map_err(|_| "Invalid task_id".to_string())?,
             None => None,
         };
-        Ok(RunListOptions { task_id })
+        Ok(RunListOptions { task_id, state: value.state })
     }
 }
 

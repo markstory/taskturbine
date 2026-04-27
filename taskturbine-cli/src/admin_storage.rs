@@ -9,6 +9,7 @@ use taskturbine_core::storage::StorageError;
 
 pub struct RunListOptions {
     pub task_id: Option<TaskId>,
+    pub state: Option<TaskState>,
 }
 
 pub struct RunGetOptions {
@@ -155,6 +156,10 @@ impl AdminStorage {
         if let Some(task_id) = options.task_id {
             clauses.push("runs.task_id = ");
             clauses.push_bind_unseparated(task_id);
+        }
+        if let Some(state) = options.state {
+            clauses.push("runs.state = ");
+            clauses.push_bind_unseparated(state);
         }
         query.push(" ORDER BY runs.created_at DESC");
 
