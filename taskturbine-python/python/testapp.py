@@ -117,7 +117,7 @@ def main() -> None:
         worker.shutdown()
 
     atexit.register(shutdown)
-    worker.run()
+    worker.run(stop_on_idle=True)
 
 
 if __name__ == "__main__":

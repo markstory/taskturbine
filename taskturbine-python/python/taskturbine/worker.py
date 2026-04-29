@@ -185,8 +185,10 @@ class Worker:
                     continue
 
                 now = time.time()
-                if last_fetch and now - last_fetch < 1:
-                    logger.debug("claim last_fetch rate limit")
+
+                # Poll the database every 200ms
+                # TODO Add a config value for this.
+                if last_fetch and now - last_fetch < 0.2:
                     time.sleep(0.2)
                     continue
 
@@ -305,6 +307,7 @@ class Worker:
 
         # start process pool to receive work.
         logger.debug("Starting worker processes")
+        idle_count = 0
         with Pool(
             processes=self._inner.worker_concurrency,
             maxtasksperchild=self._inner.worker_max_tasks_per_child,
@@ -324,17 +327,19 @@ class Worker:
                     self._inflight.append(fut)
                     self._claimed_tasks.task_done()
 
-                remaining = self._poll_inflight()
+                running = self._poll_inflight()
 
                 # If this worker is shutting down wait until
                 # all inflight work is complete.
-                if remaining == 0:
-                    if stop_on_idle:
-                        logger.info("all work complete, and idle reached")
-                        return self.shutdown()
+                if running == 0 and not claimed:
+                    idle_count += 1
+                    time.sleep(0.1)
 
-                    if self._shutdown.is_set():
-                        break
+                # TODO add idle count config
+                if idle_count > 2 and stop_on_idle:
+                    logger.info("all work complete, and idle reached")
+                    return self.shutdown()
+
 
                 if not self._shutdown.is_set() and self._inner.should_run_upkeep(
                     int(last_cleanup)
@@ -352,7 +357,7 @@ class Worker:
                 keep.append(fut)
         self._inflight = keep
 
-        return len(keep)
+        return len(self._inflight)
 
     def shutdown(self) -> None:
         logger.info("shutting down")

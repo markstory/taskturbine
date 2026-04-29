@@ -115,7 +115,7 @@ async def main() -> None:
     print("Process ", os.getpid())
     worker = app.create_worker("worker-1", ["default"])
 
-    await worker.run()
+    await worker.run(stop_on_idle=True)
 
 
 if __name__ == "__main__":
