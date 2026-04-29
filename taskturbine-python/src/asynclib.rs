@@ -156,7 +156,6 @@ impl AsyncContextInner {
         self.storage.get_config().await_event_default_timeout_secs
     }
 
-    // there is a 'fun' bug hiding here.
     #[getter(claimed_task)]
     fn get_claimed_task(&self) -> ClaimedTask {
         self.claimed_task.clone()

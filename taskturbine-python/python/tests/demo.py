@@ -1,14 +1,13 @@
 """
 A simple demo app used for integration testing.
+
+Intentionally placed in test files
 """
 
 import os
 from typing import Any
 from taskturbine import TaskturbineApp, Config, TaskContext
 
-# TODO Find a more elegant solution to this.
-# Having a demo application in a top level module isn't ideal.
-# Perhaps we can have an importable module in the test suite?
 db_url = os.getenv("TASKTURBINE_DATABASE_URL")
 assert db_url, "Required environment variable TASKTURBINE_DATABASE_URL undefined"
 
