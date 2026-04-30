@@ -472,7 +472,7 @@ class AsyncWorker:
                 and len(self._pending_tasks) < concurrent_task_limit
                 and (last_claim_miss is None or time.time() - last_claim_miss > 1)
             ):
-                logger.debug(f"Attempt to claim tasks")
+                logger.debug("Attempt to claim tasks")
                 claimed = await self.claim_tasks()
                 if not len(claimed):
                     last_claim_miss = time.time()

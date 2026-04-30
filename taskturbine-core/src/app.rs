@@ -582,7 +582,7 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                             claimed.pop();
                         },
                         Err(TrySendError::Full(_)) => {
-                            // TODO this looks like it drops the task before the claim timeout 
+                            // TODO this looks like it drops the task before the claim timeout
                             // has expired.
                             //
                             // Backpressure as all executors are busy.

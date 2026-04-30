@@ -221,7 +221,9 @@ class Worker:
         ) -> None:
             while True:
                 try:
-                    task_result = result_queue.get(timeout=self._inner.worker_sleep_ms / 1000)
+                    task_result = result_queue.get(
+                        timeout=self._inner.worker_sleep_ms / 1000
+                    )
                 except queue.Empty:
                     # Graceful shutdown drains all results.
                     if shutdown.is_set():
@@ -315,7 +317,9 @@ class Worker:
         ) as pool:
             while True:
                 try:
-                    claimed = self._claimed_tasks.get(timeout=self._inner.worker_sleep_ms)
+                    claimed = self._claimed_tasks.get(
+                        timeout=self._inner.worker_sleep_ms
+                    )
                 except queue.Empty:
                     # This could be another utilization metric to collect
                     logger.debug("claimed_tasks.get() empty timeout")
