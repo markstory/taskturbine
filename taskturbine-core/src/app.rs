@@ -552,7 +552,7 @@ async fn run_upkeep(worker: Arc<Worker>) {
 }
 
 /// Claim tasks and append them to the `work_send` channel.
-/// If no tasks could be claimed, the claimer will sleep for `config.worker_sleep_secs`.
+/// If no tasks could be claimed, the claimer will sleep for `config.worker_sleep_ms`.
 async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
     log::debug!("Spawning claim_tasks");
     let config = worker.config();
@@ -564,9 +564,9 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
             Ok(mut claimed) = worker.claim_tasks(timeout) => {
                 log::debug!("Claimed {} tasks", claimed.len());
                 if claimed.is_empty() {
-                    let sleep_secs = config.worker_sleep_secs;
-                    log::debug!("No tasks claimed, worker sleeping for {sleep_secs} seconds");
-                    time::sleep(time::Duration::from_secs(sleep_secs as u64)).await;
+                    let sleep_millis = config.worker_sleep_ms;
+                    log::debug!("No tasks claimed, worker sleeping for {sleep_millis}ms");
+                    time::sleep(time::Duration::from_millis(sleep_millis as u64)).await;
                 }
                 while !claimed.is_empty() {
                     let task_opt = claimed.last();
@@ -582,10 +582,13 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                             claimed.pop();
                         },
                         Err(TrySendError::Full(_)) => {
+                            // TODO this looks like it drops the task before the claim timeout 
+                            // has expired.
+                            //
                             // Backpressure as all executors are busy.
                             // If we blocking send the worker won't shutdown.
                             log::debug!("work_send was full; sleeping and re-attempting.");
-                            time::sleep(time::Duration::from_secs(config.worker_sleep_secs as u64)).await;
+                            time::sleep(time::Duration::from_millis(config.worker_sleep_ms as u64)).await;
                         },
                         Err(TrySendError::Closed(_)) => {
                             log::warn!("Channel is closed, shutting down claim_tasks");

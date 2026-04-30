@@ -23,7 +23,7 @@ pub struct Config {
     pub worker_concurrency: i32,
 
     #[pyo3(get, set)]
-    pub worker_sleep_secs: i32,
+    pub worker_sleep_ms: i32,
 
     #[pyo3(get, set)]
     pub worker_cleanup_limit: i32,
@@ -61,7 +61,7 @@ impl From<Config> for taskturbine_core::config::Config {
             worker_upkeep_interval_secs: value.worker_upkeep_interval_secs,
             worker_cleanup_limit: value.worker_cleanup_limit,
             worker_concurrency: value.worker_concurrency,
-            worker_sleep_secs: value.worker_sleep_secs,
+            worker_sleep_ms: value.worker_sleep_ms,
             await_event_default_timeout_secs: value.await_event_default_timeout_secs,
         }
     }
@@ -84,7 +84,7 @@ impl Config {
         worker_upkeep_interval_secs=10,
         worker_cleanup_limit=1000,
         worker_concurrency=3,
-        worker_sleep_secs=2,
+        worker_sleep_ms=2,
         worker_max_tasks_per_child=1000,
         await_event_default_timeout_secs=120,
     ))]
@@ -100,7 +100,7 @@ impl Config {
         worker_upkeep_interval_secs: i32,
         worker_cleanup_limit: i32,
         worker_concurrency: i32,
-        worker_sleep_secs: i32,
+        worker_sleep_ms: i32,
         worker_max_tasks_per_child: i32,
         await_event_default_timeout_secs: i32,
     ) -> Self {
@@ -111,7 +111,7 @@ impl Config {
             usecase: usecase.to_string(),
             default_channel: default_channel.to_string(),
             worker_concurrency,
-            worker_sleep_secs,
+            worker_sleep_ms,
             worker_cleanup_limit,
             worker_upkeep_interval_secs,
             worker_upkeep_inline,

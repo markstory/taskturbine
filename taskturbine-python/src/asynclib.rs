@@ -279,9 +279,9 @@ impl AsyncWorkerInner {
         self.config.app_module.clone()
     }
 
-    #[getter(worker_sleep_secs)]
-    pub fn worker_sleep_secs(&self) -> i32 {
-        self.config.worker_sleep_secs
+    #[getter(worker_sleep_ms)]
+    pub fn worker_sleep_ms(&self) -> i32 {
+        self.config.worker_sleep_ms
     }
 
     #[getter(worker_upkeep_interval_secs)]

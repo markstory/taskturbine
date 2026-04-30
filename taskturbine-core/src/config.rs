@@ -24,8 +24,13 @@ pub struct Config {
     /// More slots will enable more tasks to run concurrently.
     pub worker_concurrency: i32,
 
-    /// The number of seconds a worker should sleep when no tasks are available.
-    pub worker_sleep_secs: i32,
+    /// The number of milliseconds a worker should sleep when
+    //  one of the following happens:
+    //
+    //  - A worker attempts to claim tasks but none are found.
+    //  - A worker claims tasks and can't send them to a worker queue.
+    //  - A worker c
+    pub worker_sleep_ms: i32,
 
     /// The maximum number of completed tasks and events
     /// a worker will delete in a single cleanup operation.
@@ -62,7 +67,7 @@ impl Default for Config {
             usecase: "default".to_string(),
             default_channel: "default".to_string(),
             worker_concurrency: 3,
-            worker_sleep_secs: 2,
+            worker_sleep_ms: 100,
             worker_upkeep_inline: true,
             worker_upkeep_interval_secs: 10,
             worker_cleanup_cutoff_secs: 60 * 10,

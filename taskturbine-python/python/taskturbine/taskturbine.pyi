@@ -173,8 +173,8 @@ class Config:
     More slots will enable more tasks to run concurrently.
     """
 
-    worker_sleep_secs: int
-    """The number of seconds a worker should sleep when no tasks are available."""
+    worker_sleep_ms: int
+    """The number of milliseconds a worker should sleep when no tasks are available."""
 
     worker_max_tasks_per_child: int
     """The number of tasks that a child should execute before shutting down."""
@@ -196,7 +196,7 @@ class Config:
         worker_upkeep_interval_secs: int = 10,
         worker_cleanup_limit: int = 1000,
         worker_concurrency: int = 3,
-        worker_sleep_secs: int = 2,
+        worker_sleep_ms: int = 100,
         await_event_default_timeout_secs: int = 120,
     ) -> None: ...
 
@@ -264,8 +264,8 @@ class WorkerInner:
     worker_concurrency: int
     """Number of child processes to spawn as task executors."""
 
-    worker_sleep_secs: int
-    """Number of seconds workers should sleep between run loops."""
+    worker_sleep_ms: int
+    """Number of milliseconds workers should sleep between run loops."""
 
     worker_upkeep_interval_secs: int
     """Number of seconds between cleanup operations."""
@@ -475,8 +475,8 @@ class AsyncWorkerInner:
     worker_concurrency: int
     """Number of child processes to spawn as task executors."""
 
-    worker_sleep_secs: int
-    """Number of seconds workers should sleep between run loops."""
+    worker_sleep_ms: int
+    """Number of milliseconds workers should sleep between run loops."""
 
     worker_upkeep_interval_secs: int
     """Number of seconds between cleanup operations."""

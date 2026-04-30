@@ -181,15 +181,14 @@ class Worker:
 
                 if claim_queue.full():
                     logger.debug("claim_queue full")
-                    time.sleep(0.1)
+                    time.sleep(self._inner.worker_sleep_ms / 1000)
                     continue
 
                 now = time.time()
 
-                # Poll the database every 200ms
-                # TODO Add a config value for this.
-                if last_fetch and now - last_fetch < 0.2:
-                    time.sleep(0.2)
+                # If we missed, backoff for a bit
+                if last_fetch and now - last_fetch < self._inner.worker_sleep_ms:
+                    time.sleep(self._inner.worker_sleep_ms / 1000)
                     continue
 
                 claimed_tasks = inner.claim_tasks()
@@ -314,7 +313,7 @@ class Worker:
         ) as pool:
             while True:
                 try:
-                    claimed = self._claimed_tasks.get(timeout=1.0)
+                    claimed = self._claimed_tasks.get(timeout=self._inner.worker_sleep_ms)
                 except queue.Empty:
                     logger.debug("claimed_tasks.get() empty timeout")
                     claimed = None
@@ -326,20 +325,21 @@ class Worker:
                     )
                     self._inflight.append(fut)
                     self._claimed_tasks.task_done()
+                    idle_count = 0
 
                 running = self._poll_inflight()
 
                 # If this worker is shutting down wait until
                 # all inflight work is complete.
                 if running == 0 and not claimed:
+                    logger.info('counting idle time')
                     idle_count += 1
-                    time.sleep(0.1)
+                    time.sleep(self._inner.worker_sleep_ms / 1000)
 
-                # TODO add idle count config
-                if idle_count > 2 and stop_on_idle:
+                # If all workers appear idle
+                if idle_count > self._inner.worker_concurrency and stop_on_idle:
                     logger.info("all work complete, and idle reached")
                     return self.shutdown()
-
 
                 if not self._shutdown.is_set() and self._inner.should_run_upkeep(
                     int(last_cleanup)
