@@ -180,6 +180,7 @@ class Worker:
                     break
 
                 if claim_queue.full():
+                    # This could be another utilization metric to collect
                     logger.debug("claim_queue full")
                     time.sleep(self._inner.worker_sleep_ms / 1000)
                     continue
@@ -188,6 +189,7 @@ class Worker:
 
                 # If we missed, backoff for a bit
                 if last_fetch and now - last_fetch < self._inner.worker_sleep_ms:
+                    # This could be another utilization metric to collect
                     time.sleep(self._inner.worker_sleep_ms / 1000)
                     continue
 
@@ -219,14 +221,14 @@ class Worker:
         ) -> None:
             while True:
                 try:
-                    task_result = result_queue.get(timeout=1.0)
+                    task_result = result_queue.get(timeout=self._inner.worker_sleep_ms / 1000)
                 except queue.Empty:
                     # Graceful shutdown drains all results.
                     if shutdown.is_set():
                         logger.debug("result-tasks receive shutdown")
                         break
-                    logger.info("result_queue.get empty timeout")
-                    time.sleep(0.2)
+                    # These sleeps would be a good place to collect utilization metrics.
+                    time.sleep(self._inner.worker_sleep_ms / 1000)
                     continue
 
                 logger.debug(f"Processing result for {task_result.run_id}")
@@ -315,6 +317,7 @@ class Worker:
                 try:
                     claimed = self._claimed_tasks.get(timeout=self._inner.worker_sleep_ms)
                 except queue.Empty:
+                    # This could be another utilization metric to collect
                     logger.debug("claimed_tasks.get() empty timeout")
                     claimed = None
 
@@ -332,7 +335,7 @@ class Worker:
                 # If this worker is shutting down wait until
                 # all inflight work is complete.
                 if running == 0 and not claimed:
-                    logger.info('counting idle time')
+                    # This could be another utilization metric to collect
                     idle_count += 1
                     time.sleep(self._inner.worker_sleep_ms / 1000)
 
