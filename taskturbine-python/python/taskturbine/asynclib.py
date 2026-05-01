@@ -385,22 +385,6 @@ class AsyncTaskturbineApp(BaseApp):
         return worker
 
 
-def load_app(app_module: str) -> AsyncTaskturbineApp:
-    if ":" not in app_module:
-        raise ValueError("Invalid module name. Expected app.tasks.runtime:app format")
-    (module_name, var_name) = app_module.split(":", 2)
-    module = importlib.import_module(module_name)
-    if not hasattr(module, var_name):
-        raise ValueError(f"Could not access `{var_name}` in {module_name}")
-    app = getattr(module, var_name)
-
-    assert isinstance(app, AsyncTaskturbineApp), (
-        f"`{app_module}` must be a AsyncTaskturbineApp instance"
-    )
-
-    return app
-
-
 class AsyncWorker:
     """
     Used to operate a worker.
