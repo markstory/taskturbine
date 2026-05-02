@@ -447,11 +447,7 @@ impl Worker {
 
     /// Helper method to suspend a run for a period of time.
     async fn sleep_run(&self, task: &ClaimedTask, duration: Duration) {
-        let res = self
-            .app
-            .storage
-            .schedule_run(task.run_id, duration)
-            .await;
+        let res = self.app.storage.schedule_run(task.run_id, duration).await;
         if let Err(schedule_err) = res {
             // If this fails, the task will eventually be moved by the claim expiring.
             log::error!("Failed to suspend run {schedule_err:?}");

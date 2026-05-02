@@ -2,7 +2,6 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 import functools
-import importlib
 import json
 import logging
 import signal
