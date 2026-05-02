@@ -1,5 +1,5 @@
 [package]
-name = "demo-app"
+name = "rust-demo"
 version = "0.1.0"
 edition = "2024"
 
@@ -23,5 +23,5 @@ serde_json.workspace = true
 sha2 = "0.10.9"
 simple_logger = "5.1.0"
 sqlx = { workspace = true, features = ["chrono", "postgres", "runtime-tokio", "uuid"] }
-taskturbine-core = { path = "../taskturbine-core" }
+taskturbine-core = { path = "../../taskturbine-core" }
 tokio.workspace = true

@@ -376,25 +376,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "demo-app"
-version = "0.1.0"
-dependencies = [
- "axum",
- "chrono",
- "hex",
- "hmac",
- "log",
- "minijinja",
- "serde",
- "serde_json",
- "sha2",
- "simple_logger",
- "sqlx",
- "taskturbine-core",
- "tokio",
-]
-
-[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1483,6 +1464,25 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rust-demo"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "hex",
+ "hmac",
+ "log",
+ "minijinja",
+ "serde",
+ "serde_json",
+ "sha2",
+ "simple_logger",
+ "sqlx",
+ "taskturbine-core",
+ "tokio",
 ]
 
 [[package]]

@@ -1,0 +1,12 @@
+[project]
+name = "python-demo"
+version = "0.1.0"
+description = "Taskturbine demo applications"
+readme = "README.md"
+requires-python = ">3.13"
+dependencies = [
+    "taskturbine-python"
+]
+
+[tool.uv.sources]
+taskturbine-python = { path = "../../taskturbine-python" }
