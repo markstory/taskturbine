@@ -444,6 +444,19 @@ impl Worker {
             log::error!("Failed to fail run {schedule_err:?}");
         }
     }
+
+    /// Helper method to suspend a run for a period of time.
+    async fn sleep_run(&self, task: &ClaimedTask, duration: Duration) {
+        let res = self
+            .app
+            .storage
+            .schedule_run(task.run_id, duration)
+            .await;
+        if let Err(schedule_err) = res {
+            // If this fails, the task will eventually be moved by the claim expiring.
+            log::error!("Failed to suspend run {schedule_err:?}");
+        }
+    }
 }
 
 /// Run a worker in a while loop.
@@ -582,13 +595,15 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                             claimed.pop();
                         },
                         Err(TrySendError::Full(_)) => {
-                            // TODO this looks like it drops the task before the claim timeout
-                            // has expired.
-                            //
-                            // Backpressure as all executors are busy.
-                            // If we blocking send the worker won't shutdown.
-                            log::debug!("work_send was full; sleeping and re-attempting.");
-                            time::sleep(time::Duration::from_millis(config.worker_sleep_ms as u64)).await;
+                            let duration = if config.worker_sleep_ms < 1000 {
+                                time::Duration::from_secs(1)
+                            } else {
+                                time::Duration::from_secs((config.worker_sleep_ms / 1000) as u64)
+                            };
+                            log::info!("work_send was full; sleeping and re-attempting.");
+                            worker.sleep_run(task, duration).await;
+                            // Back pressure to let `work_send` drain.
+                            time::sleep(duration).await;
                         },
                         Err(TrySendError::Closed(_)) => {
                             log::warn!("Channel is closed, shutting down claim_tasks");
