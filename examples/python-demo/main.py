@@ -1,5 +1,5 @@
 def main():
-    print("Hello from python!")
+    print("Run either testapp.py or testappasync.py instead.")
 
 
 if __name__ == "__main__":
