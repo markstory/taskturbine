@@ -2,6 +2,7 @@ use std::{env, time::Duration};
 
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::Sha256;
 use sqlx::Row;
 use taskturbine_core::{
@@ -41,6 +42,7 @@ pub fn make_task_app() -> TaskturbineApp {
         .register_task("err-fail", err_failure)
         .register_task("panic-fail", panic_failure)
         .register_task("register-user", register_user)
+        .register_task("sleep-time", sleep_time)
 }
 
 #[derive(sqlx::FromRow, Debug, PartialEq, Deserialize, Serialize)]
@@ -194,4 +196,24 @@ pub async fn err_failure(mut _ctx: TaskContext) -> TaskResult {
 pub async fn panic_failure(mut _ctx: TaskContext) -> TaskResult {
     log::info!("Starting panic_failure task");
     panic!("A task has hit panic!");
+}
+
+/// Simulate IO wait workload
+pub async fn sleep_time(ctx: TaskContext) -> TaskResult {
+    let params = ctx.param_bytes();
+    let res: Result<Value, _> = serde_json::from_slice(params.as_slice());
+    let delay = match res {
+        Ok(params) => {
+            params
+                .get("duration")
+                .map(|v| v.as_f64())
+                .unwrap_or(Some(0.1))
+                .unwrap()
+        },
+        Err(_) => 0.1
+    };
+    log::info!("started sleep_time. Sleeping for {delay}");
+    tokio::time::sleep(Duration::from_millis((delay * 1000.0) as u64)).await;
+    log::info!("sleep_time complete");
+    Ok(None)
 }
