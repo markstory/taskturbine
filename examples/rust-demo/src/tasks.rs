@@ -203,14 +203,12 @@ pub async fn sleep_time(ctx: TaskContext) -> TaskResult {
     let params = ctx.param_bytes();
     let res: Result<Value, _> = serde_json::from_slice(params.as_slice());
     let delay = match res {
-        Ok(params) => {
-            params
-                .get("duration")
-                .map(|v| v.as_f64())
-                .unwrap_or(Some(0.1))
-                .unwrap()
-        },
-        Err(_) => 0.1
+        Ok(params) => params
+            .get("duration")
+            .map(|v| v.as_f64())
+            .unwrap_or(Some(0.1))
+            .unwrap(),
+        Err(_) => 0.1,
     };
     log::info!("started sleep_time. Sleeping for {delay}");
     tokio::time::sleep(Duration::from_millis((delay * 1000.0) as u64)).await;
