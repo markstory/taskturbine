@@ -38,8 +38,7 @@ impl AsyncAppInner {
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
 
-        // Make a throwaway runtime to get started.
-        // TODO figure out if there is a more efficient solution to this.
+        // Make a throwaway runtime to build Storage in.
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
