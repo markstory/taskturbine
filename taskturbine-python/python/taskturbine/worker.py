@@ -191,7 +191,7 @@ class Worker:
                 # If we missed, backoff for a bit
                 if last_fetch and now - last_fetch < worker_sleep:
                     # This could be another utilization metric to collect
-                    logger.debug('last fetch was less than %ss, sleeping', worker_sleep)
+                    logger.debug("last fetch was less than %ss, sleeping", worker_sleep)
                     time.sleep(worker_sleep)
                     continue
 
@@ -231,7 +231,7 @@ class Worker:
                         logger.debug("result-tasks receive shutdown")
                         break
                     # These sleeps would be a good place to collect utilization metrics.
-                    logger.debug('result thread empty, sleeping')
+                    logger.debug("result thread empty, sleeping")
                     time.sleep(worker_sleep)
                     continue
 
