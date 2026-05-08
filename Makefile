@@ -4,6 +4,8 @@
 # and CI. Using make for CI makes reproducing what happens in CI
 # locally much simpler and forces you to avoid complex code being stored in YAML.
 
+TASK_REPEAT:=10
+
 # Install and setup
 ###################
 
@@ -23,6 +25,10 @@ build-py: install-py ## Build python extension
 	cd ./taskturbine-python && uv run maturin build
 .PHONY: build-py
 
+build-cli: ## Build taskturbine-cli into target/taskturbine-cli
+	cd ./taskturbine-cli/ && cargo build
+.PHONY: build-cli
+
 
 # Running tests
 ###################
@@ -36,6 +42,13 @@ test-rs: ## Run rust tests
 
 test-py: install-py ## Run python tests
 	cd ./taskturbine-python && uv run pytest
+
+test-examples-py: ## Run an integration test with the python client.
+	@echo "> Spawning $(TASK_REPEAT) tasks"
+	target/debug/taskturbine-cli spawn-task -t 'sleep-time' --params {} --repeat $(TASK_REPEAT)
+	@echo "> Running python worker"
+	cd ./examples/python-demo && uv sync && uv run testapp.py
+
 
 # Linting and style
 ###################
