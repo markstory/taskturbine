@@ -9,7 +9,11 @@ import uuid
 
 from taskturbine import TaskturbineApp, Config, TaskContext
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s %(message)s',
+    level=logging.DEBUG,
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 db_url = os.getenv("TASKTURBINE_DATABASE_URL")
 assert db_url, "TASKTURBINE_DATABASE_URL is required"
@@ -22,6 +26,7 @@ config = Config(
     database_url=db_url,
     app_module="testapp:app",
     worker_concurrency=4,
+    worker_sleep_ms=100
 )
 app = TaskturbineApp(config)
 
