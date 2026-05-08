@@ -42,12 +42,14 @@ test-rs: ## Run rust tests
 
 test-py: install-py ## Run python tests
 	cd ./taskturbine-python && uv run pytest
+.PHONY: test-py
 
-test-examples-py: ## Run an integration test with the python client.
+test-examples-py: build-cli ## Run an integration test with the python client.
 	@echo "> Spawning $(TASK_REPEAT) tasks"
 	target/debug/taskturbine-cli spawn-task -t 'sleep-time' --params {} --repeat $(TASK_REPEAT)
 	@echo "> Running python worker"
 	cd ./examples/python-demo && uv sync && uv run testapp.py
+.PHONY: test-examples-py
 
 
 # Linting and style
