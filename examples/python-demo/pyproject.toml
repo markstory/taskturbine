@@ -9,4 +9,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-taskturbine-python = { path = "../../taskturbine-python" }
+taskturbine-python = { path = "../../taskturbine-python", editable = true }

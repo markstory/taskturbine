@@ -31,12 +31,12 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "taskturbine-python", directory = "../../taskturbine-python" }]
+requires-dist = [{ name = "taskturbine-python", editable = "../../taskturbine-python" }]
 
 [[package]]
 name = "taskturbine-python"
 version = "0.1.0"
-source = { directory = "../../taskturbine-python" }
+source = { editable = "../../taskturbine-python" }
 dependencies = [
     { name = "maturin" },
     { name = "tomli" },
