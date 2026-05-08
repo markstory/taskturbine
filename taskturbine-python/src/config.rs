@@ -84,7 +84,7 @@ impl Config {
         worker_upkeep_interval_secs=10,
         worker_cleanup_limit=1000,
         worker_concurrency=3,
-        worker_sleep_ms=2,
+        worker_sleep_ms=200,
         worker_max_tasks_per_child=1000,
         await_event_default_timeout_secs=120,
     ))]
