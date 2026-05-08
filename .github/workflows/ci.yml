@@ -249,7 +249,7 @@ jobs:
           RUST_BACKTRACE: 1
           TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
 
-  run-demo-py:
+  run-examples-py:
     name: Run demo applications, and CLI tool to run a small no-op workload.
     runs-on: ubuntu-latest
     needs: build-py
