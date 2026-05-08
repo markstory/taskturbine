@@ -172,6 +172,7 @@ class Worker:
             inner: WorkerInner,
         ) -> None:
             last_fetch = None
+            worker_sleep = self._inner.worker_sleep_ms / 1000
             while True:
                 # During graceful shutdown we want to immediately
                 # stop claiming tasks so that inflight work can drain out.
@@ -181,16 +182,17 @@ class Worker:
 
                 if claim_queue.full():
                     # This could be another utilization metric to collect
-                    logger.debug("claim_queue full")
-                    time.sleep(self._inner.worker_sleep_ms / 1000)
+                    logger.debug("claim_queue full, sleeping")
+                    time.sleep(worker_sleep)
                     continue
 
                 now = time.time()
 
                 # If we missed, backoff for a bit
-                if last_fetch and now - last_fetch < self._inner.worker_sleep_ms:
+                if last_fetch and now - last_fetch < worker_sleep:
                     # This could be another utilization metric to collect
-                    time.sleep(self._inner.worker_sleep_ms / 1000)
+                    logger.debug('last fetch was less than %ss, sleeping', worker_sleep)
+                    time.sleep(worker_sleep)
                     continue
 
                 claimed_tasks = inner.claim_tasks()
@@ -219,18 +221,18 @@ class Worker:
             result_queue: queue.Queue[TaskResult],
             inner: WorkerInner,
         ) -> None:
+            worker_sleep = self._inner.worker_sleep_ms / 1000
             while True:
                 try:
-                    task_result = result_queue.get(
-                        timeout=self._inner.worker_sleep_ms / 1000
-                    )
+                    task_result = result_queue.get(timeout=worker_sleep)
                 except queue.Empty:
                     # Graceful shutdown drains all results.
                     if shutdown.is_set():
                         logger.debug("result-tasks receive shutdown")
                         break
                     # These sleeps would be a good place to collect utilization metrics.
-                    time.sleep(self._inner.worker_sleep_ms / 1000)
+                    logger.debug('result thread empty, sleeping')
+                    time.sleep(worker_sleep)
                     continue
 
                 logger.debug(f"Processing result for {task_result.run_id}")
@@ -309,7 +311,8 @@ class Worker:
         self._result_thread.start()
 
         # start process pool to receive work.
-        logger.debug("Starting worker processes")
+        logger.debug("Starting worker %s processes", self._inner.worker_concurrency)
+        worker_sleep = self._inner.worker_sleep_ms / 1000
         idle_count = 0
         with Pool(
             processes=self._inner.worker_concurrency,
@@ -317,9 +320,7 @@ class Worker:
         ) as pool:
             while True:
                 try:
-                    claimed = self._claimed_tasks.get(
-                        timeout=self._inner.worker_sleep_ms
-                    )
+                    claimed = self._claimed_tasks.get(timeout=worker_sleep)
                 except queue.Empty:
                     # This could be another utilization metric to collect
                     logger.debug("claimed_tasks.get() empty timeout")
