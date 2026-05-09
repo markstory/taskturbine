@@ -598,8 +598,10 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                             };
                             log::info!("work_send was full; sleeping and re-attempting.");
                             worker.sleep_run(task, duration).await;
+
                             // Back pressure to let `work_send` drain.
-                            time::sleep(duration).await;
+                            let sleep_duration = time::Duration::from_millis(config.worker_sleep_ms as u64);
+                            time::sleep(sleep_duration).await;
                         },
                         Err(TrySendError::Closed(_)) => {
                             log::warn!("Channel is closed, shutting down claim_tasks");
