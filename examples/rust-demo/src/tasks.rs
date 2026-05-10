@@ -31,7 +31,7 @@ impl From<serde_json::Error> for TaskError {
 /// Factory method for the task application with all tasks bound in.
 /// In more complex applications, tasks would be defined in module files, and imported here.
 pub fn make_task_app() -> TaskturbineApp {
-    let database_url = env::var("DEMO_DATABASE_URL").expect("Missing DEMO_DATABASE_URL in env");
+    let database_url = env::var("TASKTURBINE_DATABASE_URL").expect("Missing TASKTURBINE_DATABASE_URL in env");
     let task_config = Config {
         database_url,
         worker_shutdown_on_idle: env::var("DEMO_APP_SHUTDOWN_ON_IDLE")

@@ -45,6 +45,8 @@ test-py: install-py ## Run python tests
 .PHONY: test-py
 
 test-examples-py: build-cli ## Run an integration test with the python client.
+	@echo "> Running migrations"
+	target/debug/taskturbine-cli migrate
 	@echo "> Spawning $(TASK_REPEAT) tasks"
 	target/debug/taskturbine-cli spawn-task -t 'sleep-time' --params {} --repeat $(TASK_REPEAT)
 	@echo "> Running python worker"
@@ -52,6 +54,8 @@ test-examples-py: build-cli ## Run an integration test with the python client.
 .PHONY: test-examples-py
 
 test-examples-rs: build-cli ## Run an integration test with the rust client.
+	@echo "> Running migrations"
+	target/debug/taskturbine-cli migrate
 	@echo "> Spawning $(TASK_REPEAT) tasks"
 	target/debug/taskturbine-cli spawn-task -t 'sleep-time' --params {} --repeat $(TASK_REPEAT)
 	@echo "> Running rust worker"
