@@ -366,8 +366,9 @@ class Worker:
         # Trigger thread shutdown
         self._shutdown.set()
 
-        logger.debug("waiting for claim-thread shutdown")
-        self._claim_thread.join()
+        if self._claim_thread:
+            logger.debug("waiting for claim-thread shutdown")
+            self._claim_thread.join()
 
         while True:
             waiting = self._poll_inflight()
@@ -377,8 +378,9 @@ class Worker:
             else:
                 break
 
-        logger.debug("waiting for result-thread shutdown")
-        self._result_thread.join()
+        if self._result_thread:
+            logger.debug("waiting for result-thread shutdown")
+            self._result_thread.join()
 
     def _process_result(self, task_result: TaskResult) -> None:
         """

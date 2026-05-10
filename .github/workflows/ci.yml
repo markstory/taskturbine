@@ -24,9 +24,10 @@ jobs:
           filters: |
             python:
               - 'taskturbine-python/**'
+              - 'examples/python-demo/**'
 
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
-        # if: steps.changes.outputs.python == 'true'
+        if: steps.changes.outputs.python == 'true'
         with:
           toolchain: stable
           profile: minimal
@@ -34,20 +35,20 @@ jobs:
           components: clippy, rustfmt
 
       - uses: swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
-        # if: steps.changes.outputs.python == 'true'
+        if: steps.changes.outputs.python == 'true'
 
       - uses: astral-sh/setup-uv@5a7eac68fb9809dea845d802897dc5c723910fa3 # v7.1.3
-        # if: steps.changes.outputs.python == 'true'
+        if: steps.changes.outputs.python == 'true'
         with:
           version: '0.8.2'
           enable-cache: true
 
       - name: Build python extension
-        # if: steps.changes.outputs.python == 'true'
+        if: steps.changes.outputs.python == 'true'
         run: make build-py
 
       - name: Store build artifacts
-        # if: steps.changes.outputs.python == 'true'
+        if: steps.changes.outputs.python == 'true'
         id: store-py
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
@@ -60,7 +61,18 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
+      - name: Get changed files
+        id: changes
+        uses: dorny/paths-filter@0bc4621a3135347011ad047f9ecf449bf72ce2bd # v3.0.0
+        with:
+          filters: |
+            rust:
+              - 'taskturbine-core/**'
+              - 'taskturbine-cli/**'
+              - 'examples/rust-demo/**'
+
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
+        if: steps.changes.outputs.rust == 'true'
         with:
           toolchain: stable
           profile: minimal
@@ -70,11 +82,13 @@ jobs:
       - uses: swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
 
       - name: Build rust crates
+        if: steps.changes.outputs.rust == 'true'
         run: make build-rs
 
       - name: Store build artifacts
         id: store-rust
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        if: steps.changes.outputs.rust == 'true'
         with:
           key: build-${{ github.sha }} 
           path: ./target/**
@@ -86,20 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
-      - name: Get changed files
-        id: changes
-        uses: dorny/paths-filter@0bc4621a3135347011ad047f9ecf449bf72ce2bd # v3.0.0
-        with:
-          filters: |
-            python:
-              - 'taskturbine-python/**'
-
-      - name: Skip if no Python client changes
-        if: steps.changes.outputs.python != 'true'
-        run: echo "No Python client files changed, skipping tests"
-
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
-        if: steps.changes.outputs.python == 'true'
         with:
           toolchain: stable
           profile: minimal
@@ -107,16 +108,13 @@ jobs:
           components: clippy, rustfmt
 
       - uses: swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
-        if: steps.changes.outputs.python == 'true'
 
       - uses: astral-sh/setup-uv@5a7eac68fb9809dea845d802897dc5c723910fa3 # v7.1.3
-        if: steps.changes.outputs.python == 'true'
         with:
           version: '0.8.2'
           enable-cache: true
 
       - name: Fetch build results
-        if: steps.changes.outputs.python == 'true'
         id: store-py
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
@@ -124,11 +122,9 @@ jobs:
           path: ./target/**
 
       - name: Run format checking
-        if: steps.changes.outputs.python == 'true'
         run: make style-py
 
       - name: Run linting
-        if: steps.changes.outputs.python == 'true'
         run: make lint-py
 
 
@@ -138,15 +134,6 @@ jobs:
     needs: build-rs
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-
-      - name: Get changed files
-        id: changes
-        uses: dorny/paths-filter@0bc4621a3135347011ad047f9ecf449bf72ce2bd # v3.0.0
-        with:
-          list-files: json
-          filters: |
-            all:
-              - added|modified: '**/*'
 
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
         with:
@@ -187,21 +174,17 @@ jobs:
               - 'taskturbine-python/**'
 
       - name: Skip if no Python client changes
-        if: steps.changes.outputs.python != 'true'
         run: echo "No Python client files changed, skipping tests"
 
       - name: Start PostgreSQL
-        if: steps.changes.output != 'true'
         run: docker run --rm --name=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=taskturbine -p 5432:5432 -d postgres:latest
 
       - uses: astral-sh/setup-uv@5a7eac68fb9809dea845d802897dc5c723910fa3 # v7.1.3
-        if: steps.changes.outputs.python == 'true'
         with:
           version: '0.8.2'
           enable-cache: true
 
       - name: Fetch build results
-        if: steps.changes.outputs.python == 'true'
         id: store-py
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
@@ -209,7 +192,6 @@ jobs:
           path: ./target/**
 
       - name: Run pytest with coverage
-        if: steps.changes.outputs.python == 'true'
         run: make test-py
         env:
           TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
@@ -223,7 +205,7 @@ jobs:
       - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
 
       - name: Start PostgreSQL
-        # if: steps.changes.output != 'true'
+        if: steps.changes.output != 'true'
         run: docker run --rm --name=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=taskturbine -p 5432:5432 -d postgres:latest
 
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
@@ -281,9 +263,9 @@ jobs:
           TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
 
   run-examples-rs:
-    name: Run demo applications, and CLI tool to run a small no-op workload.
+    name: Run rust demo application
     runs-on: ubuntu-latest
-    needs: build-py
+    needs: build-rs
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -306,4 +288,3 @@ jobs:
         env:
           TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
           DEMO_APP_SHUTDOWN_ON_IDLE: "true"
-
