@@ -261,6 +261,7 @@ jobs:
         run: make test-examples-py
         env:
           TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+          TASKTURBINE_SHUTDOWN_ON_IDLE: "true"
 
   run-examples-rs:
     name: Run rust demo application
@@ -287,4 +288,4 @@ jobs:
         run: make test-examples-rs
         env:
           TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
-          DEMO_APP_SHUTDOWN_ON_IDLE: "true"
+          TASKTURBINE_SHUTDOWN_ON_IDLE: "true"
