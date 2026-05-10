@@ -1,11 +1,9 @@
 use std::{
-    collections::{HashMap, HashSet},
-    pin::Pin,
-    sync::Arc,
-    time::Duration,
+    collections::{HashMap, HashSet}, pin::Pin, sync::{Arc, atomic}, time::Duration
 };
 
 use async_channel::{Receiver, Sender, TrySendError};
+use futures::FutureExt;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::{
@@ -327,6 +325,9 @@ pub struct Worker {
     /// The number of tasks this worker should claim on each iteration
     /// of the run loop.
     pub claim_count: i32,
+
+    /// The number of claim attempts that returned no rows.
+    idle_count: atomic::AtomicI32,
 }
 
 impl Worker {
@@ -338,6 +339,7 @@ impl Worker {
             worker_id,
             claim_count,
             channels,
+            idle_count: atomic::AtomicI32::new(0),
         }
     }
 
@@ -355,11 +357,29 @@ impl Worker {
             .storage
             .claim_task(channels, &self.worker_id, timeout, self.claim_count)
             .await;
-        if let Err(err) = res {
-            Err(err.into())
-        } else {
-            Ok(res.unwrap())
+
+        match res {
+            Err(err) => Err(err.into()),
+            Ok(rows) => {
+                if rows.is_empty() {
+                    log::debug!("incrementing idle counter");
+                    self.idle_count.fetch_add(1, atomic::Ordering::Relaxed);
+                } else {
+                    self.idle_count.store(0, atomic::Ordering::Relaxed);
+                }
+                Ok(rows)
+            }
         }
+    }
+
+    pub fn should_shutdown(&self) -> bool {
+        if !self.app.config.worker_shutdown_on_idle {
+            return false;
+        }
+        if self.app.config.worker_shutdown_idle_max < self.idle_count.load(atomic::Ordering::Relaxed) {
+            return false;
+        }
+        true
     }
 
     /// Runs a upkeep step on storage.
@@ -489,10 +509,42 @@ pub async fn run_worker(worker: Worker) {
         tokio::spawn(run_upkeep(arc_worker.clone()));
     }
 
-    elegant_departure::tokio::depart()
+    let mut departure = elegant_departure::tokio::depart()
         .on_termination()
-        .on_signal(SignalKind::quit())
-        .await
+        .on_signal(SignalKind::quit());
+
+    if config.worker_shutdown_on_idle {
+        // Ignore the result as we only care that this task has completed.
+        let check_task = tokio::spawn(check_idle_shutdown(arc_worker.clone()))
+            .into_future().map(|_v| ());
+        departure = departure.on_completion(check_task);
+    }
+
+    departure.await
+}
+
+// Active when a worker can shutdown when idle
+async fn check_idle_shutdown(worker: Arc<Worker>) {
+    log::debug!("Spawning check_idle_shutdown");
+    let mut timer = time::interval(Duration::from_secs(1));
+    timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+    let guard = elegant_departure::get_shutdown_guard();
+
+    loop {
+        tokio::select! {
+            _ = timer.tick() => {
+                log::error!("check idle count");
+                if worker.should_shutdown() {
+                    log::error!("Idle max count reached, shutting down");
+                    break;
+                }
+            }
+            _ = guard.wait() => {
+                log::debug!("Shutting down check_idle_shutdown");
+                break;
+            }
+        }
+    }
 }
 
 /// Run a upkeep worker in a while loop.
