@@ -126,10 +126,10 @@ async fn main() -> Result<(), CliError> {
         Ok(_) => {
             log::info!("Complete");
             Ok(())
-        },
+        }
         Err(CliError::Message(msg)) => {
             log::error!("Failed: {msg}");
             Err(CliError::Message(msg))
-        },
+        }
     }
 }
