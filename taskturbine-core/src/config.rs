@@ -55,6 +55,14 @@ pub struct Config {
     /// Default value is 600 (10m)
     pub worker_claim_timeout_secs: i32,
 
+    /// Whether or not the worker should shutdown on when it is idle.
+    pub worker_shutdown_on_idle: bool,
+
+    /// The number empty claim attempts to make before a worker considers
+    /// itself idle. If `[worker_shutdown_on_idle]` is set, the worker
+    /// will complete its run loop. This is used for integration testing.
+    pub worker_shutdown_idle_max: i32,
+
     /// The default number of seconds that events are waited on for.
     pub await_event_default_timeout_secs: i32,
 }
@@ -73,6 +81,8 @@ impl Default for Config {
             worker_cleanup_cutoff_secs: 60 * 10,
             worker_cleanup_limit: 1000,
             worker_claim_timeout_secs: 60 * 10,
+            worker_shutdown_on_idle: false,
+            worker_shutdown_idle_max: 5,
             await_event_default_timeout_secs: 120,
         }
     }

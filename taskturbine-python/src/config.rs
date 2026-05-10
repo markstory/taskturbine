@@ -38,13 +38,19 @@ pub struct Config {
     pub worker_upkeep_inline: bool,
 
     #[pyo3(get, set)]
-    pub await_event_default_timeout_secs: i32,
-
-    #[pyo3(get, set)]
     pub worker_claim_timeout_secs: i32,
 
     #[pyo3(get, set)]
     pub worker_max_tasks_per_child: i32,
+
+    #[pyo3(get, set)]
+    pub worker_shutdown_idle_max: i32,
+
+    #[pyo3(get, set)]
+    pub worker_shutdown_on_idle: bool,
+
+    #[pyo3(get, set)]
+    pub await_event_default_timeout_secs: i32,
 }
 
 /// Convert from the python module to the core struct.
@@ -62,6 +68,8 @@ impl From<Config> for taskturbine_core::config::Config {
             worker_cleanup_limit: value.worker_cleanup_limit,
             worker_concurrency: value.worker_concurrency,
             worker_sleep_ms: value.worker_sleep_ms,
+            worker_shutdown_idle_max: value.worker_shutdown_idle_max,
+            worker_shutdown_on_idle: value.worker_shutdown_on_idle,
             await_event_default_timeout_secs: value.await_event_default_timeout_secs,
         }
     }
@@ -86,6 +94,8 @@ impl Config {
         worker_concurrency=3,
         worker_sleep_ms=200,
         worker_max_tasks_per_child=1000,
+        worker_shutdown_idle_max=5,
+        worker_shutdown_on_idle=false,
         await_event_default_timeout_secs=120,
     ))]
     fn __new__(
@@ -102,6 +112,8 @@ impl Config {
         worker_concurrency: i32,
         worker_sleep_ms: i32,
         worker_max_tasks_per_child: i32,
+        worker_shutdown_idle_max: i32,
+        worker_shutdown_on_idle: bool,
         await_event_default_timeout_secs: i32,
     ) -> Self {
         Config {
@@ -118,6 +130,8 @@ impl Config {
             worker_cleanup_cutoff_secs,
             worker_claim_timeout_secs,
             worker_max_tasks_per_child,
+            worker_shutdown_idle_max,
+            worker_shutdown_on_idle,
             await_event_default_timeout_secs,
         }
     }
