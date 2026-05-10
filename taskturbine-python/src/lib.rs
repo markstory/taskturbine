@@ -165,6 +165,11 @@ impl WorkerInner {
         self.config.worker_concurrency
     }
 
+    #[getter(worker_max_tasks_per_child)]
+    pub fn worker_max_tasks_per_child(&self) -> i32 {
+        self.config.worker_max_tasks_per_child
+    }
+
     /// Claim a collection tasks for timeout seconds.
     fn claim_tasks(&mut self) -> PyResult<Vec<ClaimedTask>> {
         let channels: Vec<&str> = self.channels.iter().map(|c| c.as_ref()).collect();
