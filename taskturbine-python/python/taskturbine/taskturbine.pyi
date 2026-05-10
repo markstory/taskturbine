@@ -207,6 +207,8 @@ class Config:
         worker_cleanup_limit: int = 1000,
         worker_concurrency: int = 3,
         worker_sleep_ms: int = 100,
+        worker_shutdown_on_idle: bool = False,
+        worker_shutdown_idle_max: int = 5,
         await_event_default_timeout_secs: int = 120,
     ) -> None: ...
 
