@@ -5,8 +5,10 @@ use sqlx::{ConnectOptions, PgPool, Pool, Postgres, migrate, postgres::PgConnectO
 pub const SALT: &str = "super-secret-value";
 
 pub async fn create_db() -> Pool<Postgres> {
-    let database_url = env::var("TASKTURBINE_DATABASE_URL").expect("Missing TASKTURBINE_DATABASE_URL in env");
-    let database_log_queries = env::var("TASKTURBINE_DATABASE_LOG_QUERIES").unwrap_or("false".into());
+    let database_url =
+        env::var("TASKTURBINE_DATABASE_URL").expect("Missing TASKTURBINE_DATABASE_URL in env");
+    let database_log_queries =
+        env::var("TASKTURBINE_DATABASE_LOG_QUERIES").unwrap_or("false".into());
     let pool =
         PgPool::connect_lazy(&database_url).expect("Failed to create database connection pool");
 
