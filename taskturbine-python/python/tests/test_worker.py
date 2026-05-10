@@ -159,9 +159,7 @@ def test_worker_cleanup(
         assert row["state"] == "cancelled", "should be cancelled now"
 
 
-def test_worker_run_simple_success(
-     db_connection: Connection, channel: str
-) -> None:
+def test_worker_run_simple_success(db_connection: Connection, channel: str) -> None:
     demo_app.set_channels([channel])
 
     first = demo_app.spawn_task("ok-task", {"oid": 123}, channel=channel)

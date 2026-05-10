@@ -184,7 +184,7 @@ impl WorkerInner {
         claim_res
             .map(|v| {
                 let mapped: Vec<ClaimedTask> = v.into_iter().map(|task| task.into()).collect();
-                if mapped.len() < 1 {
+                if mapped.is_empty() {
                     self.idle_count += 1;
                 } else {
                     self.idle_count = 0;
@@ -221,7 +221,7 @@ impl WorkerInner {
             return false;
         }
         if self.idle_count < self.config.worker_shutdown_idle_max {
-            return false
+            return false;
         }
         true
     }

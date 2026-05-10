@@ -34,7 +34,9 @@ pub fn make_task_app() -> TaskturbineApp {
     let database_url = env::var("DEMO_DATABASE_URL").expect("Missing DEMO_DATABASE_URL in env");
     let task_config = Config {
         database_url,
-        worker_shutdown_on_idle: env::var("DEMO_APP_SHUTDOWN_ON_IDLE").unwrap_or("false".to_string()) == "true",
+        worker_shutdown_on_idle: env::var("DEMO_APP_SHUTDOWN_ON_IDLE")
+            .unwrap_or("false".to_string())
+            == "true",
         worker_shutdown_idle_max: 10,
         ..Config::default()
     };

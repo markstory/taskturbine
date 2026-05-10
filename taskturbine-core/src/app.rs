@@ -1,5 +1,8 @@
 use std::{
-    collections::{HashMap, HashSet}, pin::Pin, sync::{Arc, atomic}, time::Duration
+    collections::{HashMap, HashSet},
+    pin::Pin,
+    sync::{Arc, atomic},
+    time::Duration,
 };
 
 use async_channel::{Receiver, Sender, TrySendError};
@@ -376,7 +379,9 @@ impl Worker {
         if !self.app.config.worker_shutdown_on_idle {
             return false;
         }
-        if self.app.config.worker_shutdown_idle_max > self.idle_count.load(atomic::Ordering::Relaxed) {
+        if self.app.config.worker_shutdown_idle_max
+            > self.idle_count.load(atomic::Ordering::Relaxed)
+        {
             return false;
         }
         true
@@ -516,7 +521,8 @@ pub async fn run_worker(worker: Worker) {
     if config.worker_shutdown_on_idle {
         // Ignore the result as we only care that this task has completed.
         let check_task = tokio::spawn(check_idle_shutdown(arc_worker.clone()))
-            .into_future().map(|_v| ());
+            .into_future()
+            .map(|_v| ());
         departure = departure.on_completion(check_task);
     }
 
