@@ -88,7 +88,7 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), CliError> {
     let args = Cli::parse();
     SimpleLogger::new().init().unwrap();
 
@@ -121,13 +121,15 @@ async fn main() {
         Commands::SpawnTask(args) => task_spawn::spawn_task(storage, args).await,
         Commands::UpkeepWorker => upkeep::upkeep(storage).await,
     };
-    if result.is_ok() {
-        log::info!("Complete");
-    } else if let Err(err) = result {
-        match err {
-            CliError::Message(msg) => {
-                log::error!("Failed: {msg}");
-            }
-        }
+
+    match result {
+        Ok(_) => {
+            log::info!("Complete");
+            Ok(())
+        },
+        Err(CliError::Message(msg)) => {
+            log::error!("Failed: {msg}");
+            Err(CliError::Message(msg))
+        },
     }
 }
