@@ -539,9 +539,8 @@ async fn check_idle_shutdown(worker: Arc<Worker>) {
     loop {
         tokio::select! {
             _ = timer.tick() => {
-                log::error!("check idle count");
                 if worker.should_shutdown() {
-                    log::error!("Idle max count reached, shutting down");
+                    log::info!("Idle max count reached, shutting down");
                     break;
                 }
             }
