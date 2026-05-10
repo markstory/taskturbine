@@ -17,7 +17,6 @@ use crate::models::Run;
 #[cfg(test)]
 use sqlx::{Pool, Postgres};
 
-
 /// Error types raised by the storage layer of taskturbine.
 #[derive(Debug)]
 pub enum StorageError {
