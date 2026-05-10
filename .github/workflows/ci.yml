@@ -194,7 +194,7 @@ jobs:
       - name: Run pytest with coverage
         run: make test-py
         env:
-          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/taskturbine"
 
   test-rs:
     name: Rust tests
@@ -205,7 +205,6 @@ jobs:
       - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
 
       - name: Start PostgreSQL
-        if: steps.changes.output != 'true'
         run: docker run --rm --name=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=taskturbine -p 5432:5432 -d postgres:latest
 
       - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # pin@v1
@@ -229,7 +228,7 @@ jobs:
         run: make test-rs
         env:
           RUST_BACKTRACE: 1
-          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/taskturbine"
 
   run-examples-py:
     name: Run python demo application
@@ -260,7 +259,7 @@ jobs:
       - name: Run examples application
         run: make test-examples-py
         env:
-          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/taskturbine"
           TASKTURBINE_SHUTDOWN_ON_IDLE: "true"
 
   run-examples-rs:
@@ -287,5 +286,5 @@ jobs:
       - name: Run examples application
         run: make test-examples-rs
         env:
-          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+          TASKTURBINE_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/taskturbine"
           TASKTURBINE_SHUTDOWN_ON_IDLE: "true"
