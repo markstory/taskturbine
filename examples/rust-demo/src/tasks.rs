@@ -35,6 +35,7 @@ pub fn make_task_app() -> TaskturbineApp {
     let task_config = Config {
         database_url,
         worker_shutdown_on_idle: env::var("DEMO_APP_SHUTDOWN_ON_IDLE").unwrap_or("false".to_string()) == "true",
+        worker_shutdown_idle_max: 10,
         ..Config::default()
     };
 

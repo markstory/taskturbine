@@ -376,7 +376,7 @@ impl Worker {
         if !self.app.config.worker_shutdown_on_idle {
             return false;
         }
-        if self.app.config.worker_shutdown_idle_max < self.idle_count.load(atomic::Ordering::Relaxed) {
+        if self.app.config.worker_shutdown_idle_max > self.idle_count.load(atomic::Ordering::Relaxed) {
             return false;
         }
         true
