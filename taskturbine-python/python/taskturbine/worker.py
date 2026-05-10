@@ -338,7 +338,7 @@ class Worker:
                     time.sleep(self._inner.worker_sleep_ms / 1000)
 
                 # If all workers appear idle
-                if self._inner.should_shutdown():
+                if running == 0 and self._inner.should_shutdown():
                     logger.info("all work complete, and idle reached")
                     return self.shutdown()
 

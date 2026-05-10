@@ -11,7 +11,7 @@ from taskturbine import TaskturbineApp, Config, TaskContext
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
-    level=logging.INFO,
+    level=logging.DEBUG,
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
@@ -26,7 +26,8 @@ config = Config(
     database_url=db_url,
     app_module="testapp:app",
     worker_concurrency=4,
-    worker_sleep_ms=100
+    worker_sleep_ms=100,
+    worker_shutdown_on_idle=os.getenv("TASKTURBINE_SHUTDOWN_ON_IDLE") == "true",
 )
 app = TaskturbineApp(config)
 
