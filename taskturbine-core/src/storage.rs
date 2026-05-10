@@ -1,11 +1,9 @@
 use std::collections::HashMap;
-use std::path::Path;
 
 use crate::config::Config;
 use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
 use chrono::{DateTime, Utc};
 use sqlx::AssertSqlSafe;
-use sqlx::migrate::Migrator;
 use sqlx::{
     ConnectOptions, PgConnection, PgPool, QueryBuilder, Row,
     migrate::MigrateError,
@@ -18,6 +16,7 @@ use uuid::Uuid;
 use crate::models::Run;
 #[cfg(test)]
 use sqlx::{Pool, Postgres};
+
 
 /// Error types raised by the storage layer of taskturbine.
 #[derive(Debug)]
@@ -317,9 +316,7 @@ impl Storage {
             .execute(&self.pool)
             .await?;
 
-        // Use the migrator API without the macro so the table can be stored
-        // in the correct schema.
-        let mut migrator = Migrator::new(Path::new("../taskturbine-core/migrations")).await?;
+        let mut migrator = sqlx::migrate!("./migrations");
         migrator.dangerous_set_table_name("taskturbine._sqlx_migrations");
         migrator.run(&self.pool).await?;
 
