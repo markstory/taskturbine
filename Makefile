@@ -51,6 +51,12 @@ test-examples-py: build-cli ## Run an integration test with the python client.
 	cd ./examples/python-demo && uv sync && uv run testapp.py
 .PHONY: test-examples-py
 
+test-examples-rs: build-cli ## Run an integration test with the rust client.
+	@echo "> Spawning $(TASK_REPEAT) tasks"
+	target/debug/taskturbine-cli spawn-task -t 'sleep-time' --params {} --repeat $(TASK_REPEAT)
+	@echo "> Running rust worker"
+	cd ./examples/rust-demo && cargo run --bin worker
+.PHONY: test-examples-py
 
 # Linting and style
 ###################
