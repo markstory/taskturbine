@@ -179,6 +179,16 @@ class Config:
     worker_max_tasks_per_child: int
     """The number of tasks that a child should execute before shutting down."""
 
+    worker_shutdown_on_idle: bool
+    """Whether or not the worker should shutdown on when it is idle."""
+
+    worker_shutdown_idle_max: int
+    """
+    The number empty claim attempts to make before a worker considers
+    itself idle. If `[worker_shutdown_on_idle]` is set, the worker
+    will complete its run loop. This is used for integration testing.
+    """
+
     await_event_default_timeout_secs: int
     """The default number of seconds that events are waited on for."""
 
