@@ -77,7 +77,7 @@ def test_worker_run_batch_mixed_failure(
     second = demo_app.spawn_task("oid-partial-failure", {"oid": 456}, channel=channel)
 
     worker = demo_app.create_worker("worker-1", [channel])
-    worker.run(stop_on_idle=True)
+    worker.run()
 
     cursor = db_connection.cursor()
     cursor.execute(
@@ -160,7 +160,7 @@ def test_worker_cleanup(
 
 
 def test_worker_run_simple_success(
-    config: Config, db_connection: Connection, channel: str
+     db_connection: Connection, channel: str
 ) -> None:
     demo_app.set_channels([channel])
 
@@ -168,7 +168,7 @@ def test_worker_run_simple_success(
     second = demo_app.spawn_task("ok-task", {"oid": 456}, channel=channel)
 
     worker = demo_app.create_worker("worker-1", [channel])
-    worker.run(stop_on_idle=True)
+    worker.run()
 
     cursor = db_connection.cursor()
     cursor.execute(

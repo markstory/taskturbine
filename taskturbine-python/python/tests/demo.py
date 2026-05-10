@@ -11,7 +11,12 @@ from taskturbine import TaskturbineApp, Config, TaskContext
 db_url = os.getenv("TASKTURBINE_DATABASE_URL")
 assert db_url, "Required environment variable TASKTURBINE_DATABASE_URL undefined"
 
-config = Config(app_module="tests.demo:app", database_url=db_url)
+config = Config(
+    app_module="tests.demo:app",
+    database_url=db_url,
+    worker_shutdown_on_idle=True,
+    worker_shutdown_idle_max=5,
+)
 app = TaskturbineApp(config)
 
 
