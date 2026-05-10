@@ -289,6 +289,9 @@ class WorkerInner:
     def should_run_upkeep(self, timestamp: int) -> bool: ...
     """Should the current worker run upkeep operations"""
 
+    def should_shutdown(self) -> bool: ...
+    """Should the worker shutdown for being idle"""
+
     def run_upkeep(self) -> None: ...
     """
     Run a cleanup operation that:

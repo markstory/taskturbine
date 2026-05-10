@@ -116,6 +116,7 @@ impl AppInner {
             config: self.config.clone(),
             storage: self.storage.clone(),
             runtime: self.runtime.clone(),
+            idle_count: 0,
             worker_id,
             channels,
         }
@@ -139,6 +140,7 @@ struct WorkerInner {
     channels: Vec<String>,
     worker_id: String,
     runtime: Arc<tokio::runtime::Runtime>,
+    idle_count: i32,
 }
 
 #[pymethods]
@@ -163,13 +165,8 @@ impl WorkerInner {
         self.config.worker_concurrency
     }
 
-    #[getter(worker_max_tasks_per_child)]
-    pub fn worker_max_tasks_per_child(&self) -> i32 {
-        self.config.worker_max_tasks_per_child
-    }
-
     /// Claim a collection tasks for timeout seconds.
-    fn claim_tasks(&self) -> PyResult<Vec<ClaimedTask>> {
+    fn claim_tasks(&mut self) -> PyResult<Vec<ClaimedTask>> {
         let channels: Vec<&str> = self.channels.iter().map(|c| c.as_ref()).collect();
         let timeout = Duration::from_secs(self.config.worker_claim_timeout_secs as u64);
         let claim_res = self.runtime.block_on(self.storage.claim_task(
@@ -182,6 +179,11 @@ impl WorkerInner {
         claim_res
             .map(|v| {
                 let mapped: Vec<ClaimedTask> = v.into_iter().map(|task| task.into()).collect();
+                if mapped.len() < 1 {
+                    self.idle_count += 1;
+                } else {
+                    self.idle_count = 0;
+                }
                 mapped
             })
             .map_err(|e| PyValueError::new_err(format!("Could not claim tasks: {e:?}")))
@@ -205,6 +207,16 @@ impl WorkerInner {
         let delta = now - timestamp;
         if delta < self.config.worker_upkeep_interval_secs as i64 {
             return false;
+        }
+        true
+    }
+
+    pub fn should_shutdown(&self) -> bool {
+        if !self.config.worker_shutdown_on_idle {
+            return false;
+        }
+        if self.idle_count < self.config.worker_shutdown_idle_max {
+            return false
         }
         true
     }

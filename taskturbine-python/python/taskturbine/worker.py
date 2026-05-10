@@ -291,15 +291,12 @@ class Worker:
         )
         return result_thread
 
-    def run(self, stop_on_idle: bool = False) -> None:
+    def run(self) -> None:
         """
         Run the worker run loop.
 
         Intended to run in a while loop that the application
         starts. Will periodically sleep based on Config.
-
-        :param stop_on_idle: Set to true to have run() break its loop when
-          there are no more tasks fetched.
         """
         last_cleanup = time.time() - 1
         app_module = self._inner.app_module
@@ -313,7 +310,6 @@ class Worker:
         # start process pool to receive work.
         logger.debug("Starting worker %s processes", self._inner.worker_concurrency)
         worker_sleep = self._inner.worker_sleep_ms / 1000
-        idle_count = 0
         with Pool(
             processes=self._inner.worker_concurrency,
             maxtasksperchild=self._inner.worker_max_tasks_per_child,
@@ -333,19 +329,16 @@ class Worker:
                     )
                     self._inflight.append(fut)
                     self._claimed_tasks.task_done()
-                    idle_count = 0
 
                 running = self._poll_inflight()
 
                 # If this worker is shutting down wait until
                 # all inflight work is complete.
                 if running == 0 and not claimed:
-                    # This could be another utilization metric to collect
-                    idle_count += 1
                     time.sleep(self._inner.worker_sleep_ms / 1000)
 
                 # If all workers appear idle
-                if idle_count > self._inner.worker_concurrency and stop_on_idle:
+                if self._inner.should_shutdown():
                     logger.info("all work complete, and idle reached")
                     return self.shutdown()
 
