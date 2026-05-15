@@ -1,3 +1,4 @@
+use colored::Colorize;
 use clap::{Parser, Subcommand};
 
 use taskturbine_core::config::Config;
@@ -107,8 +108,8 @@ async fn main() -> Result<(), CliError> {
         usecase: args.usecase,
         ..Config::default()
     };
-    println!("Taskturbine CLI");
-    println!("usecase: {}", config.usecase);
+    println!("{}", "Taskturbine CLI".blue());
+    println!("{}: {}", "usecase".blue().bold(), config.usecase.bright_blue());
 
     let storage = Storage::new(config);
     let result = match args.command {
