@@ -1,6 +1,5 @@
 use clap::{Parser, Subcommand};
 
-use simple_logger::SimpleLogger;
 use taskturbine_core::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
 
@@ -90,7 +89,12 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<(), CliError> {
     let args = Cli::parse();
-    SimpleLogger::new().init().unwrap();
+    let log_level = if args.verbose {
+        log::Level::Debug
+    } else {
+        log::Level::Info
+    };
+    simple_logger::init_with_level(log_level).unwrap();
 
     // Find the database url. Use both CLI options and environment variables.
     let db_url = args.database_url.unwrap_or_else(|| {
