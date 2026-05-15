@@ -122,6 +122,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
         results.push(res);
     }
 
+    let mut failed = false;
     for item in results.iter() {
         match item {
             Ok(spawned) => {
@@ -131,8 +132,11 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
             }
             Err(err) => {
                 log::error!("Failed to spawn task {err:?}");
-                return Err(CliError::Message("Failed to spawn task".into()));
+                failed = true;
             }
+        }
+        if failed {
+            return Err(CliError::Message("Failed to spawn task".into()));
         }
     }
 
