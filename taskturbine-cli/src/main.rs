@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use colored::Colorize;
 use clap::{Parser, Subcommand};
 
@@ -20,15 +22,18 @@ mod task_spawn;
 mod upkeep;
 
 #[derive(Debug)]
-enum CliError {
-    // TODO with no other variants is this enum necessary?
-    // This could be a unit type.
-    Message(String),
-}
+struct CliError(String);
+
 impl From<StorageError> for CliError {
     fn from(value: StorageError) -> Self {
         let message = format!("Operation failed - StorageError\n{value:?}");
-        CliError::Message(message)
+        CliError(message)
+    }
+}
+
+impl Display for CliError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+       write!(f, "{}", self.0)
     }
 }
 
@@ -138,9 +143,9 @@ async fn main() -> Result<(), CliError> {
             log::info!("Complete");
             Ok(())
         }
-        Err(CliError::Message(msg)) => {
+        Err(CliError(msg)) => {
             log::error!("Failed: {msg}");
-            Err(CliError::Message("Command Failed!".to_string()))
+            Err(CliError("Command Failed!".to_string()))
         }
     }
 }

@@ -31,7 +31,7 @@ impl TryFrom<RunGetArgs> for RunGetOptions {
 
 pub async fn execute(storage: Storage, args: RunGetArgs) -> Result<(), CliError> {
     let admin_storage = AdminStorage::new(storage.get_config());
-    let options: RunGetOptions = args.try_into().map_err(CliError::Message)?;
+    let options: RunGetOptions = args.try_into().map_err(CliError)?;
 
     let run_details = admin_storage
         .run_get(options)

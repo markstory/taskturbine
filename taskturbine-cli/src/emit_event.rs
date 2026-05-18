@@ -23,6 +23,6 @@ pub async fn emit_event(storage: Storage, args: EmitEventArgs) -> Result<(), Cli
             log::info!("Emit event for {}", args.event_name);
             Ok(())
         }
-        Err(err) => Err(CliError::Message(format!("Failed to emit event {err:?}"))),
+        Err(err) => Err(CliError(format!("Failed to emit event {err:?}"))),
     }
 }

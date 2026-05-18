@@ -16,7 +16,7 @@ pub async fn clear_storage(storage: Storage, args: ClearArgs) -> Result<(), CliE
 
         match res {
             Ok(_) => Ok(()),
-            Err(err) => Err(CliError::Message(format!("Failed to clear tasks {err:?}"))),
+            Err(err) => Err(CliError(format!("Failed to clear tasks {err:?}"))),
         }
     } else {
         log::info!("SKIP: You did not provide --execute to confirm execution.");

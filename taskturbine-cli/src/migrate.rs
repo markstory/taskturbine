@@ -7,5 +7,5 @@ pub async fn run_migrations(storage: Storage) -> Result<(), CliError> {
     storage
         .update_schema()
         .await
-        .map_err(|e| CliError::Message(format!("Failed to run migrations: {e:?}")))
+        .map_err(|e| CliError(format!("Failed to run migrations: {e:?}")))
 }

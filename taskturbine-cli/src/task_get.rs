@@ -39,7 +39,7 @@ impl TryFrom<TaskGetArgs> for TaskGetOptions {
 pub async fn execute(storage: Storage, args: TaskGetArgs) -> Result<(), CliError> {
     let admin_storage = AdminStorage::new(storage.get_config());
     let show_results = args.show_results;
-    let options: TaskGetOptions = args.try_into().map_err(CliError::Message)?;
+    let options: TaskGetOptions = args.try_into().map_err(CliError)?;
 
     let details = admin_storage
         .task_get(options.clone())

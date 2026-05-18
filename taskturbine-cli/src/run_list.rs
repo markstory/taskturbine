@@ -43,7 +43,7 @@ impl TryFrom<RunListArgs> for RunListOptions {
 
 pub async fn execute(storage: Storage, args: RunListArgs) -> Result<(), CliError> {
     let admin_storage = AdminStorage::new(storage.get_config());
-    let options: RunListOptions = args.try_into().map_err(CliError::Message)?;
+    let options: RunListOptions = args.try_into().map_err(CliError)?;
 
     let runs = admin_storage
         .run_list(options)

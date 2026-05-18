@@ -136,7 +136,7 @@ pub async fn spawn_task(storage: Storage, args: SpawnArgs) -> Result<(), CliErro
             }
         }
         if failed {
-            return Err(CliError::Message("Failed to spawn task".into()));
+            return Err(CliError("Failed to spawn task".into()));
         }
     }
 
