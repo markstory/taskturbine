@@ -8,6 +8,7 @@ use taskturbine_core::{models::TaskId, storage::Storage};
 pub struct CancelArgs {
     /// The task id to cancel
     pub task_id: Uuid,
+
     #[arg(long, help = "The failure reason when cancelling the task")]
     pub reason: Option<String>,
 }

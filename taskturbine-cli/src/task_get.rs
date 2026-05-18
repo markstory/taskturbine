@@ -1,4 +1,5 @@
 use clap::Args;
+use uuid::Uuid;
 
 use crate::{
     CliError,
@@ -13,7 +14,7 @@ use taskturbine_core::{
 #[derive(Args, Debug)]
 pub struct TaskGetArgs {
     /// The id of the task to get
-    pub task_id: String,
+    pub task_id: Uuid,
 
     #[arg(
         long,
@@ -27,10 +28,7 @@ pub struct TaskGetArgs {
 impl TryFrom<TaskGetArgs> for TaskGetOptions {
     type Error = String;
     fn try_from(value: TaskGetArgs) -> Result<Self, Self::Error> {
-        let task_id: TaskId = value
-            .task_id
-            .try_into()
-            .map_err(|_| "Invalid task_id".to_string())?;
+        let task_id: TaskId = value.task_id.into();
 
         Ok(TaskGetOptions { task_id })
     }

@@ -1,4 +1,5 @@
 use clap::Args;
+use uuid::Uuid;
 
 use crate::{
     CliError,
@@ -13,7 +14,7 @@ use taskturbine_core::{
 #[derive(Args, Debug)]
 pub struct RunGetArgs {
     /// The run id
-    pub run_id: String,
+    pub run_id: Uuid,
 }
 
 /// Implement into/from to convert into the storage interface struct
@@ -21,10 +22,7 @@ impl TryFrom<RunGetArgs> for RunGetOptions {
     type Error = String;
 
     fn try_from(value: RunGetArgs) -> Result<Self, String> {
-        let run_id: RunId = value
-            .run_id
-            .try_into()
-            .map_err(|_| "Invalid run_id".to_string())?;
+        let run_id: RunId = value.run_id.into();
         Ok(RunGetOptions { run_id })
     }
 }
