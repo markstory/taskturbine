@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-use colored::Colorize;
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 
 use taskturbine_core::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
@@ -33,7 +33,7 @@ impl From<StorageError> for CliError {
 
 impl Display for CliError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-       write!(f, "{}", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -120,7 +120,11 @@ async fn main() -> Result<(), CliError> {
         ..Config::default()
     };
     println!("{}", "Taskturbine CLI".blue());
-    println!("{}: {}", "usecase".blue().bold(), config.usecase.bright_blue());
+    println!(
+        "{}: {}",
+        "usecase".blue().bold(),
+        config.usecase.bright_blue()
+    );
 
     let storage = Storage::new(config);
     let result = match args.command {
