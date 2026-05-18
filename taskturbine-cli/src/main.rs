@@ -21,6 +21,8 @@ mod upkeep;
 
 #[derive(Debug)]
 enum CliError {
+    // TODO with no other variants is this enum necessary?
+    // This could be a unit type.
     Message(String),
 }
 impl From<StorageError> for CliError {
@@ -64,6 +66,10 @@ enum Commands {
     /// * Release expired claims, and fail the run that expired.
     ///
     /// * Cancel tasks that are past their cancellation_max_age
+    ///
+    /// The worker will continue to run even if there are postgres
+    /// connection errors. The hope is for any infrastructure/configuration
+    /// issues to be resolved and the application is restarted.
     UpkeepWorker,
     /// Run a retention cleanup on event data.
     CleanupEvent(cleanup_event::CleanupEventArgs),
@@ -134,7 +140,7 @@ async fn main() -> Result<(), CliError> {
         }
         Err(CliError::Message(msg)) => {
             log::error!("Failed: {msg}");
-            Err(CliError::Message(msg))
+            Err(CliError::Message("Command Failed!".to_string()))
         }
     }
 }
