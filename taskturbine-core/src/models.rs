@@ -92,6 +92,11 @@ impl TryFrom<&String> for TaskId {
         Ok(Self(uuid))
     }
 }
+impl From<Uuid> for TaskId {
+    fn from(value: Uuid) -> Self {
+        Self(value)
+    }
+}
 
 /// Marker type for Run identifiers. Bare UUIDs are easy to confuse.
 #[derive(sqlx::Decode, sqlx::Encode, Clone, Copy, Debug, PartialEq)]
@@ -102,13 +107,11 @@ impl sqlx::Type<sqlx::Postgres> for RunId {
         <Uuid as sqlx::Type<sqlx::Postgres>>::type_info()
     }
 }
-
 impl Display for RunId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
-
 impl TryFrom<String> for RunId {
     type Error = ();
 
@@ -119,7 +122,6 @@ impl TryFrom<String> for RunId {
         Ok(Self(uuid))
     }
 }
-
 impl TryFrom<&String> for RunId {
     type Error = ();
 
@@ -128,6 +130,11 @@ impl TryFrom<&String> for RunId {
             return Err(());
         };
         Ok(Self(uuid))
+    }
+}
+impl From<Uuid> for RunId {
+    fn from(value: Uuid) -> Self {
+        Self(value)
     }
 }
 
