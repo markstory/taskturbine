@@ -10,3 +10,29 @@ This crate provides CLI tools for interacting with a taskturbine application's d
 - Run a upkeep worker.
 - Clear all stored tasks + events.
 - Create schema and run schema migrations.
+- Run tasks on a schedule
+
+## Scheduler
+
+Using `taskturbine-cli scheduler` will let you periodically spawn tasks based on
+schedules defined in a configuration file. Think of it like crontab for your
+application's tasks:
+
+### Configuration File Example
+
+```
+[schedules]
+
+[schedules.send-digests]
+taskname = "myapp-notification-send-digests"
+channel = "notifications"
+schedule = {cron = "*/5 * * * *" }
+
+[schedules.process-commits]
+taskname = "myapp-commits-process"
+channel = "commits"
+schedule =  { timedelta = "10 seconds" }
+```
+
+The `schedules` table contains a list of schedule keys, the task, channel and schedule to
+use. Each schedule can use either a crontab or timedelta expression schedule.

@@ -15,6 +15,7 @@ mod formatters;
 mod migrate;
 mod run_get;
 mod run_list;
+mod scheduler;
 mod task_cancel;
 mod task_get;
 mod task_list;
@@ -76,6 +77,13 @@ enum Commands {
     /// connection errors. The hope is for any infrastructure/configuration
     /// issues to be resolved and the application is restarted.
     UpkeepWorker,
+    /// Run a scheduler that spawns tasks on periodic schedules
+    ///
+    /// Will spawn tasks periodically based on the provided configuration file.
+    ///
+    /// See the README for an example configuration file.
+    ///
+    Scheduler(scheduler::SchedulerArgs),
     /// Run a retention cleanup on event data.
     CleanupEvent(cleanup_event::CleanupEventArgs),
     /// Run a retention cleanup on task, run and checkpoint data.
@@ -138,6 +146,7 @@ async fn main() -> Result<(), CliError> {
         Commands::CancelTask(args) => task_cancel::cancel(storage, args).await,
         Commands::GetTask(args) => task_get::execute(storage, args).await,
         Commands::ListTask(args) => task_list::execute(storage, args).await,
+        Commands::Scheduler(args) => scheduler::scheduler(storage, args).await,
         Commands::SpawnTask(args) => task_spawn::spawn_task(storage, args).await,
         Commands::UpkeepWorker => upkeep::upkeep(storage).await,
     };
