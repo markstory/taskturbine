@@ -15,3 +15,5 @@ simple_logger = "5.1.0"
 uuid.workspace = true
 sqlx.workspace = true
 colored = "3.1.1"
+toml = "1.1.2"
+serde = "1.0.228"
