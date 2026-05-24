@@ -142,9 +142,7 @@ impl PartialOrd for StorageEntry {
 }
 impl PartialEq for StorageEntry {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key &&
-            self.taskname == other.taskname &&
-            self.channel == other.channel
+        self.key == other.key && self.taskname == other.taskname && self.channel == other.channel
     }
 }
 impl Eq for StorageEntry {}
@@ -171,7 +169,7 @@ impl Scheduler {
 
     /// Return the number of seconds to sleep for.
     pub async fn tick(&self) -> i32 {
-        let now = Utc::now();
+        let _now = Utc::now();
         // look at the top of the heap
         // is the entry.is_due()
         // if so, spawn a task
