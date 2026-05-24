@@ -206,6 +206,7 @@ pub async fn panic_failure(mut _ctx: TaskContext) -> TaskResult {
 /// Simulate IO wait workload
 pub async fn sleep_time(ctx: TaskContext) -> TaskResult {
     let params = ctx.param_bytes();
+    // TODO use serde and a struct to be more idiomatic
     let res: Result<Value, _> = serde_json::from_slice(params.as_slice());
     let delay = match res {
         Ok(params) => params
