@@ -69,7 +69,7 @@ pub async fn scheduler(storage: Storage, args: SchedulerArgs) -> Result<(), CliE
     Ok(())
 }
 
-pub async fn run_scheduler_worker(storage: Storage, config: SchedulerConfig) {
+async fn run_scheduler_worker(storage: Storage, config: SchedulerConfig) {
     tokio::spawn(run_scheduler(storage, config));
 
     // Should this be handled in main.rs?
@@ -79,7 +79,7 @@ pub async fn run_scheduler_worker(storage: Storage, config: SchedulerConfig) {
         .await
 }
 
-pub async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
+async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     log::debug!("Starting scheduler");
     // TODO should this have config? scheduler_poll_interval
     let mut timer = time::interval(Duration::from_secs(1));
