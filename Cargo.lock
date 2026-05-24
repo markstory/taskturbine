@@ -1969,6 +1969,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
+ "elegant-departure",
  "log",
  "serde",
  "serde_json",
