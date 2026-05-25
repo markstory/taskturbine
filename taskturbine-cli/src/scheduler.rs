@@ -161,7 +161,7 @@ impl Eq for StorageEntry {}
 
 struct Scheduler {
     storage: Storage,
-    entries: Box<BinaryHeap<StorageEntry>>,
+    entries: BinaryHeap<StorageEntry>,
 }
 
 impl Scheduler {
@@ -173,7 +173,7 @@ impl Scheduler {
         }
         Self {
             storage,
-            entries: Box::new(entries),
+            entries,
         }
     }
 
