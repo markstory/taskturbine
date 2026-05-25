@@ -86,7 +86,7 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     let guard = elegant_departure::get_shutdown_guard();
 
-    let scheduler = Scheduler::new(storage, config);
+    let mut scheduler = Scheduler::new(storage, config);
 
     loop {
         tokio::select! {
@@ -119,6 +119,7 @@ struct StorageEntry {
     taskname: String,
     channel: String,
     // schedule: Box<dyn Schedule>,
+    pub last_run: Option<DateTime<Utc>>,
 }
 impl StorageEntry {
     fn new(key: &String, config_entry: &ScheduleEntry) -> Self {
@@ -126,7 +127,18 @@ impl StorageEntry {
             key: key.to_owned(),
             taskname: config_entry.taskname.clone(),
             channel: config_entry.channel.clone(),
+            last_run: None,
         }
+    }
+
+    fn is_due(&self) -> bool {
+        // Compare Use last_run and schedule to see if now is less than or equal to the next time.
+        false
+    }
+    
+    fn remaining_seconds(&self) -> i32 {
+        // Use last_run and schedule.
+        1
     }
 }
 impl Ord for StorageEntry {
@@ -149,8 +161,7 @@ impl Eq for StorageEntry {}
 
 struct Scheduler {
     storage: Storage,
-    entries: BinaryHeap<StorageEntry>,
-    last_run: HashMap<String, DateTime<Utc>>,
+    entries: Box<BinaryHeap<StorageEntry>>,
 }
 
 impl Scheduler {
@@ -162,19 +173,54 @@ impl Scheduler {
         }
         Self {
             storage,
-            entries,
-            last_run: HashMap::new(),
+            entries: Box::new(entries),
         }
     }
 
     /// Return the number of seconds to sleep for.
-    pub async fn tick(&self) -> i32 {
-        let _now = Utc::now();
+    pub async fn tick(&mut self) -> i32 {
         // look at the top of the heap
-        // is the entry.is_due()
-        // if so, spawn a task
-        // and then update last run state.
+        let mut next_tick_at = 1;
+        loop {
+            // This method takes a &mut, so it should be threadsafe
+            let is_due = if let Some(entry) = self.entries.peek() {
+                entry.is_due()
+            } else {
+                false
+            };
+            if !is_due {
+                log::debug!("no tasks due now");
+                break;
+            }
 
-        1
+            if let Some(mut entry) = self.entries.pop() {
+                // Update last_run state.
+                // TODO add options and params support
+                let result = self.storage.spawn_task(&entry.channel, &entry.taskname, b"", None).await;
+                match result {
+                    Ok(spawn) => {
+                        let task_id = spawn.task_id;
+                        let run_id = spawn.run_id;
+                        log::debug!("Spawned task_id={task_id} run_id={run_id}");
+
+                        let now = Utc::now();
+                        entry.last_run = Some(now);
+                    },
+                    Err(err) => {
+                        log::error!("Failed to spawn task. Error: {err:?}");
+                    }
+                }
+                // Put the entry back into the heap where it can be sorted.
+                self.entries.push(entry);
+            } else {
+                log::debug!("could not pop from self.entries");
+                break;
+            }
+        }
+        // We're done this tick update the sleep time until the next task is due.
+        if let Some(entry) = self.entries.peek() {
+            next_tick_at = entry.remaining_seconds();
+        }
+        next_tick_at
     }
 }
