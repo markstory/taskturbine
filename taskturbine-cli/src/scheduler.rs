@@ -34,7 +34,14 @@ struct ScheduleEntry {
 #[serde(rename_all = "snake_case")]
 enum ScheduleKind {
     Cron(String),
-    Timedelta(String),
+    Timedelta(TimedeltaData),
+}
+
+#[derive(Deserialize)]
+struct TimedeltaData {
+    hours: Option<i32>,
+    minutes: Option<i32>,
+    seconds: Option<i32>,
 }
 
 pub async fn scheduler(storage: Storage, args: SchedulerArgs) -> Result<(), CliError> {
@@ -86,7 +93,8 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     let guard = elegant_departure::get_shutdown_guard();
 
-    let mut scheduler = Scheduler::new(storage, config);
+    let now = Utc::now();
+    let mut scheduler = Scheduler::new(storage, config, now);
 
     loop {
         tokio::select! {
@@ -105,40 +113,76 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
 trait Schedule {
     /// Is this schedule currently due? or past due based on the last_run.
     /// Schedules that are due, will have tasks spawned.
-    fn is_due(&self, last_run: DateTime<Utc>) -> bool;
+    fn is_due(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> bool;
 
     /// Get the number of seconds until the task is due again.
-    fn remaining_seconds(&self, last_run: DateTime<Utc>) -> Duration;
+    fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64;
+}
 
-    /// Get the next time this task will be spawned *after* the provided datetime
-    fn runtime_after(&self, start: DateTime<Utc>) -> DateTime<Utc>;
+struct TimedeltaSchedule {
+    duration: Duration,
+}
+impl TimedeltaSchedule {
+    fn new(schedule: &TimedeltaData) -> Self {
+        let mut total_seconds = 0;
+        if let Some(v) = schedule.seconds {
+            total_seconds += v;
+        }
+        if let Some(v) = schedule.minutes {
+            total_seconds += v * 60;
+        }
+        if let Some(v) = schedule.hours {
+            total_seconds += v * 60 * 60;
+        }
+        let duration = Duration::from_secs(total_seconds as u64);
+        Self {duration}
+    }
+}
+impl Schedule for TimedeltaSchedule {
+    /// Check if the delta between last_run and now is at least schedule seconds apart.
+    fn is_due(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> bool {
+        let remaining = self.remaining_seconds(now, last_run);
+        remaining <= 0
+    }
+
+    /// Get the seconds remaining between last_run and now
+    fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64 {
+        let gap = now - last_run;
+        log::debug!("now {now}");
+        log::debug!("last_run {last_run}");
+        log::debug!("gap {gap}");
+        (self.duration.as_secs() as i64) - gap.num_seconds()
+    }
 }
 
 struct StorageEntry {
     key: String,
     taskname: String,
     channel: String,
-    // schedule: Box<dyn Schedule>,
-    pub last_run: Option<DateTime<Utc>>,
+    schedule: Box<dyn Schedule + Send>,
+    pub last_run: DateTime<Utc>,
 }
 impl StorageEntry {
-    fn new(key: &String, config_entry: &ScheduleEntry) -> Self {
+    fn new(key: &String, config_entry: &ScheduleEntry, last_run: DateTime<Utc>) -> Self {
+        let schedule = match &config_entry.schedule {
+            ScheduleKind::Cron(_value) => panic!("not done"),
+            ScheduleKind::Timedelta(value) => TimedeltaSchedule::new(value),
+        };
         Self {
             key: key.to_owned(),
             taskname: config_entry.taskname.clone(),
             channel: config_entry.channel.clone(),
-            last_run: None,
+            last_run,
+            schedule: Box::new(schedule),
         }
     }
 
-    fn is_due(&self) -> bool {
-        // Compare Use last_run and schedule to see if now is less than or equal to the next time.
-        false
+    fn is_due(&self, now: DateTime<Utc>) -> bool {
+        self.schedule.is_due(now, self.last_run)
     }
-    
-    fn remaining_seconds(&self) -> i32 {
-        // Use last_run and schedule.
-        1
+
+    fn remaining_seconds(&self, now: DateTime<Utc>) -> i64 {
+        self.schedule.remaining_seconds(now, self.last_run)
     }
 }
 impl Ord for StorageEntry {
@@ -165,11 +209,13 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    pub fn new(storage: Storage, config: SchedulerConfig) -> Self {
+    // TODO this now parameter should become a map of storage entry : last_run state loaded from
+    // the storage layer. First we'll need schema for that.
+    pub fn new(storage: Storage, config: SchedulerConfig, now: DateTime<Utc>) -> Self {
         let mut entries = BinaryHeap::new();
         for (key, config_entry) in config.schedules.iter() {
             // TODO figure out if I need Reversed
-            entries.push(StorageEntry::new(key, config_entry))
+            entries.push(StorageEntry::new(key, config_entry, now))
         }
         Self {
             storage,
@@ -178,13 +224,15 @@ impl Scheduler {
     }
 
     /// Return the number of seconds to sleep for.
-    pub async fn tick(&mut self) -> i32 {
+    pub async fn tick(&mut self) -> i64 {
         // look at the top of the heap
         let mut next_tick_at = 1;
         loop {
+            let now = Utc::now();
+
             // This method takes a &mut, so it should be threadsafe
             let is_due = if let Some(entry) = self.entries.peek() {
-                entry.is_due()
+                entry.is_due(now)
             } else {
                 false
             };
@@ -204,7 +252,7 @@ impl Scheduler {
                         log::debug!("Spawned task_id={task_id} run_id={run_id}");
 
                         let now = Utc::now();
-                        entry.last_run = Some(now);
+                        entry.last_run = now;
                     },
                     Err(err) => {
                         log::error!("Failed to spawn task. Error: {err:?}");
@@ -217,9 +265,12 @@ impl Scheduler {
                 break;
             }
         }
+        // Refresh time as spawning can be slow.
+        let now = Utc::now();
+
         // We're done this tick update the sleep time until the next task is due.
         if let Some(entry) = self.entries.peek() {
-            next_tick_at = entry.remaining_seconds();
+            next_tick_at = entry.remaining_seconds(now);
         }
         next_tick_at
     }

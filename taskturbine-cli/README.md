@@ -31,7 +31,7 @@ schedule = {cron = "*/5 * * * *" }
 [schedules.process-commits]
 taskname = "myapp-commits-process"
 channel = "commits"
-schedule =  { timedelta = "10 seconds" }
+schedule =  { timedelta = { minutes = 5 } }
 ```
 
 The `schedules` table contains a list of schedule keys, the task, channel and schedule to
