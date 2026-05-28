@@ -101,7 +101,7 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
                 match result {
                     Ok(schedule) => Box::new(schedule) as Box<dyn Schedule + Send>,
                     Err(message) => {
-                        log::error!("Invalid cron schedule found for {key}. {value} is invalid: {message}");
+                        log::error!("Invalid cron schedule found for {key}. Skipping this schedule. {value} is invalid: {message}");
                         continue;
                     }
                 }
