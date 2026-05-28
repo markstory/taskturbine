@@ -1,6 +1,5 @@
 use std::{
-    collections::{BinaryHeap, HashMap},
-    time::Duration,
+    collections::{BinaryHeap, HashMap}, str::FromStr, time::Duration
 };
 
 use chrono::{DateTime, Utc};
@@ -94,7 +93,26 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     let guard = elegant_departure::get_shutdown_guard();
 
     let now = Utc::now();
-    let mut scheduler = Scheduler::new(storage, config, now);
+    let mut scheduler = Scheduler::new(storage);
+    for (key, config_entry) in config.schedules.iter() {
+        let schedule: Box<dyn Schedule + Send> = match &config_entry.schedule {
+            ScheduleKind::Cron(value) => {
+                let result = CronSchedule::new(value);
+                match result {
+                    Ok(schedule) => Box::new(schedule) as Box<dyn Schedule + Send>,
+                    Err(message) => {
+                        log::error!("Invalid cron schedule found for {key}. {value} is invalid: {message}");
+                        continue;
+                    }
+                }
+            },
+            ScheduleKind::Timedelta(value) => Box::new(TimedeltaSchedule::new(value)),
+        };
+
+        // TODO figure out if I need Reversed
+        let entry = StorageEntry::new(key, config_entry, now, schedule);
+        scheduler.add(entry);
+    }
 
     loop {
         tokio::select! {
@@ -155,6 +173,39 @@ impl Schedule for TimedeltaSchedule {
     }
 }
 
+struct CronSchedule {
+    cron_schedule: cron::Schedule,
+}
+impl CronSchedule {
+    fn new(schedule: &String) -> Result<Self, cron::error::Error> {
+        let cron_schedule = cron::Schedule::from_str(schedule)?;
+        Ok(Self {cron_schedule})
+    }
+}
+impl Schedule for CronSchedule {
+    /// Check if the delta between last_run and now is at least schedule seconds apart.
+    fn is_due(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> bool {
+        let remaining = self.remaining_seconds(now, last_run);
+        remaining <= 0
+    }
+
+    /// Get the seconds remaining between last_run and now
+    fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64 {
+        let next = self.cron_schedule.after(&last_run).next();
+        if let Some(next) = next {
+            let gap = next - now;
+            let seconds = gap.num_seconds();
+            if seconds > 0 {
+                return seconds;
+            }
+            // Less than 0
+            return 0;
+        }
+        // There is no next schedule. Wait a second.
+        1
+    }
+}
+
 struct StorageEntry {
     key: String,
     taskname: String,
@@ -163,17 +214,13 @@ struct StorageEntry {
     pub last_run: DateTime<Utc>,
 }
 impl StorageEntry {
-    fn new(key: &String, config_entry: &ScheduleEntry, last_run: DateTime<Utc>) -> Self {
-        let schedule = match &config_entry.schedule {
-            ScheduleKind::Cron(_value) => panic!("not done"),
-            ScheduleKind::Timedelta(value) => TimedeltaSchedule::new(value),
-        };
+    fn new(key: &String, config_entry: &ScheduleEntry, last_run: DateTime<Utc>, schedule: Box<dyn Schedule + Send>) -> Self {
         Self {
             key: key.to_owned(),
             taskname: config_entry.taskname.clone(),
             channel: config_entry.channel.clone(),
             last_run,
-            schedule: Box::new(schedule),
+            schedule,
         }
     }
 
@@ -211,16 +258,17 @@ struct Scheduler {
 impl Scheduler {
     // TODO this now parameter should become a map of storage entry : last_run state loaded from
     // the storage layer. First we'll need schema for that.
-    pub fn new(storage: Storage, config: SchedulerConfig, now: DateTime<Utc>) -> Self {
-        let mut entries = BinaryHeap::new();
-        for (key, config_entry) in config.schedules.iter() {
-            // TODO figure out if I need Reversed
-            entries.push(StorageEntry::new(key, config_entry, now))
-        }
+    pub fn new(storage: Storage) -> Self {
+        let entries = BinaryHeap::new();
         Self {
             storage,
             entries,
         }
+    }
+
+    /// Add a ScheduleEntry to the scheduler.
+    pub fn add(&mut self, entry: StorageEntry) {
+        self.entries.push(entry)
     }
 
     /// Return the number of seconds to sleep for.
