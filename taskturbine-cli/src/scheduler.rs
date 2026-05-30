@@ -362,4 +362,40 @@ mod tests {
         assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
         assert!(schedule.is_due(the_future, last_run), "negative value when overdue");
     }
+
+    #[test]
+    fn cron_schedule_remaining_seconds() {
+        let now = Utc::now();
+        let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
+        let due = now.with_minute(1).unwrap().with_second(0).unwrap();
+        let not_due = now.with_minute(0).unwrap().with_second(50).unwrap();
+        let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
+        let the_past = last_run - Duration::from_secs(180);
+        let the_future = last_run + Duration::from_secs(180);
+
+        let schedule = CronSchedule::new("0 */1 * * * *").unwrap();
+        assert_eq!(schedule.remaining_seconds(due, last_run), 0);
+        assert_eq!(schedule.remaining_seconds(not_due, last_run), 9);
+        assert_eq!(schedule.remaining_seconds(very_early, last_run), 39);
+        assert_eq!(schedule.remaining_seconds(the_past, last_run), 239, "handles full cycles");
+        assert_eq!(schedule.remaining_seconds(the_future, last_run), 0, "0 when overdue");
+    }
+
+    #[test]
+    fn cron_schedule_is_due() {
+        let now = Utc::now();
+        let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
+        let due = now.with_minute(1).unwrap().with_second(0).unwrap();
+        let not_due = now.with_minute(0).unwrap().with_second(50).unwrap();
+        let very_early = now.with_minute(0).unwrap().with_second(50).unwrap();
+        let the_past = last_run - Duration::from_secs(180);
+        let the_future = last_run + Duration::from_secs(180);
+
+        let schedule = CronSchedule::new("0 */1 * * * * *").unwrap();
+        assert!(schedule.is_due(due, last_run));
+        assert!(!schedule.is_due(not_due, last_run));
+        assert!(!schedule.is_due(very_early, last_run));
+        assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
+        assert!(schedule.is_due(the_future, last_run), "negative value when overdue");
+    }
 }
