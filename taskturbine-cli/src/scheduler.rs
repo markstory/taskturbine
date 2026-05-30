@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    str::FromStr,
-    time::Duration,
-};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use chrono::{DateTime, Utc};
 use clap::Args;
@@ -41,7 +37,9 @@ impl ScheduleEntry {
                     Ok(schedule) => Ok(Box::new(schedule)),
                     Err(message) => {
                         let taskname = &self.taskname;
-                        Err(format!("Invalid cron schedule found for {taskname}. Skipping this schedule. {value} is invalid: {message}"))
+                        Err(format!(
+                            "Invalid cron schedule found for {taskname}. Skipping this schedule. {value} is invalid: {message}"
+                        ))
                     }
                 }
             }
@@ -49,7 +47,6 @@ impl ScheduleEntry {
         }
     }
 }
-
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -261,7 +258,6 @@ impl StorageEntry {
     }
 }
 
-
 /// The state machine for scheduled tasks
 struct Scheduler {
     storage: Storage,
@@ -284,9 +280,7 @@ impl Scheduler {
     /// Sort the entries vec based on time remaining for each schedule.
     fn sort_entries(&mut self) {
         let now = Utc::now();
-        self.entries.sort_by(|a, b| {
-            a.remaining_seconds(now).cmp(&b.remaining_seconds(now))
-        });
+        self.entries.sort_by_key(|a| a.remaining_seconds(now));
     }
 
     /// Return the number of seconds to sleep for.
@@ -379,7 +373,10 @@ mod tests {
             minutes: Some(5),
             seconds: Some(30),
         });
-        assert_eq!(schedule.remaining_seconds(after_last_run, last_run), 3600 + 300 + 29);
+        assert_eq!(
+            schedule.remaining_seconds(after_last_run, last_run),
+            3600 + 300 + 29
+        );
         assert_eq!(schedule.remaining_seconds(before_next, last_run), 150);
     }
 
@@ -460,7 +457,7 @@ mod tests {
         let config = ScheduleEntry {
             taskname: "update-data".to_owned(),
             channel: "default".to_owned(),
-            schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned())
+            schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
         };
         let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
 
