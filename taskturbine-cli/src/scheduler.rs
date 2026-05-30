@@ -166,9 +166,6 @@ impl Schedule for TimedeltaSchedule {
     /// Get the seconds remaining between last_run and now
     fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64 {
         let gap = now - last_run;
-        log::debug!("now {now}");
-        log::debug!("last_run {last_run}");
-        log::debug!("gap {gap}");
         (self.duration.as_secs() as i64) - gap.num_seconds()
     }
 }
@@ -177,7 +174,7 @@ struct CronSchedule {
     cron_schedule: cron::Schedule,
 }
 impl CronSchedule {
-    fn new(schedule: &String) -> Result<Self, cron::error::Error> {
+    fn new(schedule: &str) -> Result<Self, cron::error::Error> {
         let cron_schedule = cron::Schedule::from_str(schedule)?;
         Ok(Self {cron_schedule})
     }
@@ -321,5 +318,48 @@ impl Scheduler {
             next_tick_at = entry.remaining_seconds(now);
         }
         next_tick_at
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::Timelike;
+
+    use super::*;
+
+    #[test]
+    fn timedelta_schedule_remaining_seconds() {
+        let now = Utc::now();
+        let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
+        let due = now.with_minute(1).unwrap().with_second(30).unwrap();
+        let not_due = now.with_minute(1).unwrap().with_second(20).unwrap();
+        let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
+        let the_past = last_run - Duration::from_secs(180);
+        let the_future = last_run + Duration::from_secs(180);
+
+        let schedule = TimedeltaSchedule::new(&TimedeltaData { hours: None, minutes: Some(1), seconds: Some(30) });
+        assert_eq!(schedule.remaining_seconds(due, last_run), 0);
+        assert_eq!(schedule.remaining_seconds(not_due, last_run), 10);
+        assert_eq!(schedule.remaining_seconds(very_early, last_run), 70);
+        assert_eq!(schedule.remaining_seconds(the_past, last_run), 270, "handles full cycles");
+        assert_eq!(schedule.remaining_seconds(the_future, last_run), -90, "negative value when overdue");
+    }
+
+    #[test]
+    fn timedelta_schedule_is_due() {
+        let now = Utc::now();
+        let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
+        let due = now.with_minute(1).unwrap().with_second(30).unwrap();
+        let not_due = now.with_minute(1).unwrap().with_second(20).unwrap();
+        let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
+        let the_past = last_run - Duration::from_secs(180);
+        let the_future = last_run + Duration::from_secs(180);
+
+        let schedule = TimedeltaSchedule::new(&TimedeltaData { hours: None, minutes: Some(1), seconds: Some(30) });
+        assert!(schedule.is_due(due, last_run));
+        assert!(!schedule.is_due(not_due, last_run));
+        assert!(!schedule.is_due(very_early, last_run));
+        assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
+        assert!(schedule.is_due(the_future, last_run), "negative value when overdue");
     }
 }
