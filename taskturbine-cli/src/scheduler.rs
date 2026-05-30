@@ -1,5 +1,5 @@
 use std::{
-    collections::{BinaryHeap, HashMap},
+    collections::HashMap,
     str::FromStr,
     time::Duration,
 };
@@ -260,34 +260,19 @@ impl StorageEntry {
         self.schedule.remaining_seconds(now, self.last_run)
     }
 }
-impl Ord for StorageEntry {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // TODO re-implement this with ordering by next runtime
-        self.taskname.cmp(&other.taskname)
-    }
-}
-impl PartialOrd for StorageEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl PartialEq for StorageEntry {
-    fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.taskname == other.taskname && self.channel == other.channel
-    }
-}
-impl Eq for StorageEntry {}
+
 
 /// The state machine for scheduled tasks
 struct Scheduler {
     storage: Storage,
-    entries: BinaryHeap<StorageEntry>,
+    /// Sorted vec of entries.
+    entries: Vec<StorageEntry>,
 }
 
 impl Scheduler {
     // TODO read last_run information from storage.
     pub fn new(storage: Storage) -> Self {
-        let entries = BinaryHeap::new();
+        let entries = vec![];
         Self { storage, entries }
     }
 
@@ -296,58 +281,53 @@ impl Scheduler {
         self.entries.push(entry)
     }
 
+    /// Sort the entries vec based on time remaining for each schedule.
+    fn sort_entries(&mut self) {
+        let now = Utc::now();
+        self.entries.sort_by(|a, b| {
+            a.remaining_seconds(now).cmp(&b.remaining_seconds(now))
+        });
+    }
+
     /// Return the number of seconds to sleep for.
     pub async fn tick(&mut self) -> i64 {
-        // look at the top of the heap
+        self.sort_entries();
+
         let mut next_tick_at = 1;
-        loop {
+        for entry in self.entries.iter_mut() {
+            // Refresh now on each cycle in case spawning takes time.
             let now = Utc::now();
 
-            // This method takes a &mut, so it should be threadsafe
-            let is_due = if let Some(entry) = self.entries.peek() {
-                entry.is_due(now)
-            } else {
-                false
-            };
-            if !is_due {
-                log::debug!("no tasks due now");
+            if !entry.is_due(now) {
+                log::debug!("no more tasks due now");
+                next_tick_at = entry.remaining_seconds(now);
                 break;
             }
 
-            if let Some(mut entry) = self.entries.pop() {
-                // Update last_run state.
-                // TODO add options and params support
-                let result = self
-                    .storage
-                    .spawn_task(&entry.channel, &entry.taskname, b"", None)
-                    .await;
-                match result {
-                    Ok(spawn) => {
-                        let task_id = spawn.task_id;
-                        let run_id = spawn.run_id;
-                        log::debug!("Spawned task_id={task_id} run_id={run_id}");
+            let key = &entry.key;
+            log::debug!("Schedule {key} is due");
 
-                        let now = Utc::now();
-                        entry.last_run = now;
-                    }
-                    Err(err) => {
-                        log::error!("Failed to spawn task. Error: {err:?}");
-                    }
+            // TODO add options and params support
+            let result = self
+                .storage
+                .spawn_task(&entry.channel, &entry.taskname, b"", None)
+                .await;
+            match result {
+                Ok(spawn) => {
+                    let task_id = spawn.task_id;
+                    let run_id = spawn.run_id;
+                    log::debug!("Spawned task_id={task_id} run_id={run_id}");
+
+                    let now = Utc::now();
+                    entry.last_run = now;
+                    // TODO Persist last_run state.
                 }
-                // Put the entry back into the heap where it can be sorted.
-                self.entries.push(entry);
-            } else {
-                log::debug!("could not pop from self.entries");
-                break;
+                Err(err) => {
+                    log::error!("Failed to spawn task. Error: {err:?}");
+                }
             }
         }
-        // Refresh time as spawning can be slow.
-        let now = Utc::now();
 
-        // We're done this tick update the sleep time until the next task is due.
-        if let Some(entry) = self.entries.peek() {
-            next_tick_at = entry.remaining_seconds(now);
-        }
         next_tick_at
     }
 }
