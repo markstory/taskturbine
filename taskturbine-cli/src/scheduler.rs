@@ -31,6 +31,26 @@ struct ScheduleEntry {
     pub channel: String,
     pub schedule: ScheduleKind,
 }
+impl ScheduleEntry {
+    /// Create a Schedule from the ScheduleKind data.
+    fn make_schedule(&self) -> Result<Box<dyn Schedule + Send>, String> {
+        match &self.schedule {
+            ScheduleKind::Cron(value) => {
+                let result = CronSchedule::new(value);
+                match result {
+                    Ok(schedule) => Ok(Box::new(schedule)),
+                    Err(message) => {
+                        let taskname = &self.taskname;
+                        Err(format!("Invalid cron schedule found for {taskname}. Skipping this schedule. {value} is invalid: {message}"))
+                    }
+                }
+            }
+            ScheduleKind::Timedelta(value) => Ok(Box::new(TimedeltaSchedule::new(value))),
+        }
+    }
+}
+
+
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum ScheduleKind {
@@ -97,20 +117,12 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     let now = Utc::now();
     let mut scheduler = Scheduler::new(storage);
     for (key, config_entry) in config.schedules.iter() {
-        let schedule: Box<dyn Schedule + Send> = match &config_entry.schedule {
-            ScheduleKind::Cron(value) => {
-                let result = CronSchedule::new(value);
-                match result {
-                    Ok(schedule) => Box::new(schedule) as Box<dyn Schedule + Send>,
-                    Err(message) => {
-                        log::error!(
-                            "Invalid cron schedule found for {key}. Skipping this schedule. {value} is invalid: {message}"
-                        );
-                        continue;
-                    }
-                }
+        let schedule = match config_entry.make_schedule() {
+            Ok(schedule) => schedule,
+            Err(message) => {
+                log::error!("{}", message);
+                continue;
             }
-            ScheduleKind::Timedelta(value) => Box::new(TimedeltaSchedule::new(value)),
         };
 
         // TODO figure out if I need Reversed.
@@ -226,7 +238,7 @@ struct StorageEntry {
 }
 impl StorageEntry {
     fn new(
-        key: &String,
+        key: &str,
         config_entry: &ScheduleEntry,
         last_run: DateTime<Utc>,
         schedule: Box<dyn Schedule + Send>,
@@ -461,5 +473,28 @@ mod tests {
             schedule.is_due(the_future, last_run),
             "negative value when overdue"
         );
+    }
+
+    #[test]
+    fn storage_entry_remaining_seconds_and_is_due() {
+        let config = ScheduleEntry {
+            taskname: "update-data".to_owned(),
+            channel: "default".to_owned(),
+            schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned())
+        };
+        let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        let schedule = config.make_schedule().unwrap();
+        let entry = StorageEntry::new("update-data", &config, now, schedule);
+        assert_eq!(entry.taskname, "update-data");
+        assert_eq!(entry.channel, "default");
+
+        let next_time = "2026-05-30 12:05:00Z".parse::<DateTime<Utc>>().unwrap();
+        assert!(entry.is_due(next_time));
+        assert_eq!(entry.remaining_seconds(next_time), 0);
+
+        let before_next = "2026-05-30 12:03:00Z".parse::<DateTime<Utc>>().unwrap();
+        assert!(!entry.is_due(before_next));
+        assert_eq!(entry.remaining_seconds(before_next), 120);
     }
 }
