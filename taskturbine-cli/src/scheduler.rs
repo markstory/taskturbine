@@ -45,6 +45,7 @@ struct TimedeltaData {
     seconds: Option<i32>,
 }
 
+/// Command function for running a scheduler.
 pub async fn scheduler(storage: Storage, args: SchedulerArgs) -> Result<(), CliError> {
     log::info!("Starting taskturbine-scheduler");
 
@@ -59,10 +60,9 @@ pub async fn scheduler(storage: Storage, args: SchedulerArgs) -> Result<(), CliE
     };
     let Ok(config_string) = config_contents else {
         return Err(CliError(
-            "Could not convert config file data into a string".into(),
+            "Could not read config file data into a string".into(),
         ));
     };
-    // let config_data = config_string.parse::<toml::Table>().expect("Could not parse toml from config file");
     let config: SchedulerConfig =
         toml::from_str(&config_string).expect("Could not parse configuration file.");
 
@@ -113,7 +113,7 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
             ScheduleKind::Timedelta(value) => Box::new(TimedeltaSchedule::new(value)),
         };
 
-        // TODO figure out if I need Reversed
+        // TODO figure out if I need Reversed.
         let entry = StorageEntry::new(key, config_entry, now, schedule);
         scheduler.add(entry);
     }
@@ -132,6 +132,7 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     }
 }
 
+/// Abstract schedule interface
 trait Schedule {
     /// Is this schedule currently due? or past due based on the last_run.
     /// Schedules that are due, will have tasks spawned.
@@ -141,6 +142,7 @@ trait Schedule {
     fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64;
 }
 
+/// Schedule that follows a timedelta of hours, minutes and seconds.
 struct TimedeltaSchedule {
     duration: Duration,
 }
@@ -174,6 +176,11 @@ impl Schedule for TimedeltaSchedule {
     }
 }
 
+/// Schedule that follows an expanded crontab schedule.
+///
+/// Schedules are defined as an expression of
+///
+/// sec   min   hour   day of month   month   day of week   year
 struct CronSchedule {
     cron_schedule: cron::Schedule,
 }
@@ -207,6 +214,9 @@ impl Schedule for CronSchedule {
     }
 }
 
+/// A single task schedule entry
+///
+/// Contains state for spawning the task, the schedule and last_run data.
 struct StorageEntry {
     key: String,
     taskname: String,
@@ -256,14 +266,14 @@ impl PartialEq for StorageEntry {
 }
 impl Eq for StorageEntry {}
 
+/// The state machine for scheduled tasks
 struct Scheduler {
     storage: Storage,
     entries: BinaryHeap<StorageEntry>,
 }
 
 impl Scheduler {
-    // TODO this now parameter should become a map of storage entry : last_run state loaded from
-    // the storage layer. First we'll need schema for that.
+    // TODO read last_run information from storage.
     pub fn new(storage: Storage) -> Self {
         let entries = BinaryHeap::new();
         Self { storage, entries }
@@ -364,6 +374,21 @@ mod tests {
             -90,
             "negative value when overdue"
         );
+    }
+
+    #[test]
+    fn timedelta_schedule_remaining_seconds_minutes_and_hours() {
+        let last_run = "2026-05-30 12:05:30Z".parse::<DateTime<Utc>>().unwrap();
+        let after_last_run = last_run + Duration::from_secs(1);
+        let before_next = "2026-05-30 13:08:30Z".parse::<DateTime<Utc>>().unwrap();
+
+        let schedule = TimedeltaSchedule::new(&TimedeltaData {
+            hours: Some(1),
+            minutes: Some(5),
+            seconds: Some(30),
+        });
+        assert_eq!(schedule.remaining_seconds(after_last_run, last_run), 3600 + 300 + 29);
+        assert_eq!(schedule.remaining_seconds(before_next, last_run), 150);
     }
 
     #[test]
