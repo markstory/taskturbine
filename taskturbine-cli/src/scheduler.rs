@@ -1,5 +1,7 @@
 use std::{
-    collections::{BinaryHeap, HashMap}, str::FromStr, time::Duration
+    collections::{BinaryHeap, HashMap},
+    str::FromStr,
+    time::Duration,
 };
 
 use chrono::{DateTime, Utc};
@@ -101,11 +103,13 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
                 match result {
                     Ok(schedule) => Box::new(schedule) as Box<dyn Schedule + Send>,
                     Err(message) => {
-                        log::error!("Invalid cron schedule found for {key}. Skipping this schedule. {value} is invalid: {message}");
+                        log::error!(
+                            "Invalid cron schedule found for {key}. Skipping this schedule. {value} is invalid: {message}"
+                        );
                         continue;
                     }
                 }
-            },
+            }
             ScheduleKind::Timedelta(value) => Box::new(TimedeltaSchedule::new(value)),
         };
 
@@ -153,7 +157,7 @@ impl TimedeltaSchedule {
             total_seconds += v * 60 * 60;
         }
         let duration = Duration::from_secs(total_seconds as u64);
-        Self {duration}
+        Self { duration }
     }
 }
 impl Schedule for TimedeltaSchedule {
@@ -176,7 +180,7 @@ struct CronSchedule {
 impl CronSchedule {
     fn new(schedule: &str) -> Result<Self, cron::error::Error> {
         let cron_schedule = cron::Schedule::from_str(schedule)?;
-        Ok(Self {cron_schedule})
+        Ok(Self { cron_schedule })
     }
 }
 impl Schedule for CronSchedule {
@@ -211,7 +215,12 @@ struct StorageEntry {
     pub last_run: DateTime<Utc>,
 }
 impl StorageEntry {
-    fn new(key: &String, config_entry: &ScheduleEntry, last_run: DateTime<Utc>, schedule: Box<dyn Schedule + Send>) -> Self {
+    fn new(
+        key: &String,
+        config_entry: &ScheduleEntry,
+        last_run: DateTime<Utc>,
+        schedule: Box<dyn Schedule + Send>,
+    ) -> Self {
         Self {
             key: key.to_owned(),
             taskname: config_entry.taskname.clone(),
@@ -257,10 +266,7 @@ impl Scheduler {
     // the storage layer. First we'll need schema for that.
     pub fn new(storage: Storage) -> Self {
         let entries = BinaryHeap::new();
-        Self {
-            storage,
-            entries,
-        }
+        Self { storage, entries }
     }
 
     /// Add a ScheduleEntry to the scheduler.
@@ -289,7 +295,10 @@ impl Scheduler {
             if let Some(mut entry) = self.entries.pop() {
                 // Update last_run state.
                 // TODO add options and params support
-                let result = self.storage.spawn_task(&entry.channel, &entry.taskname, b"", None).await;
+                let result = self
+                    .storage
+                    .spawn_task(&entry.channel, &entry.taskname, b"", None)
+                    .await;
                 match result {
                     Ok(spawn) => {
                         let task_id = spawn.task_id;
@@ -298,7 +307,7 @@ impl Scheduler {
 
                         let now = Utc::now();
                         entry.last_run = now;
-                    },
+                    }
                     Err(err) => {
                         log::error!("Failed to spawn task. Error: {err:?}");
                     }
@@ -337,12 +346,24 @@ mod tests {
         let the_past = last_run - Duration::from_secs(180);
         let the_future = last_run + Duration::from_secs(180);
 
-        let schedule = TimedeltaSchedule::new(&TimedeltaData { hours: None, minutes: Some(1), seconds: Some(30) });
+        let schedule = TimedeltaSchedule::new(&TimedeltaData {
+            hours: None,
+            minutes: Some(1),
+            seconds: Some(30),
+        });
         assert_eq!(schedule.remaining_seconds(due, last_run), 0);
         assert_eq!(schedule.remaining_seconds(not_due, last_run), 10);
         assert_eq!(schedule.remaining_seconds(very_early, last_run), 70);
-        assert_eq!(schedule.remaining_seconds(the_past, last_run), 270, "handles full cycles");
-        assert_eq!(schedule.remaining_seconds(the_future, last_run), -90, "negative value when overdue");
+        assert_eq!(
+            schedule.remaining_seconds(the_past, last_run),
+            270,
+            "handles full cycles"
+        );
+        assert_eq!(
+            schedule.remaining_seconds(the_future, last_run),
+            -90,
+            "negative value when overdue"
+        );
     }
 
     #[test]
@@ -355,12 +376,19 @@ mod tests {
         let the_past = last_run - Duration::from_secs(180);
         let the_future = last_run + Duration::from_secs(180);
 
-        let schedule = TimedeltaSchedule::new(&TimedeltaData { hours: None, minutes: Some(1), seconds: Some(30) });
+        let schedule = TimedeltaSchedule::new(&TimedeltaData {
+            hours: None,
+            minutes: Some(1),
+            seconds: Some(30),
+        });
         assert!(schedule.is_due(due, last_run));
         assert!(!schedule.is_due(not_due, last_run));
         assert!(!schedule.is_due(very_early, last_run));
         assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
-        assert!(schedule.is_due(the_future, last_run), "negative value when overdue");
+        assert!(
+            schedule.is_due(the_future, last_run),
+            "negative value when overdue"
+        );
     }
 
     #[test]
@@ -377,8 +405,16 @@ mod tests {
         assert_eq!(schedule.remaining_seconds(due, last_run), 0);
         assert_eq!(schedule.remaining_seconds(not_due, last_run), 9);
         assert_eq!(schedule.remaining_seconds(very_early, last_run), 39);
-        assert_eq!(schedule.remaining_seconds(the_past, last_run), 239, "handles full cycles");
-        assert_eq!(schedule.remaining_seconds(the_future, last_run), 0, "0 when overdue");
+        assert_eq!(
+            schedule.remaining_seconds(the_past, last_run),
+            239,
+            "handles full cycles"
+        );
+        assert_eq!(
+            schedule.remaining_seconds(the_future, last_run),
+            0,
+            "0 when overdue"
+        );
     }
 
     #[test]
@@ -396,6 +432,9 @@ mod tests {
         assert!(!schedule.is_due(not_due, last_run));
         assert!(!schedule.is_due(very_early, last_run));
         assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
-        assert!(schedule.is_due(the_future, last_run), "negative value when overdue");
+        assert!(
+            schedule.is_due(the_future, last_run),
+            "negative value when overdue"
+        );
     }
 }
