@@ -4,7 +4,6 @@ use chrono::{DateTime, Timelike, Utc};
 use clap::Args;
 use serde::Deserialize;
 use tokio::signal::unix::SignalKind;
-use tokio::time;
 
 use crate::CliError;
 use taskturbine_core::storage::Storage;
