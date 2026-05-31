@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use clap::Args;
 use serde::Deserialize;
 use tokio::signal::unix::SignalKind;
@@ -106,12 +106,9 @@ async fn run_scheduler_worker(storage: Storage, config: SchedulerConfig) {
 
 async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     log::debug!("Starting scheduler");
-    // TODO should this have config? scheduler_poll_interval
-    let mut timer = time::interval(Duration::from_secs(1));
-    timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     let guard = elegant_departure::get_shutdown_guard();
 
-    let now = Utc::now();
+    let now = Utc::now().with_nanosecond(0).unwrap();
     let mut scheduler = Scheduler::new(storage);
     for (key, config_entry) in config.schedules.iter() {
         let schedule = match config_entry.make_schedule() {
@@ -127,14 +124,17 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
         scheduler.add(entry);
     }
 
+    scheduler.sort_entries();
+
     loop {
         tokio::select! {
-            _ = timer.tick() => {
-                let sleep_time = scheduler.tick().await;
-                log::debug!("Completed scheduler tick. Should sleep for {sleep_time}");
-            }
+            sleep_time = scheduler.tick() => {
+                let sleep_time = sleep_time.max(1);
+                log::debug!("Completed scheduler tick. Will sleep for {sleep_time}");
+                tokio::time::sleep(Duration::from_secs(sleep_time as u64)).await;
+            },
             _ = guard.wait() => {
-                log::debug!("Shutting down upkeep");
+                log::info!("Shutting down scheduler");
                 break;
             }
         }
@@ -145,7 +145,10 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
 trait Schedule {
     /// Is this schedule currently due? or past due based on the last_run.
     /// Schedules that are due, will have tasks spawned.
-    fn is_due(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> bool;
+    fn is_due(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> bool {
+        let remaining = self.remaining_seconds(now, last_run);
+        remaining <= 0
+    }
 
     /// Get the number of seconds until the task is due again.
     fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64;
@@ -172,12 +175,6 @@ impl TimedeltaSchedule {
     }
 }
 impl Schedule for TimedeltaSchedule {
-    /// Check if the delta between last_run and now is at least schedule seconds apart.
-    fn is_due(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> bool {
-        let remaining = self.remaining_seconds(now, last_run);
-        remaining <= 0
-    }
-
     /// Get the seconds remaining between last_run and now
     fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64 {
         let gap = now - last_run;
@@ -200,12 +197,6 @@ impl CronSchedule {
     }
 }
 impl Schedule for CronSchedule {
-    /// Check if the delta between last_run and now is at least schedule seconds apart.
-    fn is_due(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> bool {
-        let remaining = self.remaining_seconds(now, last_run);
-        remaining <= 0
-    }
-
     /// Get the seconds remaining between last_run and now
     fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64 {
         let next = self.cron_schedule.after(&last_run).next();
@@ -279,22 +270,18 @@ impl Scheduler {
 
     /// Sort the entries vec based on time remaining for each schedule.
     fn sort_entries(&mut self) {
-        let now = Utc::now();
+        let now = Utc::now().with_nanosecond(0).unwrap();
         self.entries.sort_by_key(|a| a.remaining_seconds(now));
     }
 
     /// Return the number of seconds to sleep for.
     pub async fn tick(&mut self) -> i64 {
-        self.sort_entries();
-
-        let mut next_tick_at = 1;
         for entry in self.entries.iter_mut() {
             // Refresh now on each cycle in case spawning takes time.
-            let now = Utc::now();
+            let now = Utc::now().with_nanosecond(0).unwrap();
 
             if !entry.is_due(now) {
                 log::debug!("no more tasks due now");
-                next_tick_at = entry.remaining_seconds(now);
                 break;
             }
 
@@ -312,8 +299,10 @@ impl Scheduler {
                     let run_id = spawn.run_id;
                     log::debug!("Spawned task_id={task_id} run_id={run_id}");
 
-                    let now = Utc::now();
+                    let now = Utc::now().with_nanosecond(0).unwrap();
                     entry.last_run = now;
+                    log::debug!("Updating state of {key:?} to {now:?}");
+
                     // TODO Persist last_run state.
                 }
                 Err(err) => {
@@ -322,7 +311,15 @@ impl Scheduler {
             }
         }
 
-        next_tick_at
+        self.sort_entries();
+        if let Some(entry) = self.entries.first() {
+            let now = Utc::now().with_nanosecond(0).unwrap();
+            return entry.remaining_seconds(now);
+            // return (entry.remaining_seconds(now) - 1).max(0);
+        }
+
+        // If we didn't have a new entry sleep 1 second to conserve resources
+        1
     }
 }
 
