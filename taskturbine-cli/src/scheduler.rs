@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use chrono::{DateTime, Timelike, Utc};
@@ -108,7 +109,9 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     let guard = elegant_departure::get_shutdown_guard();
 
     let now = Utc::now().with_nanosecond(0).unwrap();
+    let state = storage.get_scheduler_last_run().await.unwrap();
     let mut scheduler = Scheduler::new(storage);
+
     for (key, config_entry) in config.schedules.iter() {
         let schedule = match config_entry.make_schedule() {
             Ok(schedule) => schedule,
@@ -117,9 +120,10 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
                 continue;
             }
         };
-
-        // TODO figure out if I need Reversed.
-        let entry = StorageEntry::new(key, config_entry, now, schedule);
+        let mut entry = StorageEntry::new(key, config_entry, now, schedule);
+        if let Some(last_run) = state.get(&entry.storage_key()) {
+            entry.last_run = *last_run;
+        }
         scheduler.add(entry);
     }
 
@@ -141,7 +145,7 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
 }
 
 /// Abstract schedule interface
-trait Schedule {
+trait Schedule: fmt::Display {
     /// Is this schedule currently due? or past due based on the last_run.
     /// Schedules that are due, will have tasks spawned.
     fn is_due(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> bool {
@@ -173,6 +177,12 @@ impl TimedeltaSchedule {
         Self { duration }
     }
 }
+impl fmt::Display for TimedeltaSchedule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let seconds = self.duration.as_secs();
+        f.write_str(format!("td:{seconds}").as_ref())
+    }
+}
 impl Schedule for TimedeltaSchedule {
     /// Get the seconds remaining between last_run and now
     fn remaining_seconds(&self, now: DateTime<Utc>, last_run: DateTime<Utc>) -> i64 {
@@ -193,6 +203,12 @@ impl CronSchedule {
     fn new(schedule: &str) -> Result<Self, cron::error::Error> {
         let cron_schedule = cron::Schedule::from_str(schedule)?;
         Ok(Self { cron_schedule })
+    }
+}
+impl fmt::Display for CronSchedule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let schedule = &self.cron_schedule;
+        f.write_str(format!("c:{schedule}").as_ref())
     }
 }
 impl Schedule for CronSchedule {
@@ -245,6 +261,12 @@ impl StorageEntry {
 
     fn remaining_seconds(&self, now: DateTime<Utc>) -> i64 {
         self.schedule.remaining_seconds(now, self.last_run)
+    }
+
+    /// Specific key to storage the run state of this entry by.
+    /// Depends on the schedule key, taskname, and schedule.
+    fn storage_key(&self) -> String {
+        format!("{}:{}:{}", self.key, self.taskname, self.schedule)
     }
 }
 
@@ -469,5 +491,30 @@ mod tests {
         let before_next = "2026-05-30 12:03:00Z".parse::<DateTime<Utc>>().unwrap();
         assert!(!entry.is_due(before_next));
         assert_eq!(entry.remaining_seconds(before_next), 120);
+    }
+
+    #[test]
+    fn storage_entry_storage_key() {
+        let cron_config = ScheduleEntry {
+            taskname: "do_update_data".to_owned(),
+            channel: "default".to_owned(),
+            schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
+        };
+        let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        let schedule = cron_config.make_schedule().unwrap();
+        let entry = StorageEntry::new("update-data", &cron_config, now, schedule);
+        assert_eq!(entry.storage_key(), "update-data:do_update_data:c:0 */5 * * * * *");
+
+        let td_config = ScheduleEntry {
+            taskname: "do_update_data".to_owned(),
+            channel: "default".to_owned(),
+            schedule: ScheduleKind::Timedelta(TimedeltaData { hours: None, minutes: None, seconds: Some(30) }),
+        };
+        let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        let schedule = td_config.make_schedule().unwrap();
+        let entry = StorageEntry::new("timedelta-update", &cron_config, now, schedule);
+        assert_eq!(entry.storage_key(), "timedelta-update:do_update_data:td:30");
     }
 }
