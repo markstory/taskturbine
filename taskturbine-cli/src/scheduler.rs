@@ -300,7 +300,9 @@ impl Scheduler {
 
     /// Update an entry's persisted last_run state to the provided record.
     pub async fn set_last_run(&mut self, entry: &StorageEntry) -> Result<(), StorageError> {
-        self.storage.set_scheduler_last_run(entry.storage_key().as_ref(), entry.last_run).await
+        self.storage
+            .set_scheduler_last_run(entry.storage_key().as_ref(), entry.last_run)
+            .await
     }
 
     /// Return the number of seconds to sleep for.
@@ -331,7 +333,10 @@ impl Scheduler {
                     let now = Utc::now().with_nanosecond(0).unwrap();
                     entry.last_run = now;
                     // TODO: Couldn't use set_last_run here because of ownership rules
-                    let _ = self.storage.set_scheduler_last_run(entry.storage_key().as_ref(), entry.last_run).await;
+                    let _ = self
+                        .storage
+                        .set_scheduler_last_run(entry.storage_key().as_ref(), entry.last_run)
+                        .await;
                     log::debug!("Updated state of {key:?} to {now:?}");
                 }
                 Err(err) => {
@@ -512,12 +517,19 @@ mod tests {
 
         let schedule = cron_config.make_schedule().unwrap();
         let entry = StorageEntry::new("update-data", &cron_config, now, schedule);
-        assert_eq!(entry.storage_key(), "update-data:do_update_data:c:0 */5 * * * * *");
+        assert_eq!(
+            entry.storage_key(),
+            "update-data:do_update_data:c:0 */5 * * * * *"
+        );
 
         let td_config = ScheduleEntry {
             taskname: "do_update_data".to_owned(),
             channel: "default".to_owned(),
-            schedule: ScheduleKind::Timedelta(TimedeltaData { hours: None, minutes: None, seconds: Some(30) }),
+            schedule: ScheduleKind::Timedelta(TimedeltaData {
+                hours: None,
+                minutes: None,
+                seconds: Some(30),
+            }),
         };
         let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
 

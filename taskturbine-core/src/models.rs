@@ -292,7 +292,6 @@ pub struct Event {
     pub payload: Vec<u8>,
 }
 
-
 /// Entity structure for a scheduler entry state
 #[derive(sqlx::FromRow, Debug, PartialEq)]
 pub struct SchedulerState {
