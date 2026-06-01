@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::config::Config;
-use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState};
+use crate::models::{Checkpoint, ClaimedTask, RunId, SpawnResult, Task, TaskId, TaskState, SchedulerState};
 use chrono::{DateTime, Utc};
 use sqlx::AssertSqlSafe;
 use sqlx::{
@@ -648,6 +648,8 @@ impl Storage {
         task_id: TaskId,
         conn: &mut PgConnection,
     ) -> Result<Task, StorageError> {
+        // TODO: add usecase conditions to all queries.
+        // Multi-tenancy is safer if operations always are constrained by usecase.
         let row: Task = sqlx::query_as(
             "SELECT *
              FROM taskturbine.tasks
@@ -1281,6 +1283,39 @@ impl Storage {
 
         let _ = atomic.commit().await;
 
+        Ok(())
+    }
+
+    /// Get the last_run state for the scheduler.
+    /// Will fetch all scheduler state for the current usecase.
+    pub async fn get_scheduler_last_run(&self) -> Result<HashMap<String, DateTime<Utc>>, StorageError> {
+        let rows: Vec<SchedulerState> = sqlx::query_as(
+            "SELECT schedule_id, last_run FROM taskturbine.scheduler_state WHERE usecase = $1"
+        ).bind(&self.config.usecase)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(StorageError::SqlError)?;
+
+        let mut out = HashMap::new();
+        for item in rows.iter() {
+            out.insert(item.schedule_id.to_owned(), item.last_run);
+        }
+        Ok(out)
+    }
+
+    /// Update the last run timestamp for a scheduler key in the current usecase.
+    pub async fn set_scheduler_last_run(&self, key: &str, last_run: DateTime<Utc>) -> Result<(), StorageError> {
+        sqlx::query(
+            "INSERT INTO taskturbine.scheduler_state (usecase, schedule_id, last_run) 
+            VALUES ($1, $2, $3)
+            ON CONFLICT (usecase, schedule_id) DO UPDATE
+            SET last_run = EXCLUDED.last_run"
+        ).bind(&self.config.usecase)
+            .bind(key.to_owned())
+            .bind(last_run)
+            .execute(&self.pool)
+            .await
+            .map_err(StorageError::SqlError)?;
         Ok(())
     }
 }
@@ -2260,5 +2295,30 @@ mod tests {
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.state, TaskState::Running);
         assert!(run.completed_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn scheduler_last_run_methods() {
+        let storage = create_storage().await;
+
+        let timestamp = Utc::now();
+        let res = storage.set_scheduler_last_run("some-key", timestamp).await;
+        assert!(res.is_ok(), "insert works some-key");
+
+        let res = storage.set_scheduler_last_run("a-different-key", timestamp).await;
+        assert!(res.is_ok(), "insert works a-different-key");
+
+        let updated = timestamp - Duration::from_secs(5);
+        let res = storage.set_scheduler_last_run("some-key", updated).await;
+        assert!(res.is_ok(), "update works some-key");
+
+        let results = storage.get_scheduler_last_run().await;
+        let state = results.expect("Should have been ok");
+
+        let some_value = state.get("some-key").expect("some-key should be defined");
+        assert!(some_value.signed_duration_since(updated).num_seconds() < 1, "less than a second different");
+
+        let different_value = state.get("some-key").expect("some-key should be defined");
+        assert!(different_value.signed_duration_since(timestamp).num_seconds() < 1, "less than a second different");
     }
 }
