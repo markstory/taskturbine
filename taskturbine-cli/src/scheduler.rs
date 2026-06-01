@@ -125,7 +125,6 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
         let mut entry = StorageEntry::new(key, config_entry, now, schedule);
         if let Some(last_run) = state.get(&entry.storage_key()) {
             entry.last_run = *last_run;
-            let _ = scheduler.set_last_run(&entry).await;
         }
         scheduler.add(entry);
     }
@@ -298,13 +297,6 @@ impl Scheduler {
         self.entries.sort_by_key(|a| a.remaining_seconds(now));
     }
 
-    /// Update an entry's persisted last_run state to the provided record.
-    pub async fn set_last_run(&mut self, entry: &StorageEntry) -> Result<(), StorageError> {
-        self.storage
-            .set_scheduler_last_run(entry.storage_key().as_ref(), entry.last_run)
-            .await
-    }
-
     /// Return the number of seconds to sleep for.
     pub async fn tick(&mut self) -> i64 {
         for entry in self.entries.iter_mut() {
@@ -332,7 +324,6 @@ impl Scheduler {
 
                     let now = Utc::now().with_nanosecond(0).unwrap();
                     entry.last_run = now;
-                    // TODO: Couldn't use set_last_run here because of ownership rules
                     let _ = self
                         .storage
                         .set_scheduler_last_run(entry.storage_key().as_ref(), entry.last_run)
