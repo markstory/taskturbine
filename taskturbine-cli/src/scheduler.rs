@@ -7,7 +7,7 @@ use serde::Deserialize;
 use tokio::signal::unix::SignalKind;
 
 use crate::CliError;
-use taskturbine_core::storage::{Storage, StorageError};
+use taskturbine_core::storage::Storage;
 
 #[derive(Args, Debug)]
 pub struct SchedulerArgs {
