@@ -7,7 +7,7 @@ use serde::Deserialize;
 use tokio::signal::unix::SignalKind;
 
 use crate::CliError;
-use taskturbine_core::storage::Storage;
+use taskturbine_core::storage::{Storage, StorageError};
 
 #[derive(Args, Debug)]
 pub struct SchedulerArgs {
@@ -29,7 +29,7 @@ struct ScheduleEntry {
 }
 impl ScheduleEntry {
     /// Create a Schedule from the ScheduleKind data.
-    fn make_schedule(&self) -> Result<Box<dyn Schedule + Send>, String> {
+    fn make_schedule(&self) -> Result<Box<dyn Schedule + Send + Sync>, String> {
         match &self.schedule {
             ScheduleKind::Cron(value) => {
                 let result = CronSchedule::new(value);
@@ -108,9 +108,11 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     log::debug!("Starting scheduler");
     let guard = elegant_departure::get_shutdown_guard();
 
-    let now = Utc::now().with_nanosecond(0).unwrap();
     let state = storage.get_scheduler_last_run().await.unwrap();
+    log::debug!("Loaded scheduler state");
+
     let mut scheduler = Scheduler::new(storage);
+    let now = Utc::now().with_nanosecond(0).unwrap();
 
     for (key, config_entry) in config.schedules.iter() {
         let schedule = match config_entry.make_schedule() {
@@ -123,6 +125,7 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
         let mut entry = StorageEntry::new(key, config_entry, now, schedule);
         if let Some(last_run) = state.get(&entry.storage_key()) {
             entry.last_run = *last_run;
+            let _ = scheduler.set_last_run(&entry).await;
         }
         scheduler.add(entry);
     }
@@ -236,7 +239,7 @@ struct StorageEntry {
     key: String,
     taskname: String,
     channel: String,
-    schedule: Box<dyn Schedule + Send>,
+    schedule: Box<dyn Schedule + Send + Sync>,
     pub last_run: DateTime<Utc>,
 }
 impl StorageEntry {
@@ -244,7 +247,7 @@ impl StorageEntry {
         key: &str,
         config_entry: &ScheduleEntry,
         last_run: DateTime<Utc>,
-        schedule: Box<dyn Schedule + Send>,
+        schedule: Box<dyn Schedule + Send + Sync>,
     ) -> Self {
         Self {
             key: key.to_owned(),
@@ -295,6 +298,11 @@ impl Scheduler {
         self.entries.sort_by_key(|a| a.remaining_seconds(now));
     }
 
+    /// Update an entry's persisted last_run state to the provided record.
+    pub async fn set_last_run(&mut self, entry: &StorageEntry) -> Result<(), StorageError> {
+        self.storage.set_scheduler_last_run(entry.storage_key().as_ref(), entry.last_run).await
+    }
+
     /// Return the number of seconds to sleep for.
     pub async fn tick(&mut self) -> i64 {
         for entry in self.entries.iter_mut() {
@@ -322,9 +330,9 @@ impl Scheduler {
 
                     let now = Utc::now().with_nanosecond(0).unwrap();
                     entry.last_run = now;
-                    log::debug!("Updating state of {key:?} to {now:?}");
-
-                    // TODO Persist last_run state.
+                    // TODO: Couldn't use set_last_run here because of ownership rules
+                    let _ = self.storage.set_scheduler_last_run(entry.storage_key().as_ref(), entry.last_run).await;
+                    log::debug!("Updated state of {key:?} to {now:?}");
                 }
                 Err(err) => {
                     log::error!("Failed to spawn task. Error: {err:?}");
