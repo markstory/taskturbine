@@ -26,6 +26,7 @@ struct ScheduleEntry {
     pub taskname: String,
     pub channel: String,
     pub schedule: ScheduleKind,
+    pub params: Option<Vec<u8>>,
 }
 impl ScheduleEntry {
     /// Create a Schedule from the ScheduleKind data.
@@ -238,6 +239,7 @@ struct StorageEntry {
     key: String,
     taskname: String,
     channel: String,
+    params: Option<Vec<u8>>,
     schedule: Box<dyn Schedule + Send + Sync>,
     pub last_run: DateTime<Utc>,
 }
@@ -252,6 +254,7 @@ impl StorageEntry {
             key: key.to_owned(),
             taskname: config_entry.taskname.clone(),
             channel: config_entry.channel.clone(),
+            params: config_entry.params.clone(),
             last_run,
             schedule,
         }
@@ -280,7 +283,6 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    // TODO read last_run information from storage.
     pub fn new(storage: Storage) -> Self {
         let entries = vec![];
         Self { storage, entries }
@@ -311,10 +313,15 @@ impl Scheduler {
             let key = &entry.key;
             log::debug!("Schedule {key} is due");
 
-            // TODO add options and params support
+            let params = if let Some(params) = &entry.params {
+                params.as_slice()
+            } else {
+                b""
+            };
+            // TODO add options
             let result = self
                 .storage
-                .spawn_task(&entry.channel, &entry.taskname, b"", None)
+                .spawn_task(&entry.channel, &entry.taskname, params, None)
                 .await;
             match result {
                 Ok(spawn) => {
@@ -480,6 +487,7 @@ mod tests {
             taskname: "update-data".to_owned(),
             channel: "default".to_owned(),
             schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
+            params: None,
         };
         let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
 
@@ -503,6 +511,7 @@ mod tests {
             taskname: "do_update_data".to_owned(),
             channel: "default".to_owned(),
             schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
+            params: None,
         };
         let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
 
@@ -521,6 +530,7 @@ mod tests {
                 minutes: None,
                 seconds: Some(30),
             }),
+            params: None,
         };
         let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
 

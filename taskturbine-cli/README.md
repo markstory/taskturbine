@@ -18,7 +18,7 @@ Using `taskturbine-cli scheduler` will let you periodically spawn tasks based on
 schedules defined in a configuration file. Think of it like crontab for your
 application's tasks:
 
-### Configuration File Example
+### Scheduler Configuration File
 
 ```
 [schedules]
@@ -27,6 +27,7 @@ application's tasks:
 taskname = "myapp-notification-send-digests"
 channel = "notifications"
 schedule = {cron = "*/5 * * * *" }
+params = '{"enable_experiement": true}'
 
 [schedules.process-commits]
 taskname = "myapp-commits-process"
@@ -34,5 +35,7 @@ channel = "commits"
 schedule =  { timedelta = { minutes = 5 } }
 ```
 
-The `schedules` table contains a list of schedule keys, the task, channel and schedule to
-use. Each schedule can use either a crontab or timedelta expression schedule.
+The `schedules` table contains a list of schedule keys, the task, channel and
+schedule to use. Each schedule can use either a crontab or timedelta expression
+schedule. Fixed parameter payloads can be provided to tasks if required. By
+default tasks are spawned without any parameters or options.
