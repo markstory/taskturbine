@@ -7,7 +7,7 @@ use serde::Deserialize;
 use tokio::signal::unix::SignalKind;
 
 use crate::CliError;
-use taskturbine_core::storage::Storage;
+use taskturbine_core::storage::{Storage, TaskOptions};
 
 #[derive(Args, Debug)]
 pub struct SchedulerArgs {
@@ -16,7 +16,6 @@ pub struct SchedulerArgs {
 }
 
 /// Simple typed config DTO layer.
-/// TODO implement serializer
 #[derive(Deserialize)]
 struct SchedulerConfig {
     pub schedules: HashMap<String, ScheduleEntry>,
@@ -27,6 +26,7 @@ struct ScheduleEntry {
     pub channel: String,
     pub schedule: ScheduleKind,
     pub params: Option<Vec<u8>>,
+    pub options: Option<ScheduleOptions>
 }
 impl ScheduleEntry {
     /// Create a Schedule from the ScheduleKind data.
@@ -46,6 +46,42 @@ impl ScheduleEntry {
             }
             ScheduleKind::Timedelta(value) => Ok(Box::new(TimedeltaSchedule::new(value))),
         }
+    }
+}
+
+/// Schedule configuration version of TaskOptions
+#[derive(Deserialize)]
+struct ScheduleOptions {
+    /// Map of headers to include with the task activation
+    pub headers: HashMap<String, String>,
+
+    /// The maximum number of attempts to make on this task
+    pub max_attempts: i32,
+
+    /// The minimum number of seconds to wait between retries.
+    pub retry_seconds: i32,
+
+    /// The multipier to apply to retry delays between attempts.
+    /// Use > 1.0 to create exponential backoff.
+    pub retry_factor: f64,
+
+    /// The maximum number of seconds to wait between retries.
+    pub retry_max_seconds: i32,
+
+    /// The maximum age of a task before it should not be run.
+    /// Measured in seconds from when the task was created.
+    pub cancellation_max_age: i32,
+}
+impl From<&ScheduleOptions> for TaskOptions {
+    fn from(value: &ScheduleOptions) -> Self {
+        let mut options = TaskOptions::default();
+        options.headers = value.headers.clone();
+        options.max_attempts = value.max_attempts;
+        options.retry_seconds = value.retry_seconds;
+        options.retry_factor = value.retry_factor;
+        options.retry_max_seconds = value.retry_max_seconds;
+        options.cancellation_max_age = value.cancellation_max_age;
+        options
     }
 }
 
@@ -133,8 +169,10 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
     scheduler.sort_entries();
 
     loop {
+        let now = Utc::now().with_nanosecond(0).unwrap();
+
         tokio::select! {
-            sleep_time = scheduler.tick() => {
+            sleep_time = scheduler.tick(now) => {
                 let sleep_time = sleep_time.max(1);
                 log::debug!("Completed scheduler tick. Will sleep for {sleep_time}");
                 tokio::time::sleep(Duration::from_secs(sleep_time as u64)).await;
@@ -240,8 +278,9 @@ struct StorageEntry {
     taskname: String,
     channel: String,
     params: Option<Vec<u8>>,
+    options: Option<TaskOptions>,
     schedule: Box<dyn Schedule + Send + Sync>,
-    pub last_run: DateTime<Utc>,
+    last_run: DateTime<Utc>,
 }
 impl StorageEntry {
     fn new(
@@ -250,6 +289,8 @@ impl StorageEntry {
         last_run: DateTime<Utc>,
         schedule: Box<dyn Schedule + Send + Sync>,
     ) -> Self {
+        let options = config_entry.options.as_ref().map(|v| v.into());
+
         Self {
             key: key.to_owned(),
             taskname: config_entry.taskname.clone(),
@@ -257,6 +298,7 @@ impl StorageEntry {
             params: config_entry.params.clone(),
             last_run,
             schedule,
+            options,
         }
     }
 
@@ -299,12 +341,21 @@ impl Scheduler {
         self.entries.sort_by_key(|a| a.remaining_seconds(now));
     }
 
-    /// Return the number of seconds to sleep for.
-    pub async fn tick(&mut self) -> i64 {
+    /// Run a 'tick' of the scheduler loop.
+    ///
+    /// A tick is a fixed point in time. Generally values increase as time advances. While the
+    /// intent is to tick each second, spawning tasks can take time and seconds may be 'lost'. The
+    /// scheduler will catch up by whenever possible. However, if multiple intervals are missed, those
+    /// interval will be skipped and the schedule will resume on its next tick time (or after).
+    ///
+    /// This is a tradeoff between every spawning being important, and being on schedule as much as
+    /// possible. By favouring being on schedule, we skip missed intervals. If intervals are being
+    /// missed, your scheduler may be overwhelmed. Consider splitting up your schedule configuration
+    /// and running multiple schedulers.
+    ///
+    /// Returns the number of seconds to sleep for.
+    pub async fn tick(&mut self, now: DateTime<Utc>) -> i64 {
         for entry in self.entries.iter_mut() {
-            // Refresh now on each cycle in case spawning takes time.
-            let now = Utc::now().with_nanosecond(0).unwrap();
-
             if !entry.is_due(now) {
                 log::debug!("no more tasks due now");
                 break;
@@ -318,10 +369,9 @@ impl Scheduler {
             } else {
                 b""
             };
-            // TODO add options
             let result = self
                 .storage
-                .spawn_task(&entry.channel, &entry.taskname, params, None)
+                .spawn_task(&entry.channel, &entry.taskname, params, entry.options.clone())
                 .await;
             match result {
                 Ok(spawn) => {
@@ -329,7 +379,6 @@ impl Scheduler {
                     let run_id = spawn.run_id;
                     log::debug!("Spawned task_id={task_id} run_id={run_id}");
 
-                    let now = Utc::now().with_nanosecond(0).unwrap();
                     entry.last_run = now;
                     let _ = self
                         .storage
@@ -342,12 +391,12 @@ impl Scheduler {
                 }
             }
         }
-
+        // Prepare for the next tick by sorting the entries putting the
+        // entry with the least time remaining at the front.
         self.sort_entries();
+
         if let Some(entry) = self.entries.first() {
-            let now = Utc::now().with_nanosecond(0).unwrap();
             return entry.remaining_seconds(now);
-            // return (entry.remaining_seconds(now) - 1).max(0);
         }
 
         // If we didn't have a new entry sleep 1 second to conserve resources
