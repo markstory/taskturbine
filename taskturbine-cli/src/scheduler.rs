@@ -537,6 +537,7 @@ mod tests {
             channel: "default".to_owned(),
             schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
             params: None,
+            options: None,
         };
         let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
 
@@ -561,6 +562,7 @@ mod tests {
             channel: "default".to_owned(),
             schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
             params: None,
+            options: None,
         };
         let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
 
@@ -580,6 +582,7 @@ mod tests {
                 seconds: Some(30),
             }),
             params: None,
+            options: None,
         };
         let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
 
