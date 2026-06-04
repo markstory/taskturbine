@@ -345,12 +345,12 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use crate::testutils::create_app;
     use crate::{
         app::TaskResult,
         models::TaskState,
         storage::{Storage, StorageError},
     };
-    use crate::testutils::create_app;
 
     #[derive(Debug)]
     enum TestError {

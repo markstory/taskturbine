@@ -1,6 +1,11 @@
 use uuid::Uuid;
 
-use crate::{app::TaskturbineApp, config::Config, models::SpawnResult, storage::{Storage, StorageError}};
+use crate::{
+    app::TaskturbineApp,
+    config::Config,
+    models::SpawnResult,
+    storage::{Storage, StorageError},
+};
 
 /// Module of test helpers and utilities.
 ///
@@ -15,7 +20,6 @@ pub fn create_config() -> Config {
         ..Config::default()
     }
 }
-
 
 pub async fn create_storage() -> Storage {
     let config = create_config();

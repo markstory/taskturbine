@@ -26,7 +26,7 @@ struct ScheduleEntry {
     pub channel: String,
     pub schedule: ScheduleKind,
     pub params: Option<Vec<u8>>,
-    pub options: Option<ScheduleOptions>
+    pub options: Option<ScheduleOptions>,
 }
 impl ScheduleEntry {
     /// Create a Schedule from the ScheduleKind data.
@@ -371,7 +371,12 @@ impl Scheduler {
             };
             let result = self
                 .storage
-                .spawn_task(&entry.channel, &entry.taskname, params, entry.options.clone())
+                .spawn_task(
+                    &entry.channel,
+                    &entry.taskname,
+                    params,
+                    entry.options.clone(),
+                )
                 .await;
             match result {
                 Ok(spawn) => {

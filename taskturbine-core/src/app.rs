@@ -703,7 +703,7 @@ mod tests {
         context::{FlowControl, TaskContext},
         models::TaskState,
         storage::{Storage, StorageError, TaskOptions},
-        testutils::{create_config, create_app}
+        testutils::{create_app, create_config},
     };
 
     use super::TaskturbineApp;
