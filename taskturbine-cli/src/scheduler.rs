@@ -417,25 +417,44 @@ mod tests {
     use super::*;
 
     mod scheduler {
+        use crate::admin_storage::{self, TaskListOptions};
+
         use super::*;
 
         #[tokio::test]
         async fn scheduler_tick() {
-            let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+            let start = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
             let storage = create_storage().await;
+            let usecase = storage.get_config().usecase;
 
-            let config = ScheduleEntry {
-                taskname: "update-data".to_owned(),
+            let taskname = format!("update-data-{usecase}");
+            let schedule_config = ScheduleEntry {
+                taskname: taskname.clone(),
                 channel: "default".to_owned(),
                 schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
                 params: None,
                 options: None,
             };
-            let schedule = config.make_schedule().unwrap();
-            let entry = StorageEntry::new("update-data", &config, now, schedule);
+            let schedule = schedule_config.make_schedule().unwrap();
+            let entry = StorageEntry::new("update-data", &schedule_config, start, schedule);
 
-            let mut scheduler = Scheduler::new(storage);
+            let config = storage.get_config();
+            let mut scheduler = Scheduler::new(storage.clone());
             scheduler.add(entry);
+
+            let now = "2026-05-30 12:05:01Z".parse::<DateTime<Utc>>().unwrap();
+            let sleep = scheduler.tick(now).await;
+            assert!(sleep > 2, "Should always sleep at least 2 out of 5");
+            let admin = admin_storage::AdminStorage::new(config.clone());
+
+            let options = TaskListOptions {
+                channel: Some("default".to_owned()),
+                taskname: Some(taskname),
+                state: None,
+                limit: 5,
+            };
+            let tasks = admin.task_list(options).await.expect("Should find something");
+            assert!(tasks.len() >= 1, "At least one task spawned");
         }
     }
 
