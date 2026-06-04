@@ -407,8 +407,49 @@ impl Scheduler {
 #[cfg(test)]
 mod tests {
     use chrono::Timelike;
+    use taskturbine_core::config::Config;
 
     use super::*;
+
+    async fn create_storage() -> Storage {
+        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
+            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
+        let config = Config {
+            usecase: "test".to_string(),
+            database_url: db_url,
+            database_log_queries: true,
+            ..Config::default()
+        };
+        let storage = Storage::new(config);
+
+        // Ensure migrations have been applied and that storage is cleared.
+        storage.update_schema().await.unwrap();
+
+        storage
+    }
+
+    mod scheduler {
+        use super::*;
+
+        #[tokio::test]
+        async fn scheduler_tick() {
+            let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+            let storage = create_storage().await;
+
+            let config = ScheduleEntry {
+                taskname: "update-data".to_owned(),
+                channel: "default".to_owned(),
+                schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
+                params: None,
+                options: None,
+            };
+            let schedule = config.make_schedule().unwrap();
+            let entry = StorageEntry::new("update-data", &config, now, schedule);
+
+            let mut scheduler = Scheduler::new(storage);
+            scheduler.add(entry);
+        }
+    }
 
     mod timedelta_schedule {
         use super::*;

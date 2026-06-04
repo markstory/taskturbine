@@ -700,32 +700,13 @@ mod tests {
     use uuid::Uuid;
 
     use crate::{
-        config::Config,
         context::{FlowControl, TaskContext},
         models::TaskState,
         storage::{Storage, StorageError, TaskOptions},
+        testutils::{create_config, create_app}
     };
 
     use super::TaskturbineApp;
-
-    fn create_config() -> Config {
-        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
-            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
-        Config {
-            usecase: "test".to_string(),
-            database_url: db_url,
-            default_channel: "channel-one".into(),
-            ..Config::default()
-        }
-    }
-
-    async fn create_app() -> TaskturbineApp {
-        let config = create_config();
-        let app = TaskturbineApp::new(config);
-        app.storage.update_schema().await.unwrap();
-
-        app
-    }
 
     async fn create_app_with_task(channel: &str) -> TaskturbineApp {
         create_app()
@@ -765,7 +746,7 @@ mod tests {
 
         assert!(app.has_channel("reports"), "Should have defined channel");
         assert!(
-            app.has_channel("channel-one"),
+            app.has_channel("taskturbine-test"),
             "Should have default channel"
         );
         assert!(
@@ -831,7 +812,7 @@ mod tests {
 
         let worker = app.create_worker("worker-1", vec![]);
         let config = worker.config();
-        assert_eq!(config.default_channel, "channel-one");
+        assert_eq!(config.default_channel, "taskturbine-test");
     }
 
     #[tokio::test]

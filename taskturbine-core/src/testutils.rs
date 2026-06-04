@@ -3,16 +3,22 @@ use uuid::Uuid;
 use crate::{app::TaskturbineApp, config::Config, models::SpawnResult, storage::{Storage, StorageError}};
 
 /// Module of test helpers and utilities.
-
-pub async fn create_storage() -> Storage {
+///
+pub fn create_config() -> Config {
     let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
         .expect("Missing required TASKTURBINE_DATABASE_URL env var");
-    let config = Config {
-        usecase: "test".to_string(),
+    Config {
+        usecase: format!("taskturbine-test-{}", Uuid::now_v7()),
         database_url: db_url,
+        default_channel: "taskturbine-test".into(),
         database_log_queries: true,
         ..Config::default()
-    };
+    }
+}
+
+
+pub async fn create_storage() -> Storage {
+    let config = create_config();
     let storage = Storage::new(config);
 
     // Ensure migrations have been applied and that storage is cleared.
@@ -35,13 +41,7 @@ pub async fn create_task() -> Result<(Storage, SpawnResult), StorageError> {
 }
 
 pub async fn create_app() -> TaskturbineApp {
-    let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
-        .expect("Missing required TASKTURBINE_DATABASE_URL env var");
-    let config = Config {
-        usecase: format!("taskturbine-test-{}", Uuid::now_v7()),
-        database_url: db_url,
-        ..Config::default()
-    };
+    let config = create_config();
     let app = TaskturbineApp::new(config);
     app.storage.update_schema().await.unwrap();
 
