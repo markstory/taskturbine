@@ -410,184 +410,196 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn timedelta_schedule_remaining_seconds() {
-        let now = Utc::now();
-        let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
-        let due = now.with_minute(1).unwrap().with_second(30).unwrap();
-        let not_due = now.with_minute(1).unwrap().with_second(20).unwrap();
-        let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
-        let the_past = last_run - Duration::from_secs(180);
-        let the_future = last_run + Duration::from_secs(180);
+    mod timedelta_schedule {
+        use super::*;
 
-        let schedule = TimedeltaSchedule::new(&TimedeltaData {
-            hours: None,
-            minutes: Some(1),
-            seconds: Some(30),
-        });
-        assert_eq!(schedule.remaining_seconds(due, last_run), 0);
-        assert_eq!(schedule.remaining_seconds(not_due, last_run), 10);
-        assert_eq!(schedule.remaining_seconds(very_early, last_run), 70);
-        assert_eq!(
-            schedule.remaining_seconds(the_past, last_run),
-            270,
-            "handles full cycles"
-        );
-        assert_eq!(
-            schedule.remaining_seconds(the_future, last_run),
-            -90,
-            "negative value when overdue"
-        );
-    }
+        #[test]
+        fn timedelta_schedule_remaining_seconds() {
+            let now = Utc::now();
+            let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
+            let due = now.with_minute(1).unwrap().with_second(30).unwrap();
+            let not_due = now.with_minute(1).unwrap().with_second(20).unwrap();
+            let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
+            let the_past = last_run - Duration::from_secs(180);
+            let the_future = last_run + Duration::from_secs(180);
 
-    #[test]
-    fn timedelta_schedule_remaining_seconds_minutes_and_hours() {
-        let last_run = "2026-05-30 12:05:30Z".parse::<DateTime<Utc>>().unwrap();
-        let after_last_run = last_run + Duration::from_secs(1);
-        let before_next = "2026-05-30 13:08:30Z".parse::<DateTime<Utc>>().unwrap();
-
-        let schedule = TimedeltaSchedule::new(&TimedeltaData {
-            hours: Some(1),
-            minutes: Some(5),
-            seconds: Some(30),
-        });
-        assert_eq!(
-            schedule.remaining_seconds(after_last_run, last_run),
-            3600 + 300 + 29
-        );
-        assert_eq!(schedule.remaining_seconds(before_next, last_run), 150);
-    }
-
-    #[test]
-    fn timedelta_schedule_is_due() {
-        let now = Utc::now();
-        let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
-        let due = now.with_minute(1).unwrap().with_second(30).unwrap();
-        let not_due = now.with_minute(1).unwrap().with_second(20).unwrap();
-        let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
-        let the_past = last_run - Duration::from_secs(180);
-        let the_future = last_run + Duration::from_secs(180);
-
-        let schedule = TimedeltaSchedule::new(&TimedeltaData {
-            hours: None,
-            minutes: Some(1),
-            seconds: Some(30),
-        });
-        assert!(schedule.is_due(due, last_run));
-        assert!(!schedule.is_due(not_due, last_run));
-        assert!(!schedule.is_due(very_early, last_run));
-        assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
-        assert!(
-            schedule.is_due(the_future, last_run),
-            "negative value when overdue"
-        );
-    }
-
-    #[test]
-    fn cron_schedule_remaining_seconds() {
-        let now = Utc::now();
-        let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
-        let due = now.with_minute(1).unwrap().with_second(0).unwrap();
-        let not_due = now.with_minute(0).unwrap().with_second(50).unwrap();
-        let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
-        let the_past = last_run - Duration::from_secs(180);
-        let the_future = last_run + Duration::from_secs(180);
-
-        let schedule = CronSchedule::new("0 */1 * * * *").unwrap();
-        assert_eq!(schedule.remaining_seconds(due, last_run), 0);
-        assert_eq!(schedule.remaining_seconds(not_due, last_run), 9);
-        assert_eq!(schedule.remaining_seconds(very_early, last_run), 39);
-        assert_eq!(
-            schedule.remaining_seconds(the_past, last_run),
-            239,
-            "handles full cycles"
-        );
-        assert_eq!(
-            schedule.remaining_seconds(the_future, last_run),
-            0,
-            "0 when overdue"
-        );
-    }
-
-    #[test]
-    fn cron_schedule_is_due() {
-        let now = Utc::now();
-        let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
-        let due = now.with_minute(1).unwrap().with_second(0).unwrap();
-        let not_due = now.with_minute(0).unwrap().with_second(50).unwrap();
-        let very_early = now.with_minute(0).unwrap().with_second(50).unwrap();
-        let the_past = last_run - Duration::from_secs(180);
-        let the_future = last_run + Duration::from_secs(180);
-
-        let schedule = CronSchedule::new("0 */1 * * * * *").unwrap();
-        assert!(schedule.is_due(due, last_run));
-        assert!(!schedule.is_due(not_due, last_run));
-        assert!(!schedule.is_due(very_early, last_run));
-        assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
-        assert!(
-            schedule.is_due(the_future, last_run),
-            "negative value when overdue"
-        );
-    }
-
-    #[test]
-    fn storage_entry_remaining_seconds_and_is_due() {
-        let config = ScheduleEntry {
-            taskname: "update-data".to_owned(),
-            channel: "default".to_owned(),
-            schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
-            params: None,
-            options: None,
-        };
-        let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
-
-        let schedule = config.make_schedule().unwrap();
-        let entry = StorageEntry::new("update-data", &config, now, schedule);
-        assert_eq!(entry.taskname, "update-data");
-        assert_eq!(entry.channel, "default");
-
-        let next_time = "2026-05-30 12:05:00Z".parse::<DateTime<Utc>>().unwrap();
-        assert!(entry.is_due(next_time));
-        assert_eq!(entry.remaining_seconds(next_time), 0);
-
-        let before_next = "2026-05-30 12:03:00Z".parse::<DateTime<Utc>>().unwrap();
-        assert!(!entry.is_due(before_next));
-        assert_eq!(entry.remaining_seconds(before_next), 120);
-    }
-
-    #[test]
-    fn storage_entry_storage_key() {
-        let cron_config = ScheduleEntry {
-            taskname: "do_update_data".to_owned(),
-            channel: "default".to_owned(),
-            schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
-            params: None,
-            options: None,
-        };
-        let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
-
-        let schedule = cron_config.make_schedule().unwrap();
-        let entry = StorageEntry::new("update-data", &cron_config, now, schedule);
-        assert_eq!(
-            entry.storage_key(),
-            "update-data:do_update_data:c:0 */5 * * * * *"
-        );
-
-        let td_config = ScheduleEntry {
-            taskname: "do_update_data".to_owned(),
-            channel: "default".to_owned(),
-            schedule: ScheduleKind::Timedelta(TimedeltaData {
+            let schedule = TimedeltaSchedule::new(&TimedeltaData {
                 hours: None,
-                minutes: None,
+                minutes: Some(1),
                 seconds: Some(30),
-            }),
-            params: None,
-            options: None,
-        };
-        let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+            });
+            assert_eq!(schedule.remaining_seconds(due, last_run), 0);
+            assert_eq!(schedule.remaining_seconds(not_due, last_run), 10);
+            assert_eq!(schedule.remaining_seconds(very_early, last_run), 70);
+            assert_eq!(
+                schedule.remaining_seconds(the_past, last_run),
+                270,
+                "handles full cycles"
+            );
+            assert_eq!(
+                schedule.remaining_seconds(the_future, last_run),
+                -90,
+                "negative value when overdue"
+            );
+        }
 
-        let schedule = td_config.make_schedule().unwrap();
-        let entry = StorageEntry::new("timedelta-update", &cron_config, now, schedule);
-        assert_eq!(entry.storage_key(), "timedelta-update:do_update_data:td:30");
+        #[test]
+        fn timedelta_schedule_remaining_seconds_minutes_and_hours() {
+            let last_run = "2026-05-30 12:05:30Z".parse::<DateTime<Utc>>().unwrap();
+            let after_last_run = last_run + Duration::from_secs(1);
+            let before_next = "2026-05-30 13:08:30Z".parse::<DateTime<Utc>>().unwrap();
+
+            let schedule = TimedeltaSchedule::new(&TimedeltaData {
+                hours: Some(1),
+                minutes: Some(5),
+                seconds: Some(30),
+            });
+            assert_eq!(
+                schedule.remaining_seconds(after_last_run, last_run),
+                3600 + 300 + 29
+            );
+            assert_eq!(schedule.remaining_seconds(before_next, last_run), 150);
+        }
+
+        #[test]
+        fn timedelta_schedule_is_due() {
+            let now = Utc::now();
+            let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
+            let due = now.with_minute(1).unwrap().with_second(30).unwrap();
+            let not_due = now.with_minute(1).unwrap().with_second(20).unwrap();
+            let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
+            let the_past = last_run - Duration::from_secs(180);
+            let the_future = last_run + Duration::from_secs(180);
+
+            let schedule = TimedeltaSchedule::new(&TimedeltaData {
+                hours: None,
+                minutes: Some(1),
+                seconds: Some(30),
+            });
+            assert!(schedule.is_due(due, last_run));
+            assert!(!schedule.is_due(not_due, last_run));
+            assert!(!schedule.is_due(very_early, last_run));
+            assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
+            assert!(
+                schedule.is_due(the_future, last_run),
+                "negative value when overdue"
+            );
+        }
+    }
+
+    mod cron_schedule {
+        use super::*;
+
+        #[test]
+        fn cron_schedule_remaining_seconds() {
+            let now = Utc::now();
+            let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
+            let due = now.with_minute(1).unwrap().with_second(0).unwrap();
+            let not_due = now.with_minute(0).unwrap().with_second(50).unwrap();
+            let very_early = now.with_minute(0).unwrap().with_second(20).unwrap();
+            let the_past = last_run - Duration::from_secs(180);
+            let the_future = last_run + Duration::from_secs(180);
+
+            let schedule = CronSchedule::new("0 */1 * * * *").unwrap();
+            assert_eq!(schedule.remaining_seconds(due, last_run), 0);
+            assert_eq!(schedule.remaining_seconds(not_due, last_run), 9);
+            assert_eq!(schedule.remaining_seconds(very_early, last_run), 39);
+            assert_eq!(
+                schedule.remaining_seconds(the_past, last_run),
+                239,
+                "handles full cycles"
+            );
+            assert_eq!(
+                schedule.remaining_seconds(the_future, last_run),
+                0,
+                "0 when overdue"
+            );
+        }
+
+        #[test]
+        fn cron_schedule_is_due() {
+            let now = Utc::now();
+            let last_run = now.with_minute(0).unwrap().with_second(0).unwrap();
+            let due = now.with_minute(1).unwrap().with_second(0).unwrap();
+            let not_due = now.with_minute(0).unwrap().with_second(50).unwrap();
+            let very_early = now.with_minute(0).unwrap().with_second(50).unwrap();
+            let the_past = last_run - Duration::from_secs(180);
+            let the_future = last_run + Duration::from_secs(180);
+
+            let schedule = CronSchedule::new("0 */1 * * * * *").unwrap();
+            assert!(schedule.is_due(due, last_run));
+            assert!(!schedule.is_due(not_due, last_run));
+            assert!(!schedule.is_due(very_early, last_run));
+            assert!(!schedule.is_due(the_past, last_run), "handles full cycles");
+            assert!(
+                schedule.is_due(the_future, last_run),
+                "negative value when overdue"
+            );
+        }
+    }
+
+    mod storage_entry {
+        use super::*;
+
+        #[test]
+        fn storage_entry_remaining_seconds_and_is_due() {
+            let config = ScheduleEntry {
+                taskname: "update-data".to_owned(),
+                channel: "default".to_owned(),
+                schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
+                params: None,
+                options: None,
+            };
+            let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+
+            let schedule = config.make_schedule().unwrap();
+            let entry = StorageEntry::new("update-data", &config, now, schedule);
+            assert_eq!(entry.taskname, "update-data");
+            assert_eq!(entry.channel, "default");
+
+            let next_time = "2026-05-30 12:05:00Z".parse::<DateTime<Utc>>().unwrap();
+            assert!(entry.is_due(next_time));
+            assert_eq!(entry.remaining_seconds(next_time), 0);
+
+            let before_next = "2026-05-30 12:03:00Z".parse::<DateTime<Utc>>().unwrap();
+            assert!(!entry.is_due(before_next));
+            assert_eq!(entry.remaining_seconds(before_next), 120);
+        }
+
+        #[test]
+        fn storage_entry_storage_key() {
+            let cron_config = ScheduleEntry {
+                taskname: "do_update_data".to_owned(),
+                channel: "default".to_owned(),
+                schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
+                params: None,
+                options: None,
+            };
+            let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+
+            let schedule = cron_config.make_schedule().unwrap();
+            let entry = StorageEntry::new("update-data", &cron_config, now, schedule);
+            assert_eq!(
+                entry.storage_key(),
+                "update-data:do_update_data:c:0 */5 * * * * *"
+            );
+
+            let td_config = ScheduleEntry {
+                taskname: "do_update_data".to_owned(),
+                channel: "default".to_owned(),
+                schedule: ScheduleKind::Timedelta(TimedeltaData {
+                    hours: None,
+                    minutes: None,
+                    seconds: Some(30),
+                }),
+                params: None,
+                options: None,
+            };
+            let now = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+
+            let schedule = td_config.make_schedule().unwrap();
+            let entry = StorageEntry::new("timedelta-update", &cron_config, now, schedule);
+            assert_eq!(entry.storage_key(), "timedelta-update:do_update_data:td:30");
+        }
     }
 }
