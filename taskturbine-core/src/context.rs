@@ -346,29 +346,15 @@ mod tests {
 
     use super::*;
     use crate::{
-        app::{TaskResult, TaskturbineApp},
-        config::Config,
+        app::TaskResult,
         models::TaskState,
         storage::{Storage, StorageError},
     };
+    use crate::testutils::create_app;
 
     #[derive(Debug)]
     enum TestError {
         GenericError,
-    }
-
-    async fn create_app() -> TaskturbineApp {
-        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
-            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
-        let config = Config {
-            usecase: format!("context-test-{}", Uuid::now_v7()),
-            database_url: db_url,
-            ..Config::default()
-        };
-        let app = TaskturbineApp::new(config);
-        app.storage.update_schema().await.unwrap();
-
-        app
     }
 
     async fn claim_task(storage: &Storage, task_name: &str) -> ClaimedTask {
