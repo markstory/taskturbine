@@ -412,26 +412,9 @@ impl Scheduler {
 #[cfg(test)]
 mod tests {
     use chrono::Timelike;
-    use taskturbine_core::config::Config;
+    use taskturbine_core::testutils::create_storage;
 
     use super::*;
-
-    async fn create_storage() -> Storage {
-        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
-            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
-        let config = Config {
-            usecase: "test".to_string(),
-            database_url: db_url,
-            database_log_queries: true,
-            ..Config::default()
-        };
-        let storage = Storage::new(config);
-
-        // Ensure migrations have been applied and that storage is cleared.
-        storage.update_schema().await.unwrap();
-
-        storage
-    }
 
     mod scheduler {
         use super::*;
