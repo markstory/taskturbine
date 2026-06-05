@@ -39,3 +39,16 @@ The `schedules` table contains a list of schedule keys, the task, channel and
 schedule to use. Each schedule can use either a crontab or timedelta expression
 schedule. Fixed parameter payloads can be provided to tasks if required. By
 default tasks are spawned without any parameters or options.
+
+#### Running the scheduler
+
+After building a `schedules.toml` file (see above), you can run the scheduler with
+:
+
+```bash
+taskturbine-cli scheduler --config=./schedules.toml
+
+# With debug logging enabled.
+taskturbine-cli --verbose scheduler --config=./schedules.toml
+```
+
