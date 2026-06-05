@@ -494,6 +494,45 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn scheduler_tick_one_multiple_intervals() {
+            let start = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+            let storage = create_storage().await;
+
+            let usecase = storage.get_config().usecase;
+            let five_seconds = ScheduleKind::Cron("0 */5 * * * * *".to_owned());
+            let taskname = format!("tick-one-multiple-interval-{usecase}");
+            let entry = create_schedule_entry("first", &taskname, start, five_seconds);
+
+            let config = storage.get_config();
+            let mut scheduler = Scheduler::new(storage.clone());
+            scheduler.add(entry);
+
+            let now = "2026-05-30 12:05:01Z".parse::<DateTime<Utc>>().unwrap();
+            let sleep = scheduler.tick(now).await;
+            assert!(sleep > 290, "Should always sleep at least 4:50");
+
+            let admin = AdminStorage::new(config.clone());
+            let tasks = find_tasks_by_name(&admin, &taskname).await;
+            let first_count = tasks.len();
+            assert!(first_count >= 1, "At least one task spawned");
+
+            let now = "2026-05-30 12:07:01Z".parse::<DateTime<Utc>>().unwrap();
+            let sleep = scheduler.tick(now).await;
+            assert!(sleep > 170, "Should sleep at least 2:50");
+
+            let admin = AdminStorage::new(config.clone());
+            let tasks = find_tasks_by_name(&admin, &taskname).await;
+            assert_eq!(tasks.len(), first_count, "no additional tasks spawned, none due");
+
+            let now = "2026-05-30 12:10:01Z".parse::<DateTime<Utc>>().unwrap();
+            let sleep = scheduler.tick(now).await;
+            assert!(sleep > 290, "Should sleep at least 4:50");
+            let tasks = find_tasks_by_name(&admin, &taskname).await;
+            let second_count = tasks.len();
+            assert!(second_count > first_count, "more tasks should be spawned");
+        }
+
+        #[tokio::test]
         async fn scheduler_tick_multiple_task_trigger_all_in_batch() {
             let start = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
             let storage = create_storage().await;
