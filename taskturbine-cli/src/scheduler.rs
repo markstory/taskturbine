@@ -417,26 +417,44 @@ mod tests {
     use super::*;
 
     mod scheduler {
-        use crate::admin_storage::{self, TaskListOptions};
+        use taskturbine_core::models::Task;
+
+        use crate::admin_storage::{AdminStorage, TaskListOptions};
 
         use super::*;
 
-        #[tokio::test]
-        async fn scheduler_tick() {
-            let start = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
-            let storage = create_storage().await;
-            let usecase = storage.get_config().usecase;
-
-            let taskname = format!("update-data-{usecase}");
+        fn create_schedule_entry(name: &str, taskname: &str, start: DateTime<Utc>, schedule: ScheduleKind) -> StorageEntry {
             let schedule_config = ScheduleEntry {
-                taskname: taskname.clone(),
+                taskname: taskname.to_owned(),
                 channel: "default".to_owned(),
-                schedule: ScheduleKind::Cron("0 */5 * * * * *".to_owned()),
+                schedule: schedule,
                 params: None,
                 options: None,
             };
             let schedule = schedule_config.make_schedule().unwrap();
-            let entry = StorageEntry::new("update-data", &schedule_config, start, schedule);
+            let entry = StorageEntry::new(name, &schedule_config, start, schedule);
+            entry
+        }
+
+        async fn find_tasks_by_name(admin: &AdminStorage, name: &str) -> Vec<Task> {
+            let options = TaskListOptions {
+                channel: Some("default".to_owned()),
+                taskname: Some(name.to_owned()),
+                state: None,
+                limit: 5,
+            };
+            admin.task_list(options).await.expect("Should find something")
+        }
+
+        #[tokio::test]
+        async fn scheduler_tick_one_task_simple() {
+            let start = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+            let storage = create_storage().await;
+
+            let usecase = storage.get_config().usecase;
+            let five_seconds = ScheduleKind::Cron("0 */5 * * * * *".to_owned());
+            let taskname = format!("tick-one-task-simple-{usecase}");
+            let entry = create_schedule_entry("tick-one-task", &taskname, start, five_seconds);
 
             let config = storage.get_config();
             let mut scheduler = Scheduler::new(storage.clone());
@@ -445,15 +463,65 @@ mod tests {
             let now = "2026-05-30 12:05:01Z".parse::<DateTime<Utc>>().unwrap();
             let sleep = scheduler.tick(now).await;
             assert!(sleep > 2, "Should always sleep at least 2 out of 5");
-            let admin = admin_storage::AdminStorage::new(config.clone());
 
-            let options = TaskListOptions {
-                channel: Some("default".to_owned()),
-                taskname: Some(taskname),
-                state: None,
-                limit: 5,
-            };
-            let tasks = admin.task_list(options).await.expect("Should find something");
+            let admin = AdminStorage::new(config.clone());
+            let tasks = find_tasks_by_name(&admin, &taskname).await;
+            assert!(tasks.len() >= 1, "At least one task spawned");
+        }
+
+        #[tokio::test]
+        async fn scheduler_tick_one_task_catch_up() {
+            let start = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+            let storage = create_storage().await;
+
+            let usecase = storage.get_config().usecase;
+            let five_seconds = ScheduleKind::Cron("0 */5 * * * * *".to_owned());
+            let taskname = format!("tick-one-task-catch-up-{usecase}");
+            let entry = create_schedule_entry("tick-one", &taskname, start, five_seconds);
+
+            let config = storage.get_config();
+            let mut scheduler = Scheduler::new(storage.clone());
+            scheduler.add(entry);
+
+            // Late by 2 minutes
+            let late = "2026-05-30 12:07:01Z".parse::<DateTime<Utc>>().unwrap();
+            let sleep = scheduler.tick(late).await;
+            assert!(sleep > 2, "Should always sleep at least 2 out of 5");
+
+            let admin = AdminStorage::new(config.clone());
+            let tasks = find_tasks_by_name(&admin, &taskname).await;
+            assert!(tasks.len() >= 1, "At least one task spawned");
+        }
+
+        #[tokio::test]
+        async fn scheduler_tick_multiple_task_trigger_all_in_batch() {
+            let start = "2026-05-30 12:00:00Z".parse::<DateTime<Utc>>().unwrap();
+            let storage = create_storage().await;
+
+            let config = storage.get_config();
+            let usecase = &config.usecase;
+            let mut scheduler = Scheduler::new(storage.clone());
+
+            let five_min = ScheduleKind::Cron("0 */5 * * * * *".to_owned());
+            let taskname = format!("tick-multiple-task-trigger-all-{usecase}");
+            let first = create_schedule_entry("first-task", &taskname, start, five_min);
+            scheduler.add(first);
+
+            let six_min = ScheduleKind::Cron("0 */6 * * * * *".to_owned());
+            let second_name = format!("tick-multiple-task-trigger-all-second-{usecase}");
+            let second = create_schedule_entry("second-task", &second_name, start, six_min);
+            scheduler.add(second);
+
+            // Late by 2 minutes and 1 minute
+            let late = "2026-05-30 12:07:01Z".parse::<DateTime<Utc>>().unwrap();
+            let sleep = scheduler.tick(late).await;
+            assert!(sleep > 2, "Should always sleep at least 2 out of 5");
+
+            let admin = AdminStorage::new(config.clone());
+            let tasks = find_tasks_by_name(&admin, &taskname).await;
+            assert!(tasks.len() >= 1, "At least one task spawned");
+
+            let tasks = find_tasks_by_name(&admin, &second_name).await;
             assert!(tasks.len() >= 1, "At least one task spawned");
         }
     }
