@@ -1,9 +1,10 @@
-use core::fmt;
+use core::{fmt};
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use chrono::{DateTime, Timelike, Utc};
 use clap::Args;
 use serde::Deserialize;
+use tokio::time;
 use tokio::signal::unix::SignalKind;
 
 use crate::CliError;
@@ -168,14 +169,17 @@ async fn run_scheduler(storage: Storage, config: SchedulerConfig) {
 
     scheduler.sort_entries();
 
+    let mut timer = time::interval(Duration::from_secs(1));
+    timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     loop {
         let now = Utc::now().with_nanosecond(0).unwrap();
-
         tokio::select! {
-            sleep_time = scheduler.tick(now) => {
-                let sleep_time = sleep_time.max(1);
+            _ = timer.tick() => {
+                let sleep_time = scheduler.tick(now).await;
                 log::debug!("Completed scheduler tick. Will sleep for {sleep_time}");
-                tokio::time::sleep(Duration::from_secs(sleep_time as u64)).await;
+                if sleep_time > 0 {
+                    tokio::time::sleep(Duration::from_secs(sleep_time as u64)).await;
+                }
             },
             _ = guard.wait() => {
                 log::info!("Shutting down scheduler");
@@ -355,6 +359,7 @@ impl Scheduler {
     ///
     /// Returns the number of seconds to sleep for.
     pub async fn tick(&mut self, now: DateTime<Utc>) -> i64 {
+        log::debug!("Begin tick for {now}");
         for entry in self.entries.iter_mut() {
             if !entry.is_due(now) {
                 log::debug!("no more tasks due now");
