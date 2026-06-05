@@ -1,11 +1,11 @@
-use core::{fmt};
+use core::fmt;
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use chrono::{DateTime, Timelike, Utc};
 use clap::Args;
 use serde::Deserialize;
-use tokio::time;
 use tokio::signal::unix::SignalKind;
+use tokio::time;
 
 use crate::CliError;
 use taskturbine_core::storage::{Storage, TaskOptions};
@@ -428,17 +428,22 @@ mod tests {
 
         use super::*;
 
-        fn create_schedule_entry(name: &str, taskname: &str, start: DateTime<Utc>, schedule: ScheduleKind) -> StorageEntry {
+        fn create_schedule_entry(
+            name: &str,
+            taskname: &str,
+            start: DateTime<Utc>,
+            schedule: ScheduleKind,
+        ) -> StorageEntry {
             let schedule_config = ScheduleEntry {
                 taskname: taskname.to_owned(),
                 channel: "default".to_owned(),
-                schedule: schedule,
+                schedule,
                 params: None,
                 options: None,
             };
             let schedule = schedule_config.make_schedule().unwrap();
-            let entry = StorageEntry::new(name, &schedule_config, start, schedule);
-            entry
+            
+            StorageEntry::new(name, &schedule_config, start, schedule)
         }
 
         async fn find_tasks_by_name(admin: &AdminStorage, name: &str) -> Vec<Task> {
@@ -448,7 +453,10 @@ mod tests {
                 state: None,
                 limit: 5,
             };
-            admin.task_list(options).await.expect("Should find something")
+            admin
+                .task_list(options)
+                .await
+                .expect("Should find something")
         }
 
         #[tokio::test]
@@ -471,7 +479,7 @@ mod tests {
 
             let admin = AdminStorage::new(config.clone());
             let tasks = find_tasks_by_name(&admin, &taskname).await;
-            assert!(tasks.len() >= 1, "At least one task spawned");
+            assert!(!tasks.is_empty(), "At least one task spawned");
         }
 
         #[tokio::test]
@@ -495,7 +503,7 @@ mod tests {
 
             let admin = AdminStorage::new(config.clone());
             let tasks = find_tasks_by_name(&admin, &taskname).await;
-            assert!(tasks.len() >= 1, "At least one task spawned");
+            assert!(!tasks.is_empty(), "At least one task spawned");
         }
 
         #[tokio::test]
@@ -527,7 +535,11 @@ mod tests {
 
             let admin = AdminStorage::new(config.clone());
             let tasks = find_tasks_by_name(&admin, &taskname).await;
-            assert_eq!(tasks.len(), first_count, "no additional tasks spawned, none due");
+            assert_eq!(
+                tasks.len(),
+                first_count,
+                "no additional tasks spawned, none due"
+            );
 
             let now = "2026-05-30 12:10:01Z".parse::<DateTime<Utc>>().unwrap();
             let sleep = scheduler.tick(now).await;
@@ -563,10 +575,10 @@ mod tests {
 
             let admin = AdminStorage::new(config.clone());
             let tasks = find_tasks_by_name(&admin, &taskname).await;
-            assert!(tasks.len() >= 1, "At least one task spawned");
+            assert!(!tasks.is_empty(), "At least one task spawned");
 
             let tasks = find_tasks_by_name(&admin, &second_name).await;
-            assert!(tasks.len() >= 1, "At least one task spawned");
+            assert!(!tasks.is_empty(), "At least one task spawned");
         }
     }
 
