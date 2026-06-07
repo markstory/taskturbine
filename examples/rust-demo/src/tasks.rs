@@ -6,8 +6,8 @@ use serde_json::Value;
 use sha2::Sha256;
 use sqlx::Row;
 use taskturbine::{
-    config::Config,
     app::{ResultData, TaskResult, TaskturbineApp},
+    config::Config,
     context::{FlowControl, TaskContext},
 };
 

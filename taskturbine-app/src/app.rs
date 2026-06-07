@@ -9,12 +9,12 @@ use async_channel::{Receiver, Sender, TrySendError};
 use futures::FutureExt;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
+use crate::context::{FlowControl, TaskContext};
 use taskturbine_core::{
     config::Config,
     models::{ClaimedTask, SpawnResult},
     storage::{Storage, StorageError, TaskOptions},
 };
-use crate::context::{FlowControl, TaskContext};
 
 /// TaskRegistry contains a map of task names -> task handlers
 type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
@@ -699,14 +699,14 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::{
+        context::{FlowControl, TaskContext},
+        testutils::create_app,
+    };
     use taskturbine_core::{
         models::TaskState,
         storage::{Storage, StorageError, TaskOptions},
         testutils::create_config,
-    };
-    use crate::{
-        context::{FlowControl, TaskContext},
-        testutils::create_app,
     };
 
     use super::TaskturbineApp;

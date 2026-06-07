@@ -1,11 +1,9 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 
+use crate::app::{Channel, ResultData, TaskturbineApp};
 use taskturbine_core::{
     models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
     storage::{StorageError, TaskOptions},
-};
-use crate::{
-    app::{Channel, ResultData, TaskturbineApp},
 };
 
 /// Used as signaling 'errors' to the worker runtime
@@ -348,12 +346,12 @@ mod tests {
 
     use super::*;
 
+    use crate::app::TaskResult;
+    use crate::testutils::create_app;
     use taskturbine_core::{
         models::TaskState,
         storage::{Storage, StorageError},
     };
-    use crate::app::TaskResult;
-    use crate::testutils::create_app;
 
     #[derive(Debug)]
     enum TestError {

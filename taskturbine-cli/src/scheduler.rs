@@ -442,7 +442,7 @@ mod tests {
                 options: None,
             };
             let schedule = schedule_config.make_schedule().unwrap();
-            
+
             StorageEntry::new(name, &schedule_config, start, schedule)
         }
 
