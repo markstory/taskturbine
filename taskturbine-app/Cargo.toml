@@ -1,0 +1,18 @@
+[package]
+name = "taskturbine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+taskturbine-core = { path = "../taskturbine-core", features = ["test"] }
+
+async-channel = "2.5.0"
+chrono = { workspace = true }
+elegant-departure = { version = "0.3.2", features = ["tokio"] }
+figment = { workspace = true }
+futures = "0.3.32"
+log = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["chrono", "postgres", "runtime-tokio", "uuid"] }
+tokio = { workspace = true }
+uuid = { workspace = true }

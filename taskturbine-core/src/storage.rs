@@ -14,9 +14,9 @@ use sqlx::{
 use std::time::Duration;
 use uuid::Uuid;
 
-#[cfg(test)]
+#[cfg(feature = "test")]
 use crate::models::Run;
-#[cfg(test)]
+#[cfg(feature = "test")]
 use sqlx::{Pool, Postgres};
 
 /// Error types raised by the storage layer of taskturbine.
@@ -219,7 +219,7 @@ impl Storage {
 
     /// {{{ Testing helpers
     /// Testing Helper: setting run + task to a specific state.
-    #[cfg(test)]
+    #[cfg(feature = "test")]
     pub async fn set_run_state(
         &self,
         task_id: TaskId,
@@ -255,7 +255,7 @@ impl Storage {
     }
 
     /// Testing helper: reading task runs
-    #[cfg(test)]
+    #[cfg(feature = "test")]
     pub async fn get_run(&self, run_id: RunId) -> Result<Run, StorageError> {
         let res: Run = sqlx::query_as("SELECT * FROM taskturbine.runs WHERE run_id = $1")
             .bind(run_id)
@@ -267,7 +267,7 @@ impl Storage {
     }
 
     /// Testing helper: get waits for a run
-    #[cfg(test)]
+    #[cfg(feature = "test")]
     pub async fn get_wait_by_run_id(&self, run_id: RunId) -> Result<Option<PgRow>, StorageError> {
         let res = sqlx::query("SELECT * FROM taskturbine.waits WHERE run_id = $1")
             .bind(run_id)
@@ -279,7 +279,7 @@ impl Storage {
     }
 
     /// Testing helper: get a task
-    #[cfg(test)]
+    #[cfg(feature = "test")]
     pub async fn get_task(&self, task_id: TaskId) -> Result<Task, StorageError> {
         let res: Task = sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
             .bind(task_id.0)
@@ -291,13 +291,13 @@ impl Storage {
     }
 
     /// Testing helper: Sometimes we need to mutate data directly.
-    #[cfg(test)]
+    #[cfg(feature = "test")]
     pub fn get_connection(&self) -> &Pool<Postgres> {
         &self.pool
     }
 
     /// Testing helper: get an event
-    #[cfg(test)]
+    #[cfg(feature = "test")]
     pub async fn get_event_row(&self, event_name: &str) -> Result<Option<PgRow>, StorageError> {
         let res = sqlx::query("SELECT * FROM taskturbine.events WHERE event_name = $1")
             .bind(event_name)

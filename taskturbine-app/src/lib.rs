@@ -222,10 +222,8 @@
 //! When running a dedicated worker you may need to tune your configuration if you were previously
 //! running inline upkeep operations on many workers.
 //!
-// pub mod app;
-pub mod config;
-// pub mod context;
-pub mod models;
-pub mod storage;
-#[cfg(feature = "test")]
-pub mod testutils;
+mod app;
+// TODO add Config in this package. It could help de-dupe python too.
+mod context;
+#[cfg(test)]
+mod testutils;
