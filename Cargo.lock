@@ -1551,7 +1551,7 @@ dependencies = [
  "sha2",
  "simple_logger",
  "sqlx",
- "taskturbine-core",
+ "taskturbine",
  "tokio",
 ]
 
@@ -2053,6 +2053,7 @@ dependencies = [
  "serde_json",
  "simple_logger",
  "sqlx",
+ "taskturbine",
  "taskturbine-core",
  "tokio",
  "toml",

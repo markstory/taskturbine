@@ -23,5 +23,5 @@ serde_json.workspace = true
 sha2 = "0.10.9"
 simple_logger = "5.1.0"
 sqlx = { workspace = true, features = ["chrono", "postgres", "runtime-tokio", "uuid"] }
-taskturbine-core = { path = "../../taskturbine-core" }
+taskturbine = { path = "../../taskturbine-app" }
 tokio.workspace = true

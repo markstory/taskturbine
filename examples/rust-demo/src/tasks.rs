@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
 use sqlx::Row;
-use taskturbine_core::{
-    app::{ResultData, TaskResult, TaskturbineApp},
+use taskturbine::{
     config::Config,
+    app::{ResultData, TaskResult, TaskturbineApp},
     context::{FlowControl, TaskContext},
 };
 

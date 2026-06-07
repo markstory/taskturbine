@@ -223,7 +223,7 @@
 //! running inline upkeep operations on many workers.
 //!
 pub mod app;
-// TODO add Config in this package. It could help de-dupe python too.
+pub mod config;
 pub mod context;
 #[cfg(test)]
 mod testutils;

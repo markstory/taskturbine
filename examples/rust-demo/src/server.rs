@@ -12,7 +12,7 @@ use simple_logger::SimpleLogger;
 use sqlx::{Pool, Postgres, Row};
 use std::sync::Arc;
 use tasks::{HmacSha256, make_task_app};
-use taskturbine_core::app::TaskturbineApp;
+use taskturbine::app::TaskturbineApp;
 
 mod db;
 mod tasks;
