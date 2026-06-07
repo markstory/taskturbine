@@ -373,15 +373,15 @@ struct TaskOptions {
 /// Convert from python to taskturbine_core
 impl From<TaskOptions> for taskturbine_core::storage::TaskOptions {
     fn from(value: TaskOptions) -> taskturbine_core::storage::TaskOptions {
-        let mut out = taskturbine_core::storage::TaskOptions::default();
-        out.idempotency_key = value.idempotency_key;
-        out.headers = value.headers;
-        out.max_attempts = value.max_attempts;
-        out.retry_seconds = value.retry_seconds;
-        out.retry_factor = value.retry_factor;
-        out.retry_max_seconds = value.retry_max_seconds;
-        out.cancellation_max_age = value.cancellation_max_age;
-        out
+        taskturbine_core::storage::TaskOptions {
+            idempotency_key: value.idempotency_key,
+            headers: value.headers,
+            max_attempts: value.max_attempts,
+            retry_seconds: value.retry_seconds,
+            retry_factor: value.retry_factor,
+            retry_max_seconds: value.retry_max_seconds,
+            cancellation_max_age: value.cancellation_max_age,
+        }
     }
 }
 

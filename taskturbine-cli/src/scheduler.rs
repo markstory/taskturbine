@@ -75,14 +75,15 @@ struct ScheduleOptions {
 }
 impl From<&ScheduleOptions> for TaskOptions {
     fn from(value: &ScheduleOptions) -> Self {
-        let mut options = TaskOptions::default();
-        options.headers = value.headers.clone();
-        options.max_attempts = value.max_attempts;
-        options.retry_seconds = value.retry_seconds;
-        options.retry_factor = value.retry_factor;
-        options.retry_max_seconds = value.retry_max_seconds;
-        options.cancellation_max_age = value.cancellation_max_age;
-        options
+        taskturbine_core::storage::TaskOptions {
+            headers: value.headers.clone(),
+            max_attempts: value.max_attempts,
+            retry_seconds: value.retry_seconds,
+            retry_factor: value.retry_factor,
+            retry_max_seconds: value.retry_max_seconds,
+            cancellation_max_age: value.cancellation_max_age,
+            ..taskturbine_core::storage::TaskOptions::default()
+        }
     }
 }
 
