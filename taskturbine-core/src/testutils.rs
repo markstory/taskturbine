@@ -1,7 +1,6 @@
 use uuid::Uuid;
 
 use crate::{
-    app::TaskturbineApp,
     config::Config,
     models::SpawnResult,
     storage::{Storage, StorageError},
@@ -42,12 +41,4 @@ pub async fn create_task() -> Result<(Storage, SpawnResult), StorageError> {
     let spawned = result.unwrap();
 
     Ok((storage, spawned))
-}
-
-pub async fn create_app() -> TaskturbineApp {
-    let config = create_config();
-    let app = TaskturbineApp::new(config);
-    app.storage.update_schema().await.unwrap();
-
-    app
 }

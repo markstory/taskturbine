@@ -702,10 +702,11 @@ mod tests {
     use taskturbine_core::{
         models::TaskState,
         storage::{Storage, StorageError, TaskOptions},
-        testutils::{create_app, create_config},
+        testutils::create_config,
     };
     use crate::{
         context::{FlowControl, TaskContext},
+        testutils::create_app,
     };
 
     use super::TaskturbineApp;

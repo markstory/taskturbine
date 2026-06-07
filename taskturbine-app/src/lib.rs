@@ -57,7 +57,7 @@
 //! Tasks are defined as async functions with a signature like:
 //!
 //! ```rust
-//! use taskturbine_core::context::{TaskContext, FlowControl};
+//! use taskturbine::context::{TaskContext, FlowControl};
 //!
 //! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {
 //!   todo!();
@@ -85,8 +85,8 @@
 //! [async_step()](../taskturbine-app/context/struct.TaskContext.html#method.async_step).
 //!
 //! ```rust
-//! use taskturbine_core::app::ResultData;
-//! use taskturbine_core::context::{FlowControl, TaskContext};
+//! use taskturbine::app::ResultData;
+//! use taskturbine::context::{FlowControl, TaskContext};
 //!
 //! #[derive(Debug)]
 //! struct Error(String);
@@ -115,8 +115,8 @@
 //! ## Spawning Tasks
 //!
 //! Tasks can be spawned using either
-//! [TaskturbineApp.spawn_task()](../taskturbine-app/app/struct.TaskturbineApp.html#method.spawn_task) or
-//! [TaskContext.spawn_task()](../taskturbine-app/context/struct.TaskContext.html#method.spawn_task). Tasks
+//! [TaskturbineApp.spawn_task()](app/struct.TaskturbineApp.html#method.spawn_task) or
+//! [TaskContext.spawn_task()](context/struct.TaskContext.html#method.spawn_task). Tasks
 //! take their parameters as a bytestring, and encoding/decoding parameter payloads is
 //! an application concern.
 //!
@@ -136,7 +136,7 @@
 //! tool that lets you have tasks wait for events like webhooks, or other tasks to complete.
 //!
 //! Use [TaskContext.await_event](context/struct.TaskContext.html#method.await_event) to await events,
-//! and [TaskturbineApp.emit_event](../taskturbine-app/app/struct.TaskturbineApp.html#method.emit_event) or
+//! and [TaskturbineApp.emit_event](app/struct.TaskturbineApp.html#method.emit_event) or
 //! [TaskContext.emit_event](context/struct.TaskContext.html#method.emit_event) to emit events.
 //!
 //! # Running workers
@@ -148,8 +148,8 @@
 //! ```rust
 //! use std::env;
 //! use taskturbine::app::{TaskturbineApp, ResultData, run_worker};
+//! use taskturbine::context::{FlowControl, TaskContext};
 //! use taskturbine_core::config::Config;
-//! use taskturbine_core::context::{FlowControl, TaskContext};
 //!
 //! async fn send_mail(ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
 //!     Ok(None)
@@ -222,8 +222,8 @@
 //! When running a dedicated worker you may need to tune your configuration if you were previously
 //! running inline upkeep operations on many workers.
 //!
-mod app;
+pub mod app;
 // TODO add Config in this package. It could help de-dupe python too.
-mod context;
+pub mod context;
 #[cfg(test)]
 mod testutils;

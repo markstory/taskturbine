@@ -41,7 +41,6 @@ pub enum StorageError {
 
 /// Options for spawning a task.
 /// Default values are drawn from the TaskOptions defaults.
-#[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct TaskOptions {
     /// A unique identifier used to prevent duplicate tasks from being spawned.
