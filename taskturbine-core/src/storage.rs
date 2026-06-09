@@ -305,13 +305,13 @@ impl Storage {
     pub async fn get_event_row(&self, event_name: &str) -> Result<Option<PgRow>, StorageError> {
         let res = sqlx::query(
             "SELECT * FROM taskturbine.events 
-            WHERE event_name = $1 AND usecase = $2"
-            )
-            .bind(event_name)
-            .bind(&self.config.usecase)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(StorageError::SqlError)?;
+            WHERE event_name = $1 AND usecase = $2",
+        )
+        .bind(event_name)
+        .bind(&self.config.usecase)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(StorageError::SqlError)?;
 
         Ok(res)
     }
