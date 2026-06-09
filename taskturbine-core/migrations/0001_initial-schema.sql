@@ -66,15 +66,17 @@ CREATE TABLE taskturbine.events (
     payload bytea,
     created_at timestamptz not null default current_timestamp,
     primary key (usecase, event_name),
-    CONSTRAINT unique_event_name UNIQUE (usecase, event_name)
+    CONSTRAINT unique_events_event_name UNIQUE (usecase, event_name)
 );
 
 CREATE TABLE taskturbine.waits (
+    usecase text not null,
     task_id uuid not null,
     run_id uuid not null,
     step_name text not null,
-    event_name text not null UNIQUE,
+    event_name text not null,
     timeout_at timestamptz,
     created_at timestamptz not null default current_timestamp,
-    primary key (run_id, step_name)
+    primary key (run_id, step_name),
+    CONSTRAINT unique_wait_event_name UNIQUE (usecase, event_name)
 );

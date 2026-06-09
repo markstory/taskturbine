@@ -131,6 +131,8 @@ impl Storage {
     /// Garbage collect events.
     ///
     /// Delete events that have created_at older than `older_than`.
+    /// Operates only on the current `config.usecase`.
+    ///
     /// Only `limit` or fewer records will be deleted.
     /// Returns the number of events that were deleted.
     pub async fn cleanup_events(
@@ -141,9 +143,10 @@ impl Storage {
         let res = sqlx::query(
             "DELETE FROM taskturbine.events WHERE event_name IN (
                 SELECT event_name FROM taskturbine.events
-                WHERE created_at < $1 LIMIT $2
+                WHERE usecase = $1 AND created_at < $2 LIMIT $3
             )",
         )
+        .bind(&self.config.usecase)
         .bind(older_than)
         .bind(limit)
         .execute(&self.pool)
@@ -175,6 +178,8 @@ impl Storage {
         let res = builder
             .push("AND completed_at <")
             .push_bind(older_than)
+            .push(" AND usecase =")
+            .push_bind(&self.config.usecase)
             .push(format!(" LIMIT {limit}"))
             .push(
                 "),
@@ -298,8 +303,12 @@ impl Storage {
     /// Testing helper: get an event
     #[cfg(feature = "test")]
     pub async fn get_event_row(&self, event_name: &str) -> Result<Option<PgRow>, StorageError> {
-        let res = sqlx::query("SELECT * FROM taskturbine.events WHERE event_name = $1")
+        let res = sqlx::query(
+            "SELECT * FROM taskturbine.events 
+            WHERE event_name = $1 AND usecase = $2"
+            )
             .bind(event_name)
+            .bind(&self.config.usecase)
             .fetch_optional(&self.pool)
             .await
             .map_err(StorageError::SqlError)?;
@@ -560,12 +569,15 @@ impl Storage {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
         // Find all runs that have expired claims
         let res = sqlx::query(
-            "SELECT run_id, task_id, claimed_by, claim_expires_at
-            FROM taskturbine.runs
-            WHERE claim_expires_at <= NOW()
-            AND state IN ('running', 'pending', 'sleeping')
-            LIMIT $1",
+            "SELECT r.run_id, r.task_id, r.claimed_by, r.claim_expires_at
+            FROM taskturbine.runs AS r
+            INNER JOIN taskturbine.tasks AS t ON r.task_id = t.task_id
+            WHERE r.claim_expires_at <= NOW()
+            AND t.usecase = $1
+            AND r.state IN ('running', 'pending', 'sleeping')
+            LIMIT $2",
         )
+        .bind(&self.config.usecase)
         .bind(self.config.worker_cleanup_limit)
         .fetch_all(&mut *atomic)
         .await
@@ -597,6 +609,7 @@ impl Storage {
                 FROM taskturbine.runs AS r
                 INNER JOIN taskturbine.tasks AS t ON r.task_id = t.task_id
                 WHERE t.state IN ('pending', 'sleeping')
+                AND t.usecase = $1
                 AND (
                     (t.first_started_at IS NOT NULL AND NOW() - t.first_started_at > t.cancellation_max_age * INTERVAL '1 SECOND')
                     OR
@@ -614,6 +627,7 @@ impl Storage {
                 completed_at = NOW()
             WHERE task_id IN (SELECT task_id FROM candidates)"
         )
+        .bind(&self.config.usecase)
         .execute(&mut *atomic)
         .await
         .map_err(StorageError::SqlError)?;
@@ -1117,16 +1131,18 @@ impl Storage {
     ) -> Result<(), StorageError> {
         let timeout = Utc::now() + timeout;
         sqlx::query(
-            "INSERT INTO taskturbine.waits (task_id, run_id, step_name, event_name, timeout_at, created_at)
-            VALUES ($1, $2, $3, $4, $5, NOW())
-            ON CONFLICT (event_name)
+            "INSERT INTO taskturbine.waits (usecase, task_id, run_id, step_name, event_name, timeout_at, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            ON CONFLICT (usecase, event_name)
             DO UPDATE
-            SET task_id = EXCLUDED.task_id,
+            SET usecase = EXCLUDED.usecase,
+                task_id = EXCLUDED.task_id,
                 run_id = EXCLUDED.run_id,
                 step_name = EXCLUDED.step_name,
                 timeout_at = EXCLUDED.timeout_at,
                 created_at = EXCLUDED.created_at"
         )
+        .bind(&self.config.usecase)
         .bind(task_id.0)
         .bind(run_id)
         .bind(step_name)
@@ -1259,12 +1275,13 @@ impl Storage {
             "WITH matching_waits AS (
                 DELETE FROM taskturbine.waits
                 WHERE event_name = $1
+                AND usecase = $2
                 AND (timeout_at IS NULL OR timeout_at >= NOW())
                 RETURNING run_id
             ),
             updated_runs AS (
                 UPDATE taskturbine.runs
-                SET state = $2,
+                SET state = $3,
                     available_at = NOW(),
                     claimed_by = NULL,
                     claim_expires_at = NULL
@@ -1272,11 +1289,12 @@ impl Storage {
                 RETURNING task_id
             )
             UPDATE taskturbine.tasks
-            SET state = $2
+            SET state = $3
             WHERE task_id IN (SELECT task_id FROM updated_runs)
         ",
         )
         .bind(event_name)
+        .bind(&self.config.usecase)
         .bind(TaskState::Pending)
         .execute(&mut *atomic)
         .await
@@ -1969,7 +1987,8 @@ mod tests {
         // to manipulate time of tasks.
         let cutoff = Utc::now() + Duration::from_secs(60 * 5);
         let res = storage.cleanup_tasks(cutoff, 2).await;
-        assert!(res.is_ok());
+        dbg!(&res);
+        assert!(res.is_ok(), "should cleanup ok");
         assert_eq!(1, res.unwrap());
 
         let task = storage.get_task(pending.task_id).await.unwrap();
