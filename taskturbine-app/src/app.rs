@@ -694,17 +694,16 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, SystemTime};
+    use std::{sync::Arc, time::{Duration, SystemTime}};
 
     use chrono::Utc;
     use uuid::Uuid;
 
     use crate::{
-        context::{FlowControl, TaskContext},
-        testutils::create_app,
+        app::{check_idle_shutdown, process_task}, context::{FlowControl, TaskContext}, testutils::create_app
     };
     use taskturbine_core::{
-        models::TaskState,
+        models::{ClaimedTask, TaskState},
         storage::{Storage, StorageError, TaskOptions},
         testutils::create_config,
     };
@@ -1077,5 +1076,54 @@ mod tests {
         let run_res = storage.get_run(spawned.run_id).await;
         let row = run_res.expect("get_run failed");
         assert_eq!(TaskState::Failed, row.state);
+    }
+
+    #[tokio::test]
+    async fn check_idle_shutdown_max() {
+        let channel = "check_idle_shutdown_max";
+        let mut app = create_app_with_task(channel).await;
+        app.config.worker_shutdown_on_idle = true;
+        app.config.worker_shutdown_idle_max = 3;
+
+        let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_string()]));
+        let _ = worker.claim_tasks(Duration::from_secs(1)).await.expect("Should be ok");
+        let _ = worker.claim_tasks(Duration::from_secs(1)).await.expect("Should be ok");
+        let _ = worker.claim_tasks(Duration::from_secs(1)).await.expect("Should be ok");
+        assert!(worker.should_shutdown());
+
+        let out = check_idle_shutdown(worker).await;
+        assert_eq!(out, (), "should complete");
+    }
+
+    #[tokio::test]
+    async fn process_task_consume_queue() {
+        let channel = "process_task_consume_queue";
+        let app = create_app_with_task(channel).await;
+        let spawn_res = app
+            .channel(channel)
+            .spawn_task("first-task", b"", None)
+            .await
+            .expect("Failed to spawn a task");
+
+        let storage = app.storage.clone();
+        let worker = Arc::new(app.create_worker("worker-1", vec![]));
+        let claimed = worker
+            .claim_tasks(Duration::from_secs(60))
+            .await
+            .expect("Failed to claim tasks");
+
+        let (send, recv) = async_channel::bounded::<ClaimedTask>(3);
+        for item in claimed {
+            send.send(item).await.expect("Failed to send claimed task");
+        }
+        // Kill the worker process after 1 seconds
+        elegant_departure::tokio::depart()
+            .on_completion(tokio::time::sleep(Duration::from_secs(1)))
+            .await;
+
+        process_task(worker, recv).await;
+
+        let task = storage.get_task(spawn_res.task_id).await.expect("Failed to read task");
+        assert_eq!(spawn_res.task_id, task.task_id)
     }
 }
