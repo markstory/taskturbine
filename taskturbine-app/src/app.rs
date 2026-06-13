@@ -694,14 +694,19 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::{Duration, SystemTime}};
+    use std::{
+        sync::Arc,
+        time::{Duration, SystemTime},
+    };
 
     use chrono::Utc;
     use tokio::task::JoinSet;
     use uuid::Uuid;
 
     use crate::{
-        app::{check_idle_shutdown, process_task}, context::{FlowControl, TaskContext}, testutils::create_app
+        app::{check_idle_shutdown, process_task},
+        context::{FlowControl, TaskContext},
+        testutils::create_app,
     };
     use taskturbine_core::{
         models::{ClaimedTask, TaskState},
@@ -1087,9 +1092,18 @@ mod tests {
         app.config.worker_shutdown_idle_max = 3;
 
         let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_string()]));
-        let _ = worker.claim_tasks(Duration::from_secs(1)).await.expect("Should be ok");
-        let _ = worker.claim_tasks(Duration::from_secs(1)).await.expect("Should be ok");
-        let _ = worker.claim_tasks(Duration::from_secs(1)).await.expect("Should be ok");
+        let _ = worker
+            .claim_tasks(Duration::from_secs(1))
+            .await
+            .expect("Should be ok");
+        let _ = worker
+            .claim_tasks(Duration::from_secs(1))
+            .await
+            .expect("Should be ok");
+        let _ = worker
+            .claim_tasks(Duration::from_secs(1))
+            .await
+            .expect("Should be ok");
         assert!(worker.should_shutdown());
 
         let out = check_idle_shutdown(worker).await;
@@ -1120,13 +1134,18 @@ mod tests {
 
         // Kill the worker process after 1 seconds
         let mut join = JoinSet::new();
-        join.spawn(elegant_departure::tokio::depart()
-            .on_completion(tokio::time::sleep(Duration::from_secs(1))));
+        join.spawn(
+            elegant_departure::tokio::depart()
+                .on_completion(tokio::time::sleep(Duration::from_secs(1))),
+        );
 
         join.spawn(process_task(worker, recv));
         join.join_all().await;
 
-        let task = storage.get_task(spawn_res.task_id).await.expect("Failed to read task");
+        let task = storage
+            .get_task(spawn_res.task_id)
+            .await
+            .expect("Failed to read task");
         assert_eq!(spawn_res.task_id, task.task_id);
         assert_eq!(task.state, TaskState::Completed);
     }
