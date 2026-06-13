@@ -375,6 +375,10 @@ impl Worker {
         }
     }
 
+    /// Check if the worker should shutdown for idleness
+    ///
+    /// Compares the number of idle claims attempts to the 
+    /// `worker_shutdown_idle_max` configuration option.
     pub fn should_shutdown(&self) -> bool {
         if !self.app.config.worker_shutdown_on_idle {
             return false;
