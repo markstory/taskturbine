@@ -704,7 +704,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::{
-        app::{check_idle_shutdown, process_task},
+        app::{check_idle_shutdown, claim_tasks, process_task},
         context::{FlowControl, TaskContext},
         testutils::create_app,
     };
@@ -1148,5 +1148,64 @@ mod tests {
             .expect("Failed to read task");
         assert_eq!(spawn_res.task_id, task.task_id);
         assert_eq!(task.state, TaskState::Completed);
+    }
+
+    #[tokio::test]
+    async fn claim_tasks_fills_queue() {
+        let channel = "claim_tasks_fills_queue";
+        let app = create_app_with_task(channel).await;
+        let spawn_res = app
+            .channel(channel)
+            .spawn_task("first-task", b"", None)
+            .await
+            .expect("Failed to spawn a task");
+
+        let storage = app.storage.clone();
+        let worker = Arc::new(app.create_worker("worker-1", vec![]));
+        let (send, recv) = async_channel::bounded::<ClaimedTask>(3);
+
+        // Kill the worker process after 1 seconds
+        let mut join = JoinSet::new();
+        join.spawn(elegant_departure::tokio::depart()
+            .on_completion(tokio::time::sleep(Duration::from_secs(1))));
+
+        join.spawn(claim_tasks(worker, send));
+        join.join_all().await;
+
+        let claimed = recv.recv().await.expect("recv should be ok");
+        assert_eq!(claimed.task_id, spawn_res.task_id);
+        let task = storage.get_task(spawn_res.task_id).await.expect("Task should exist");
+        assert_eq!(task.state, TaskState::Running, "was claimed");
+    }
+
+    #[tokio::test]
+    async fn claim_tasks_handles_channel_close() {
+        let channel = "claim_tasks_handles_channel_close";
+        let app = create_app_with_task(channel).await;
+        let spawn_res = app
+            .channel(channel)
+            .spawn_task("first-task", b"", None)
+            .await
+            .expect("Failed to spawn a task");
+
+        let storage = app.storage.clone();
+        let worker = Arc::new(app.create_worker("worker-1", vec![]));
+        let (send, recv) = async_channel::bounded::<ClaimedTask>(3);
+
+        // Kill the worker process after 1 seconds
+        let mut join = JoinSet::new();
+        join.spawn(elegant_departure::tokio::depart()
+            .on_completion(tokio::time::sleep(Duration::from_secs(1))));
+
+        // close the channel and then start the claim_tasks task.
+        send.close();
+        join.spawn(claim_tasks(worker, send));
+
+        join.join_all().await;
+
+        let recv_res = recv.try_recv();
+        assert!(recv_res.is_err(), "recv should fail");
+        let task = storage.get_task(spawn_res.task_id).await.expect("task should exist");
+        assert_eq!(task.state, TaskState::Pending, "should not have been claimed");
     }
 }
