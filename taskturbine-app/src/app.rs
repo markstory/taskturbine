@@ -697,6 +697,7 @@ mod tests {
     use std::{sync::Arc, time::{Duration, SystemTime}};
 
     use chrono::Utc;
+    use tokio::task::JoinSet;
     use uuid::Uuid;
 
     use crate::{
@@ -1116,14 +1117,17 @@ mod tests {
         for item in claimed {
             send.send(item).await.expect("Failed to send claimed task");
         }
-        // Kill the worker process after 1 seconds
-        elegant_departure::tokio::depart()
-            .on_completion(tokio::time::sleep(Duration::from_secs(1)))
-            .await;
 
-        process_task(worker, recv).await;
+        // Kill the worker process after 1 seconds
+        let mut join = JoinSet::new();
+        join.spawn(elegant_departure::tokio::depart()
+            .on_completion(tokio::time::sleep(Duration::from_secs(1))));
+
+        join.spawn(process_task(worker, recv));
+        join.join_all().await;
 
         let task = storage.get_task(spawn_res.task_id).await.expect("Failed to read task");
-        assert_eq!(spawn_res.task_id, task.task_id)
+        assert_eq!(spawn_res.task_id, task.task_id);
+        assert_eq!(task.state, TaskState::Completed);
     }
 }
