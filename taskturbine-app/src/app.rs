@@ -1121,7 +1121,7 @@ mod tests {
             .expect("Failed to spawn a task");
 
         let storage = app.storage.clone();
-        let worker = Arc::new(app.create_worker("worker-1", vec![]));
+        let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_owned()]));
         let claimed = worker
             .claim_tasks(Duration::from_secs(60))
             .await
@@ -1161,7 +1161,7 @@ mod tests {
             .expect("Failed to spawn a task");
 
         let storage = app.storage.clone();
-        let worker = Arc::new(app.create_worker("worker-1", vec![]));
+        let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_owned()]));
         let (send, recv) = async_channel::bounded::<ClaimedTask>(3);
 
         // Kill the worker process after 1 seconds
@@ -1189,7 +1189,7 @@ mod tests {
             .expect("Failed to spawn a task");
 
         let storage = app.storage.clone();
-        let worker = Arc::new(app.create_worker("worker-1", vec![]));
+        let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_owned()]));
         let (send, recv) = async_channel::bounded::<ClaimedTask>(3);
 
         // Kill the worker process after 1 seconds
@@ -1206,6 +1206,6 @@ mod tests {
         let recv_res = recv.try_recv();
         assert!(recv_res.is_err(), "recv should fail");
         let task = storage.get_task(spawn_res.task_id).await.expect("task should exist");
-        assert_eq!(task.state, TaskState::Pending, "should not have been claimed");
+        assert_eq!(task.state, TaskState::Pending, "task will be claimed");
     }
 }
