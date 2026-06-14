@@ -10,7 +10,7 @@ use futures::FutureExt;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::context::{FlowControl, TaskContext};
-use metrics::{counter, histogram};
+use metrics::{counter, gauge};
 use taskturbine_core::{
     config::Config,
     models::{ClaimedTask, SpawnResult},
@@ -365,12 +365,19 @@ impl Worker {
         match res {
             Err(err) => Err(err.into()),
             Ok(rows) => {
-                if rows.is_empty() {
-                    log::debug!("incrementing idle counter");
-                    self.idle_count.fetch_add(1, atomic::Ordering::Relaxed);
-                } else {
-                    self.idle_count.store(0, atomic::Ordering::Relaxed);
+                if self.app.config.worker_shutdown_on_idle {
+                    if rows.is_empty() {
+                        log::debug!("incrementing idle counter");
+                        self.idle_count.fetch_add(1, atomic::Ordering::Relaxed);
+                    } else {
+                        self.idle_count.store(0, atomic::Ordering::Relaxed);
+                    }
+                    gauge!("worker.claim_tasks.idle_count").set(
+                        self.idle_count.load(atomic::Ordering::Relaxed)
+                    );
                 }
+                counter!("worker.claim_tasks.claimed").increment(rows.len() as u64);
+
                 Ok(rows)
             }
         }
