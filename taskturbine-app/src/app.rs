@@ -206,6 +206,11 @@ impl TaskturbineApp {
                 "No task named {task_name} is registered."
             )));
         }
+        let labels = [
+            ("usecase", self.config.usecase.to_owned()),
+            ("channel", self.config.default_channel.to_owned()),
+        ];
+        counter!("app.spawn_task", &labels).increment(1);
         self.storage
             .spawn_task(&self.config.default_channel, task_name, params, options)
             .await
@@ -291,6 +296,11 @@ impl<'a> Channel<'a> {
                 "No task named {task_name} is registered."
             )));
         }
+        let labels = [
+            ("usecase", self.app.config.usecase.to_owned()),
+            ("channel", self.name.to_owned()),
+        ];
+        counter!("app.spawn_task", &labels).increment(1);
         self.app
             .storage
             .spawn_task(self.name, task_name, params, options)
