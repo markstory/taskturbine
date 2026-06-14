@@ -220,15 +220,7 @@ impl TaskContext {
     /// that can be recorded as events. Events can have a Payload of bytes.
     /// How those bytes are encoded is an application concern.
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
-        let res = self.app.storage.emit_event(event_name, payload).await;
-        counter!("emit_event", "usecase" => self.app.config.usecase.to_owned()).increment(1);
-
-        if let Err(err) = res {
-            return Err(FlowControl::Failure(format!(
-                "Could not store event {err:?}"
-            )));
-        }
-        Ok(())
+        self.app.emit_event(event_name, payload).await
     }
 
     /// Await for an event to be captured by emit_event.
