@@ -87,10 +87,9 @@ impl Default for TaskOptions {
 /// Structure for metric summaries from upkeep operations
 pub struct UpkeepMetrics {
     pub channel: String,
-    pub running: i32,
-    pub pending: i32,
-    pub sleeping: i32,
-    pub waiting: i32,
+    pub running: i64,
+    pub pending: i64,
+    pub sleeping: i64,
 }
 
 
@@ -147,7 +146,6 @@ impl Storage {
             COUNT(*) FILTER (WHERE state = 'pending') AS pending,
             COUNT(*) FILTER (WHERE state = 'running') AS running,
             COUNT(*) FILTER (WHERE state = 'sleeping') AS sleeping,
-            COUNT(*) FILTER (WHERE state = 'waiting') AS waiting,
             FROM taskturbine.tasks
             WHERE usecase = $1
             GROUP BY channel"
@@ -155,18 +153,18 @@ impl Storage {
         .fetch_all(&self.pool)
         .await;
 
+        dbg!(&res);
         match res {
             Err(_) => {
-                vec![UpkeepMetrics {channel: self.config.default_channel.to_owned(), pending: 0, running: 0, sleeping: 0, waiting: 0}]
+                vec![UpkeepMetrics {channel: self.config.default_channel.to_owned(), pending: 0, running: 0, sleeping: 0}]
             },
             Ok(rows) => {
                 rows.iter().map(|row| {
                     UpkeepMetrics {
                         channel: row.get::<String, _>("channel"),
-                        pending: row.get::<i32, _>("pending"),
-                        running: row.get::<i32, _>("running"),
-                        sleeping: row.get::<i32, _>("sleeping"),
-                        waiting: row.get::<i32, _>("waiting"),
+                        pending: row.get::<i64, _>("pending"),
+                        running: row.get::<i64, _>("running"),
+                        sleeping: row.get::<i64, _>("sleeping"),
                     }
                 }).collect()
             }
@@ -2375,5 +2373,25 @@ mod tests {
                 < 1,
             "less than a second different"
         );
+    }
+
+    #[tokio::test]
+    async fn test_upkeep_metrics() {
+        let storage = create_storage().await;
+
+        let _ = storage.spawn_task(&storage.config.default_channel, "first-task", b"", None).await;
+        let spawned = storage.spawn_task(&storage.config.default_channel, "first-task", b"", None).await.expect("should work");
+        storage.set_run_state(spawned.task_id, TaskState::Running).await.expect("updating run state should not fail");
+
+        let spawned = storage.spawn_task(&storage.config.default_channel, "first-task", b"", None).await.expect("should work");
+        storage.set_run_state(spawned.task_id, TaskState::Sleeping).await.expect("updating run state should not fail");
+
+        let metrics = storage.upkeep_metrics().await;
+        assert_eq!(metrics.len(), 1, "only one channel");
+        assert_eq!(metrics[0].channel, storage.config.default_channel, "default channel is present");
+        assert_eq!(metrics[0].pending, 1, "pending count should match");
+        assert_eq!(metrics[0].running, 1, "running count should match");
+        assert_eq!(metrics[0].sleeping, 1, "sleeping count should match");
+
     }
 }
