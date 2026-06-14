@@ -372,9 +372,8 @@ impl Worker {
                     } else {
                         self.idle_count.store(0, atomic::Ordering::Relaxed);
                     }
-                    gauge!("worker.claim_tasks.idle_count").set(
-                        self.idle_count.load(atomic::Ordering::Relaxed)
-                    );
+                    gauge!("worker.claim_tasks.idle_count")
+                        .set(self.idle_count.load(atomic::Ordering::Relaxed));
                 }
                 counter!("worker.claim_tasks.claimed").increment(rows.len() as u64);
 
@@ -416,7 +415,7 @@ impl Worker {
         let task_id = &task.task_id;
         let labels = [
             ("channel", task.channel.to_owned()),
-            ("taskname", task.task_name.to_owned())
+            ("taskname", task.task_name.to_owned()),
         ];
         counter!("worker.execute_task", &labels).increment(1);
         log::debug!("Attempting to execute {task_id}");
@@ -503,7 +502,7 @@ impl Worker {
 
         let labels = [
             ("channel", task.channel.to_owned()),
-            ("taskname", task.task_name.to_owned())
+            ("taskname", task.task_name.to_owned()),
         ];
         counter!("worker.fail_run", &labels).increment(1);
     }
@@ -518,7 +517,7 @@ impl Worker {
 
         let labels = [
             ("channel", task.channel.to_owned()),
-            ("taskname", task.task_name.to_owned())
+            ("taskname", task.task_name.to_owned()),
         ];
         counter!("worker.sleep_run", &labels).increment(1);
     }
