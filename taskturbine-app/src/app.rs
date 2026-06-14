@@ -428,14 +428,12 @@ impl Worker {
         for item in metrics.iter() {
             let labels = [
                 ("usecase", usecase.to_owned()),
-                ("channel", item.channel.to_owned())
+                ("channel", item.channel.to_owned()),
             ];
-            gauge!("run_upkeep.pending_count", &labels).set(item.pending);
-            gauge!("run_upkeep.running_count", &labels).set(item.running);
-            gauge!("run_upkeep.sleeping_count", &labels).set(item.sleeping);
-            gauge!("run_upkeep.waiting_count", &labels).set(item.waiting);
+            gauge!("run_upkeep.pending_count", &labels).set(item.pending as f64);
+            gauge!("run_upkeep.running_count", &labels).set(item.running as f64);
+            gauge!("run_upkeep.sleeping_count", &labels).set(item.sleeping as f64);
         }
-
     }
 
     /// Execute a task function and record the execution status.

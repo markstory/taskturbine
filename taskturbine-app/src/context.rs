@@ -248,7 +248,8 @@ impl TaskContext {
                 Some(wait_for),
             )
             .await;
-        counter!("context.await_event", "usecase" => self.app.config.usecase.to_owned()).increment(1);
+        counter!("context.await_event", "usecase" => self.app.config.usecase.to_owned())
+            .increment(1);
 
         match res {
             Ok(wait) => {

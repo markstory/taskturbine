@@ -92,7 +92,6 @@ pub struct UpkeepMetrics {
     pub sleeping: i64,
 }
 
-
 /// A structure for interacting with the storage layer of TaskTurbine
 ///
 /// This struct provides the basic storage manipulation functions for
@@ -145,29 +144,34 @@ impl Storage {
             channel,
             COUNT(*) FILTER (WHERE state = 'pending') AS pending,
             COUNT(*) FILTER (WHERE state = 'running') AS running,
-            COUNT(*) FILTER (WHERE state = 'sleeping') AS sleeping,
+            COUNT(*) FILTER (WHERE state = 'sleeping') AS sleeping
             FROM taskturbine.tasks
             WHERE usecase = $1
-            GROUP BY channel"
-        ).bind(&self.config.usecase)
+            GROUP BY channel",
+        )
+        .bind(&self.config.usecase)
         .fetch_all(&self.pool)
         .await;
 
         dbg!(&res);
         match res {
             Err(_) => {
-                vec![UpkeepMetrics {channel: self.config.default_channel.to_owned(), pending: 0, running: 0, sleeping: 0}]
-            },
-            Ok(rows) => {
-                rows.iter().map(|row| {
-                    UpkeepMetrics {
-                        channel: row.get::<String, _>("channel"),
-                        pending: row.get::<i64, _>("pending"),
-                        running: row.get::<i64, _>("running"),
-                        sleeping: row.get::<i64, _>("sleeping"),
-                    }
-                }).collect()
+                vec![UpkeepMetrics {
+                    channel: self.config.default_channel.to_owned(),
+                    pending: 0,
+                    running: 0,
+                    sleeping: 0,
+                }]
             }
+            Ok(rows) => rows
+                .iter()
+                .map(|row| UpkeepMetrics {
+                    channel: row.get::<String, _>("channel"),
+                    pending: row.get::<i64, _>("pending"),
+                    running: row.get::<i64, _>("running"),
+                    sleeping: row.get::<i64, _>("sleeping"),
+                })
+                .collect(),
         }
     }
 
@@ -2379,19 +2383,35 @@ mod tests {
     async fn test_upkeep_metrics() {
         let storage = create_storage().await;
 
-        let _ = storage.spawn_task(&storage.config.default_channel, "first-task", b"", None).await;
-        let spawned = storage.spawn_task(&storage.config.default_channel, "first-task", b"", None).await.expect("should work");
-        storage.set_run_state(spawned.task_id, TaskState::Running).await.expect("updating run state should not fail");
+        let _ = storage
+            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
+            .await;
+        let spawned = storage
+            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
+            .await
+            .expect("should work");
+        storage
+            .set_run_state(spawned.task_id, TaskState::Running)
+            .await
+            .expect("updating run state should not fail");
 
-        let spawned = storage.spawn_task(&storage.config.default_channel, "first-task", b"", None).await.expect("should work");
-        storage.set_run_state(spawned.task_id, TaskState::Sleeping).await.expect("updating run state should not fail");
+        let spawned = storage
+            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
+            .await
+            .expect("should work");
+        storage
+            .set_run_state(spawned.task_id, TaskState::Sleeping)
+            .await
+            .expect("updating run state should not fail");
 
         let metrics = storage.upkeep_metrics().await;
         assert_eq!(metrics.len(), 1, "only one channel");
-        assert_eq!(metrics[0].channel, storage.config.default_channel, "default channel is present");
+        assert_eq!(
+            metrics[0].channel, storage.config.default_channel,
+            "default channel is present"
+        );
         assert_eq!(metrics[0].pending, 1, "pending count should match");
         assert_eq!(metrics[0].running, 1, "running count should match");
         assert_eq!(metrics[0].sleeping, 1, "sleeping count should match");
-
     }
 }
