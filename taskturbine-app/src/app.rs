@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     pin::Pin,
     sync::{Arc, atomic},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use async_channel::{Receiver, Sender, TrySendError};
@@ -10,7 +10,7 @@ use futures::FutureExt;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::context::{FlowControl, TaskContext};
-use metrics::{counter, gauge};
+use metrics::{counter, gauge, histogram};
 use taskturbine_core::{
     config::Config,
     models::{ClaimedTask, SpawnResult},
@@ -644,6 +644,7 @@ async fn run_upkeep(worker: Arc<Worker>) {
         tokio::select! {
             _ = timer.tick() => {
                 log::debug!("Running upkeep operations.");
+                let start = Instant::now();
                 match worker.run_upkeep().await {
                     Ok(_) => {
                         log::info!("upkeep operations complete");
@@ -652,6 +653,7 @@ async fn run_upkeep(worker: Arc<Worker>) {
                         log::error!("{err:?}");
                     }
                 }
+                histogram!("run_upkeep.duration").record(Instant::now() - start);
             }
             _ = guard.wait() => {
                 log::debug!("Shutting down upkeep");
@@ -670,12 +672,17 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
 
     loop {
         let timeout = Duration::from_secs(config.worker_claim_timeout_secs as u64);
+        let start = Instant::now();
         tokio::select! {
             Ok(mut claimed) = worker.claim_tasks(timeout) => {
+                histogram!("worker.claim_tasks.duration").record(Instant::now() - start);
                 log::debug!("Claimed {} tasks", claimed.len());
+
                 if claimed.is_empty() {
                     let sleep_millis = config.worker_sleep_ms;
+                    counter!("worker.empty_sleep").increment(1);
                     log::debug!("No tasks claimed, worker sleeping for {sleep_millis}ms");
+
                     time::sleep(time::Duration::from_millis(sleep_millis as u64)).await;
                 }
                 while !claimed.is_empty() {
@@ -697,6 +704,8 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                             } else {
                                 time::Duration::from_secs((config.worker_sleep_ms / 1000) as u64)
                             };
+
+                            counter!("worker.claim.work_send.full").increment(1);
                             log::info!("work_send was full; sleeping and re-attempting.");
                             worker.sleep_run(task, duration).await;
 
