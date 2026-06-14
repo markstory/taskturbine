@@ -430,6 +430,7 @@ impl Worker {
                 ("usecase", usecase.to_owned()),
                 ("channel", item.channel.to_owned()),
             ];
+            gauge!("run_upkeep.total_count", &labels).set(item.total as f64);
             gauge!("run_upkeep.pending_count", &labels).set(item.pending as f64);
             gauge!("run_upkeep.running_count", &labels).set(item.running as f64);
             gauge!("run_upkeep.sleeping_count", &labels).set(item.sleeping as f64);

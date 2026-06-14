@@ -87,6 +87,7 @@ impl Default for TaskOptions {
 /// Structure for metric summaries from upkeep operations
 pub struct UpkeepMetrics {
     pub channel: String,
+    pub total: i64,
     pub running: i64,
     pub pending: i64,
     pub sleeping: i64,
@@ -142,6 +143,7 @@ impl Storage {
         let res = sqlx::query(
             "SELECT
             channel,
+            COUNT(*) AS total,
             COUNT(*) FILTER (WHERE state = 'pending') AS pending,
             COUNT(*) FILTER (WHERE state = 'running') AS running,
             COUNT(*) FILTER (WHERE state = 'sleeping') AS sleeping
@@ -158,6 +160,7 @@ impl Storage {
             Err(_) => {
                 vec![UpkeepMetrics {
                     channel: self.config.default_channel.to_owned(),
+                    total: 0,
                     pending: 0,
                     running: 0,
                     sleeping: 0,
@@ -167,6 +170,7 @@ impl Storage {
                 .iter()
                 .map(|row| UpkeepMetrics {
                     channel: row.get::<String, _>("channel"),
+                    total: row.get::<i64, _>("total"),
                     pending: row.get::<i64, _>("pending"),
                     running: row.get::<i64, _>("running"),
                     sleeping: row.get::<i64, _>("sleeping"),
