@@ -16,3 +16,4 @@ serde_json = { workspace = true }
 sqlx = { workspace = true, features = ["chrono", "postgres", "runtime-tokio", "uuid"] }
 tokio = { workspace = true }
 uuid = { workspace = true }
+metrics = "0.24.6"
