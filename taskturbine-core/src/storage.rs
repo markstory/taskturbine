@@ -84,6 +84,16 @@ impl Default for TaskOptions {
     }
 }
 
+/// Structure for metric summaries from upkeep operations
+pub struct UpkeepMetrics {
+    pub channel: String,
+    pub running: i32,
+    pub pending: i32,
+    pub sleeping: i32,
+    pub waiting: i32,
+}
+
+
 /// A structure for interacting with the storage layer of TaskTurbine
 ///
 /// This struct provides the basic storage manipulation functions for
@@ -126,6 +136,41 @@ impl Storage {
         self.handle_cancellation_max_age().await?;
 
         Ok(())
+    }
+
+    /// Get a structure of current task state for all tasks in
+    /// the current usecase.
+    pub async fn upkeep_metrics(&self) -> Vec<UpkeepMetrics> {
+        let res = sqlx::query(
+            "SELECT
+            channel,
+            COUNT(*) FILTER (WHERE state = 'pending') AS pending,
+            COUNT(*) FILTER (WHERE state = 'running') AS running,
+            COUNT(*) FILTER (WHERE state = 'sleeping') AS sleeping,
+            COUNT(*) FILTER (WHERE state = 'waiting') AS waiting,
+            FROM taskturbine.tasks
+            WHERE usecase = $1
+            GROUP BY channel"
+        ).bind(&self.config.usecase)
+        .fetch_all(&self.pool)
+        .await;
+
+        match res {
+            Err(_) => {
+                vec![UpkeepMetrics {channel: self.config.default_channel.to_owned(), pending: 0, running: 0, sleeping: 0, waiting: 0}]
+            },
+            Ok(rows) => {
+                rows.iter().map(|row| {
+                    UpkeepMetrics {
+                        channel: row.get::<String, _>("channel"),
+                        pending: row.get::<i32, _>("pending"),
+                        running: row.get::<i32, _>("running"),
+                        sleeping: row.get::<i32, _>("sleeping"),
+                        waiting: row.get::<i32, _>("waiting"),
+                    }
+                }).collect()
+            }
+        }
     }
 
     /// Garbage collect events.

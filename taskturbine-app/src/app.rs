@@ -421,6 +421,23 @@ impl Worker {
             .map_err(|e| WorkerError::Message(format!("{e:?}")))
     }
 
+    /// Record a snapshot of current task state as gauge metrics
+    pub async fn record_upkeep_metrics(&self) {
+        let metrics = self.app.storage.upkeep_metrics().await;
+        let usecase = &self.app.config.usecase;
+        for item in metrics.iter() {
+            let labels = [
+                ("usecase", usecase.to_owned()),
+                ("channel", item.channel.to_owned())
+            ];
+            gauge!("run_upkeep.pending_count", &labels).set(item.pending);
+            gauge!("run_upkeep.running_count", &labels).set(item.running);
+            gauge!("run_upkeep.sleeping_count", &labels).set(item.sleeping);
+            gauge!("run_upkeep.waiting_count", &labels).set(item.waiting);
+        }
+
+    }
+
     /// Execute a task function and record the execution status.
     async fn execute_task(&self, task: ClaimedTask) {
         let task_id = &task.task_id;
@@ -452,7 +469,11 @@ impl Worker {
         };
 
         let storage = &self.app.storage;
-        let outcome_label = match task_fn.call(context).await {
+        let start = Instant::now();
+        let task_result = task_fn.call(context).await;
+        histogram!("worker.execute_task.call.duration", labels.as_slice())
+            .record(Instant::now() - start);
+        let outcome_label = match task_result {
             Err(FlowControl::InvalidValue(msg)) => {
                 log::warn!("Invalid value {msg}");
 
@@ -507,12 +528,6 @@ impl Worker {
         if let Err(schedule_err) = res {
             log::error!("Failed to fail run {schedule_err:?}");
         }
-
-        counter!(
-            "worker.fail_run",
-            _task_metric_labels(self.config(), &task).as_slice()
-        )
-        .increment(1);
     }
 
     /// Helper method to suspend a run for a period of time.
@@ -522,12 +537,6 @@ impl Worker {
             // If this fails, the task will eventually be moved by the claim expiring.
             log::error!("Failed to suspend run {schedule_err:?}");
         }
-
-        counter!(
-            "worker.sleep_run",
-            _task_metric_labels(self.config(), task).as_slice()
-        )
-        .increment(1);
     }
 }
 
@@ -658,7 +667,6 @@ async fn run_upkeep(worker: Arc<Worker>) {
     ));
     timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     let guard = elegant_departure::get_shutdown_guard();
-
     loop {
         tokio::select! {
             _ = timer.tick() => {
@@ -673,6 +681,7 @@ async fn run_upkeep(worker: Arc<Worker>) {
                     }
                 }
                 histogram!("run_upkeep.duration").record(Instant::now() - start);
+                worker.record_upkeep_metrics().await;
             }
             _ = guard.wait() => {
                 log::debug!("Shutting down upkeep");
