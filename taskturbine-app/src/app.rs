@@ -230,6 +230,7 @@ impl TaskturbineApp {
     /// ```
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
         let res = self.storage.emit_event(event_name, payload).await;
+        counter!("app.emit_event", "usecase" => self.config.usecase.to_owned()).increment(1);
 
         if let Err(err) = res {
             return Err(FlowControl::Failure(format!(
@@ -413,17 +414,15 @@ impl Worker {
     /// Execute a task function and record the execution status.
     async fn execute_task(&self, task: ClaimedTask) {
         let task_id = &task.task_id;
-        let labels = [
-            ("channel", task.channel.to_owned()),
-            ("taskname", task.task_name.to_owned()),
-        ];
-        counter!("worker.execute_task", &labels).increment(1);
+        let mut labels = _task_metric_labels(self.config(), &task);
+
+        counter!("worker.execute_task", labels.as_slice()).increment(1);
         log::debug!("Attempting to execute {task_id}");
 
         let context = TaskContext::build(task.clone(), self.app.clone());
         let taskname = &task.task_name;
         let Some(task_fn) = self.app.tasks.get(taskname) else {
-            counter!("worker.execute_task.not_found", &labels).increment(1);
+            counter!("worker.execute_task.not_found", labels.as_slice()).increment(1);
             log::warn!("No task named {taskname} is registered.");
 
             // Fail the run.
@@ -482,9 +481,8 @@ impl Worker {
             }
         };
 
-        let mut outcome_labels = labels.to_vec();
-        outcome_labels.push(("outcome", outcome_label.to_owned()));
-        counter!("worker.execute_task.outcome", &outcome_labels).increment(1);
+        labels.push(("outcome", outcome_label.to_owned()));
+        counter!("worker.execute_task.outcome", labels.as_slice()).increment(1);
     }
 
     /// Helper method to fail a run and log an error
@@ -500,11 +498,7 @@ impl Worker {
             log::error!("Failed to fail run {schedule_err:?}");
         }
 
-        let labels = [
-            ("channel", task.channel.to_owned()),
-            ("taskname", task.task_name.to_owned()),
-        ];
-        counter!("worker.fail_run", &labels).increment(1);
+        counter!("worker.fail_run", _task_metric_labels(self.config(), &task).as_slice()).increment(1);
     }
 
     /// Helper method to suspend a run for a period of time.
@@ -515,12 +509,17 @@ impl Worker {
             log::error!("Failed to suspend run {schedule_err:?}");
         }
 
-        let labels = [
-            ("channel", task.channel.to_owned()),
-            ("taskname", task.task_name.to_owned()),
-        ];
-        counter!("worker.sleep_run", &labels).increment(1);
+        counter!("worker.sleep_run", _task_metric_labels(self.config(), task).as_slice()).increment(1);
     }
+}
+
+fn _task_metric_labels<'a, 'b>(config: &'a Config, task: &'a ClaimedTask) -> Vec<(&'b str, String)> {
+    let labels = vec![
+        ("usecase", config.usecase.to_owned()),
+        ("channel", task.channel.to_owned()),
+        ("taskname", task.task_name.to_owned()),
+    ];
+    labels
 }
 
 /// Run a worker in a while loop.
