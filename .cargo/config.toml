@@ -1,4 +1,4 @@
 [alias]
 # Sadly the api tests have a bunch of bleed through between
 # tasks and I don't know how to fix that yet.
-t = "test -- --test-threads=1"
+t = "test --all-features -- --test-threads=1"
