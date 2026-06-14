@@ -10,6 +10,7 @@ use futures::FutureExt;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
 use crate::context::{FlowControl, TaskContext};
+use metrics::{counter, histogram};
 use taskturbine_core::{
     config::Config,
     models::{ClaimedTask, SpawnResult},
@@ -377,7 +378,7 @@ impl Worker {
 
     /// Check if the worker should shutdown for idleness
     ///
-    /// Compares the number of idle claims attempts to the 
+    /// Compares the number of idle claims attempts to the
     /// `worker_shutdown_idle_max` configuration option.
     pub fn should_shutdown(&self) -> bool {
         if !self.app.config.worker_shutdown_on_idle {
@@ -406,12 +407,19 @@ impl Worker {
     /// Execute a task function and record the execution status.
     async fn execute_task(&self, task: ClaimedTask) {
         let task_id = &task.task_id;
+        let labels = [
+            ("channel", task.channel.to_owned()),
+            ("taskname", task.task_name.to_owned())
+        ];
+        counter!("worker.execute_task", &labels).increment(1);
         log::debug!("Attempting to execute {task_id}");
 
         let context = TaskContext::build(task.clone(), self.app.clone());
         let taskname = &task.task_name;
         let Some(task_fn) = self.app.tasks.get(taskname) else {
+            counter!("worker.execute_task.not_found", &labels).increment(1);
             log::warn!("No task named {taskname} is registered.");
+
             // Fail the run.
             // We could be in a cross deploy situation, and following
             // the retry schedule of the task allows for recovery on the next
@@ -429,26 +437,34 @@ impl Worker {
         };
 
         let storage = &self.app.storage;
-        match task_fn.call(context).await {
+        let outcome_label = match task_fn.call(context).await {
             Err(FlowControl::InvalidValue(msg)) => {
                 log::warn!("Invalid value {msg}");
+
                 self.fail_run(task).await;
+
+                "invalid_value"
             }
             Err(FlowControl::Failure(msg)) => {
                 log::debug!("Task run failure: {msg}");
                 self.fail_run(task).await;
+
+                "failure"
             }
             Err(FlowControl::Suspended) => {
                 log::debug!("Task run suspended: run_id={}", task.run_id);
+                "suspended"
             }
             Err(FlowControl::Suspend(wait_for)) => {
                 let res = storage.schedule_run(task.run_id, wait_for).await;
                 if let Err(schedule_err) = res {
                     log::error!("Failed to schedule run on suspend {schedule_err:?}");
                 }
+                "suspend"
             }
             Ok(maybe_result) => {
                 log::debug!("Completed task {taskname}");
+
                 let result_data = maybe_result.unwrap_or_else(Vec::new);
                 let res = storage
                     .complete_run(task.run_id, result_data.as_slice())
@@ -456,8 +472,13 @@ impl Worker {
                 if let Err(msg) = res {
                     log::error!("Failed to complete run {msg:?}");
                 }
+                "complete"
             }
-        }
+        };
+
+        let mut outcome_labels = labels.to_vec();
+        outcome_labels.push(("outcome", outcome_label.to_owned()));
+        counter!("worker.execute_task.outcome", &outcome_labels).increment(1);
     }
 
     /// Helper method to fail a run and log an error
@@ -472,6 +493,12 @@ impl Worker {
         if let Err(schedule_err) = res {
             log::error!("Failed to fail run {schedule_err:?}");
         }
+
+        let labels = [
+            ("channel", task.channel.to_owned()),
+            ("taskname", task.task_name.to_owned())
+        ];
+        counter!("worker.fail_run", &labels).increment(1);
     }
 
     /// Helper method to suspend a run for a period of time.
@@ -481,6 +508,12 @@ impl Worker {
             // If this fails, the task will eventually be moved by the claim expiring.
             log::error!("Failed to suspend run {schedule_err:?}");
         }
+
+        let labels = [
+            ("channel", task.channel.to_owned()),
+            ("taskname", task.task_name.to_owned())
+        ];
+        counter!("worker.sleep_run", &labels).increment(1);
     }
 }
 
@@ -1170,15 +1203,20 @@ mod tests {
 
         // Kill the worker process after 1 seconds
         let mut join = JoinSet::new();
-        join.spawn(elegant_departure::tokio::depart()
-            .on_completion(tokio::time::sleep(Duration::from_secs(1))));
+        join.spawn(
+            elegant_departure::tokio::depart()
+                .on_completion(tokio::time::sleep(Duration::from_secs(1))),
+        );
 
         join.spawn(claim_tasks(worker, send));
         join.join_all().await;
 
         let claimed = recv.recv().await.expect("recv should be ok");
         assert_eq!(claimed.task_id, spawn_res.task_id);
-        let task = storage.get_task(spawn_res.task_id).await.expect("Task should exist");
+        let task = storage
+            .get_task(spawn_res.task_id)
+            .await
+            .expect("Task should exist");
         assert_eq!(task.state, TaskState::Running, "was claimed");
     }
 
@@ -1198,8 +1236,10 @@ mod tests {
 
         // Kill the worker process after 1 seconds
         let mut join = JoinSet::new();
-        join.spawn(elegant_departure::tokio::depart()
-            .on_completion(tokio::time::sleep(Duration::from_secs(1))));
+        join.spawn(
+            elegant_departure::tokio::depart()
+                .on_completion(tokio::time::sleep(Duration::from_secs(1))),
+        );
 
         // close the channel and then start the claim_tasks task.
         send.close();
@@ -1209,7 +1249,10 @@ mod tests {
 
         let recv_res = recv.try_recv();
         assert!(recv_res.is_err(), "recv should fail");
-        let task = storage.get_task(spawn_res.task_id).await.expect("task should exist");
+        let task = storage
+            .get_task(spawn_res.task_id)
+            .await
+            .expect("task should exist");
         assert_eq!(task.state, TaskState::Pending, "task will be claimed");
     }
 }
