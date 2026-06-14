@@ -498,7 +498,11 @@ impl Worker {
             log::error!("Failed to fail run {schedule_err:?}");
         }
 
-        counter!("worker.fail_run", _task_metric_labels(self.config(), &task).as_slice()).increment(1);
+        counter!(
+            "worker.fail_run",
+            _task_metric_labels(self.config(), &task).as_slice()
+        )
+        .increment(1);
     }
 
     /// Helper method to suspend a run for a period of time.
@@ -509,11 +513,18 @@ impl Worker {
             log::error!("Failed to suspend run {schedule_err:?}");
         }
 
-        counter!("worker.sleep_run", _task_metric_labels(self.config(), task).as_slice()).increment(1);
+        counter!(
+            "worker.sleep_run",
+            _task_metric_labels(self.config(), task).as_slice()
+        )
+        .increment(1);
     }
 }
 
-fn _task_metric_labels<'a, 'b>(config: &'a Config, task: &'a ClaimedTask) -> Vec<(&'b str, String)> {
+fn _task_metric_labels<'a, 'b>(
+    config: &'a Config,
+    task: &'a ClaimedTask,
+) -> Vec<(&'b str, String)> {
     let labels = vec![
         ("usecase", config.usecase.to_owned()),
         ("channel", task.channel.to_owned()),

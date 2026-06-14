@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 
 use crate::app::{Channel, ResultData, TaskturbineApp};
+use metrics::counter;
 use taskturbine_core::{
     models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
     storage::{StorageError, TaskOptions},
@@ -220,6 +221,7 @@ impl TaskContext {
     /// How those bytes are encoded is an application concern.
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
         let res = self.app.storage.emit_event(event_name, payload).await;
+        counter!("emit_event", "usecase" => self.app.config.usecase.to_owned()).increment(1);
 
         if let Err(err) = res {
             return Err(FlowControl::Failure(format!(
