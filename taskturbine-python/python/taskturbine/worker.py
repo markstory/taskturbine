@@ -18,9 +18,10 @@ from datetime import timedelta
 from multiprocessing.pool import AsyncResult, Pool
 from typing import Any, Callable, Mapping, TYPE_CHECKING
 
+from taskturbine.metrics import MetricsBackend, NoopMetrics
 from taskturbine.context import TaskContext
 from taskturbine.models import Task, SuspendError, ClaimedTaskDict
-from taskturbine.taskturbine import ClaimedTask, WorkerInner
+from taskturbine.taskturbine import ClaimedTask, Config, WorkerInner
 
 if TYPE_CHECKING:
     from taskturbine import TaskturbineApp
@@ -94,7 +95,11 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
     Requires a reference to the application so that registered tasks, and `create_context()`
     can be accessed safely.
     """
+    tags = _metrics_tags(app._inner.config.usecase, claimed)
+    app.metrics.incr("worker.execute_task", 1, tags)
+
     if not app.has_task(claimed.task_name):
+        app.metrics.incr("worker.execute_task.not_found", 1, tags)
         logger.warning(f"Task with {claimed.task_name} is not registered")
         return TaskResult(
             outcome=TaskOutcome.Missing,
@@ -104,17 +109,24 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
 
     task_fn = app.get_task(claimed.task_name)
     context = app.create_context(claimed)
+    start = time.monotonic()
     try:
         # Call userland code
         res = task_fn(context)
         res_bytes = b""
         if res is not None:
             res_bytes = context._serialize(res)
+        tags["outcome"] = str(TaskOutcome.Complete)
+        app.metrics.incr("worker.execute_task.outcome", 1, tags)
+
         return TaskResult(
             outcome=TaskOutcome.Complete, run_id=claimed.run_id, payload=res_bytes
         )
     except SuspendError as suspend:
         logger.debug("Task suspended")
+        tags["outcome"] = str(TaskOutcome.Suspend)
+        app.metrics.incr("worker.execute_task.outcome", 1, tags)
+
         return TaskResult(
             outcome=TaskOutcome.Suspend,
             duration=suspend.duration,
@@ -122,12 +134,27 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
         )
     except Exception as fail:
         logger.exception("Task execution failed")
+        tags["outcome"] = str(TaskOutcome.Failure)
+        app.metrics.incr("worker.execute_task.outcome", 1, tags)
+
         retry_at = claimed.next_retry_in()
         if app.error_handler:
             app.error_handler(fail)
         return TaskResult(
             outcome=TaskOutcome.Failure, duration=retry_at, run_id=claimed.run_id
         )
+    finally:
+        app.metrics.histogram("worker.execute_task.call.duration", time.monotonic() - start, tags)
+
+
+def _metrics_tags(usecase: str, claimed: ClaimedTask | None) -> dict[str, str]:
+    tags = {
+        "usecase": usecase,
+    }
+    if claimed:
+        tags["channel"] = claimed.channel
+        tags["taskname"] = claimed.task_name
+    return tags
 
 
 class Worker:
@@ -144,6 +171,7 @@ class Worker:
         tasks: Mapping[str, Task[..., Any]],
         context_factory: Callable[[ClaimedTask], TaskContext],
         error_handler: Callable[[Exception], None] | None = None,
+        metrics: MetricsBackend | None = None
     ) -> None:
         self._inner = inner
         self._tasks = tasks
@@ -157,6 +185,7 @@ class Worker:
         )
         self._shutdown = threading.Event()
         self._inflight: list[AsyncResult[TaskResult]] = []
+        self._metrics = metrics or NoopMetrics()
 
     def _make_claim_thread(self) -> threading.Thread:
         """
@@ -181,6 +210,8 @@ class Worker:
                     break
 
                 if claim_queue.full():
+                    tags = _metrics_tags(self.usecase, None)
+                    self.metrics.incr("worker.claim_queue.full", 1, tags)
                     # This could be another utilization metric to collect
                     logger.debug("claim_queue full, sleeping")
                     time.sleep(worker_sleep)
