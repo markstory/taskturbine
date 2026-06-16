@@ -209,6 +209,7 @@ impl TaskturbineApp {
         let labels = [
             ("usecase", self.config.usecase.to_owned()),
             ("channel", self.config.default_channel.to_owned()),
+            ("taskname", task_name.to_owned()),
         ];
         counter!("app.spawn_task", &labels).increment(1);
         self.storage
