@@ -336,6 +336,8 @@ class AsyncTaskturbineApp(BaseApp):
             cancellation_max_age=cancellation_max_age,
             idempotency_key=idempotency_key,
         )
+        tags = {"usecase": self._inner.config.usecase, "channel": channel or self._inner.config.default_channel}
+        self.metrics.incr("app.spawn_task", 1, tags)
         if channel:
             return await self._inner.channel_spawn_task(
                 channel, taskname, self.serialize_value(params), options
@@ -356,6 +358,7 @@ class AsyncTaskturbineApp(BaseApp):
         Payload can be an arbitrary JSON encodable value that
         can be retrieved later.
         """
+        self.metrics.incr("app.emit_event", 1, {"usecase": self._inner.config.usecase})
         await self._inner.emit_event(event_name, self.serialize_value(payload))
 
     def create_context(self, claimed_task: ClaimedTask) -> AsyncTaskContext:

@@ -55,7 +55,7 @@ class BaseApp(abc.ABC):
         self,
         serializer: TaskSerializer | None = None,
         error_handler: Callable[[Exception], None] | None = None,
-        metrics: MetricsBackend | None = None
+        metrics: MetricsBackend | None = None,
     ) -> None:
         self._default_spawn_options = TaskOptions(
             max_attempts=5,
@@ -129,7 +129,7 @@ class TaskturbineApp(BaseApp):
         config: Config,
         serializer: TaskSerializer | None = None,
         error_handler: Callable[[Exception], None] | None = None,
-        metrics: MetricsBackend | None = None
+        metrics: MetricsBackend | None = None,
     ) -> None:
         self._inner = AppInner(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
@@ -245,6 +245,12 @@ class TaskturbineApp(BaseApp):
             cancellation_max_age=cancellation_max_age,
             idempotency_key=idempotency_key,
         )
+        tags = {
+            "usecase": self._inner.config.usecase,
+            "channel": channel,
+            "taskname": taskname,
+        }
+        self.metrics.incr("app.spawn_task", 1, tags)
         if channel:
             return self._inner.channel_spawn_task(
                 channel, taskname, self.serialize_value(params), options
@@ -266,6 +272,7 @@ class TaskturbineApp(BaseApp):
         can be retrieved later.
         """
         self._inner.emit_event(event_name, self.serialize_value(payload))
+        self.metrics.incr("app.emit_event", 1, {"usecase": self._inner.config.usecase})
 
     def create_context(self, claimed_task: ClaimedTask) -> TaskContext:
         """
