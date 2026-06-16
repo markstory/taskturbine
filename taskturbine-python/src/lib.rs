@@ -145,6 +145,11 @@ struct WorkerInner {
 
 #[pymethods]
 impl WorkerInner {
+    #[getter(usecase)]
+    pub fn usecase(&self) -> String {
+        self.config.usecase.clone()
+    }
+
     #[getter(app_module)]
     pub fn app_module(&self) -> String {
         self.config.app_module.clone()
