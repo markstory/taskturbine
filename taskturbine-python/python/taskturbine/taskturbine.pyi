@@ -273,6 +273,9 @@ class WorkerInner:
     app_module: str
     """Path to the module and variable that contain the application being run."""
 
+    usecase: str
+    """The configured usecase"""
+
     worker_concurrency: int
     """Number of child processes to spawn as task executors."""
 
