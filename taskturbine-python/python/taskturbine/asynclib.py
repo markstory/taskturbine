@@ -17,6 +17,7 @@ from typing import (
 )
 from taskturbine import BaseApp
 from taskturbine.context import BaseContext
+from taskturbine.metrics import MetricsBackend, NoopMetrics
 from taskturbine.models import JsonData, OptionalJsonData, SuspendError
 from taskturbine.taskturbine import (
     AsyncContextInner,
@@ -219,10 +220,11 @@ class AsyncTaskturbineApp(BaseApp):
         config: Config,
         serializer: TaskSerializer | None = None,
         error_handler: Callable[[Exception], None] | None = None,
+        metrics: MetricsBackend | None = None
     ) -> None:
         self._inner = AsyncAppInner(config)
         self._tasks: MutableMapping[str, AsyncTask[..., Any]] = {}
-        super().__init__(serializer, error_handler)
+        super().__init__(serializer, error_handler, metrics)
 
     def add_channel(self, name: str) -> None:
         """

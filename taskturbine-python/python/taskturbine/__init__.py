@@ -27,6 +27,7 @@ from .taskturbine import (
 )
 from .context import TaskContext
 from .models import Task
+from .metrics import MetricsBackend, NoopMetrics
 from .serializer import TaskSerializer, JsonSerializer
 from .worker import Worker
 
@@ -54,6 +55,7 @@ class BaseApp(abc.ABC):
         self,
         serializer: TaskSerializer | None = None,
         error_handler: Callable[[Exception], None] | None = None,
+        metrics: MetricsBackend | None = None
     ) -> None:
         self._default_spawn_options = TaskOptions(
             max_attempts=5,
@@ -67,6 +69,7 @@ class BaseApp(abc.ABC):
         if serializer is None:
             serializer = JsonSerializer()
         self.serializer = serializer
+        self.metrics = metrics or NoopMetrics()
 
     def set_spawn_options(
         self,
@@ -126,10 +129,11 @@ class TaskturbineApp(BaseApp):
         config: Config,
         serializer: TaskSerializer | None = None,
         error_handler: Callable[[Exception], None] | None = None,
+        metrics: MetricsBackend | None = None
     ) -> None:
         self._inner = AppInner(config)
         self._tasks: MutableMapping[str, Task[..., Any]] = {}
-        super().__init__(serializer, error_handler)
+        super().__init__(serializer, error_handler, metrics)
 
     def add_channel(self, name: str) -> None:
         """
