@@ -144,7 +144,9 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
             outcome=TaskOutcome.Failure, duration=retry_at, run_id=claimed.run_id
         )
     finally:
-        app.metrics.histogram("worker.execute_task.call.duration", time.monotonic() - start, tags)
+        app.metrics.histogram(
+            "worker.execute_task.call.duration", time.monotonic() - start, tags
+        )
 
 
 def _metrics_tags(usecase: str, claimed: ClaimedTask | None) -> dict[str, str]:
@@ -171,7 +173,7 @@ class Worker:
         tasks: Mapping[str, Task[..., Any]],
         context_factory: Callable[[ClaimedTask], TaskContext],
         error_handler: Callable[[Exception], None] | None = None,
-        metrics: MetricsBackend | None = None
+        metrics: MetricsBackend | None = None,
     ) -> None:
         self._inner = inner
         self._tasks = tasks

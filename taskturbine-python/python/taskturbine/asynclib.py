@@ -220,7 +220,7 @@ class AsyncTaskturbineApp(BaseApp):
         config: Config,
         serializer: TaskSerializer | None = None,
         error_handler: Callable[[Exception], None] | None = None,
-        metrics: MetricsBackend | None = None
+        metrics: MetricsBackend | None = None,
     ) -> None:
         self._inner = AsyncAppInner(config)
         self._tasks: MutableMapping[str, AsyncTask[..., Any]] = {}
@@ -336,7 +336,10 @@ class AsyncTaskturbineApp(BaseApp):
             cancellation_max_age=cancellation_max_age,
             idempotency_key=idempotency_key,
         )
-        tags = {"usecase": self._inner.config.usecase, "channel": channel or self._inner.config.default_channel}
+        tags = {
+            "usecase": self._inner.config.usecase,
+            "channel": channel or self._inner.config.default_channel,
+        }
         self.metrics.incr("app.spawn_task", 1, tags)
         if channel:
             return await self._inner.channel_spawn_task(
