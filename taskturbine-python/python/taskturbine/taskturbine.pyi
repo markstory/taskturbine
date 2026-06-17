@@ -22,6 +22,13 @@ class SpawnResult:
     task_id: str
     """The task_id of the spawned task"""
 
+class UpkeepMetric:
+    channel: str
+    total: int
+    running: int
+    pending: int
+    sleeping: int
+
 class Checkpoint:
     """
     A saved checkpoint created by either a step completing, sleep_for expiring

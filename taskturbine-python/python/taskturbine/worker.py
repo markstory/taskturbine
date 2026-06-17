@@ -157,6 +157,11 @@ class Worker:
 
     Workers are best created by TaskturbineApp.create_worker()
     as Worker depends on rust internals.
+
+    The python worker does not implement the following metrics:
+
+    - worker.claim.work_send.full
+    - worker.claim_tasks.idle_count
     """
 
     def __init__(
@@ -370,13 +375,28 @@ class Worker:
                     logger.info("all work complete, and idle reached")
                     return self.shutdown()
 
-                if not self._shutdown.is_set() and self._inner.should_run_upkeep(
-                    int(last_cleanup)
-                ):
-                    logger.debug("run_upkeep start")
-                    with self._metrics.timer("run_upkeep.duration", tags):
-                        self._inner.run_upkeep()
+                if self._maybe_upkeep(last_cleanup):
                     last_cleanup = time.time()
+
+    def _maybe_upkeep(self, last_cleanup: float) -> float:
+        if self._shutdown.is_set() or not self._inner.should_run_upkeep(
+            int(last_cleanup)
+        ):
+            return False
+
+        logger.debug("run_upkeep start")
+        with self._metrics.timer("run_upkeep.duration", tags):
+            self._inner.run_upkeep()
+
+        stats = self._inner.upkeep_metrics()
+        tags = {"usecase": self._inner.usecase, }
+        for item in stats:
+            tags = {"usecase": self._inner.usecase, "channel": item.channel}
+            self._metrics.gauge("run_upkeep.total_count", item.total, tags)
+            self._metrics.gauge("run_upkeep.pending_count", item.pending, tags)
+            self._metrics.gauge("run_upkeep.running_count", item.running, tags)
+            self._metrics.gauge("run_upkeep.sleeping_count", item.sleeping, tags)
+        return True
 
     def _poll_inflight(self) -> int:
         keep: list[AsyncResult[TaskResult]] = []

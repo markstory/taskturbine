@@ -17,7 +17,7 @@ mod config;
 mod models;
 
 use config::Config;
-use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult};
+use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric};
 
 ///! See taskturbine.pyi for docstrings
 
@@ -206,6 +206,13 @@ impl WorkerInner {
             .map_err(|e| PyValueError::new_err(format!("Upkeep failed: {e:?}")))
     }
 
+    /// Collect metrics on the state of the usecase data.
+    /// Generally called during upkeep
+    fn upkeep_metrics(&self) -> Vec<UpkeepMetric> {
+        let metrics = self.runtime.block_on(self.storage.upkeep_metrics());
+        metrics.into_iter().map(|metric| metric.into()).collect()
+    }
+
     // Should upkeep be run right now by a Worker?
     // Set `config.worker_upkeep_inline` to false if you are running a dedicated
     // upkeep worker.
@@ -221,7 +228,7 @@ impl WorkerInner {
         true
     }
 
-    pub fn should_shutdown(&self) -> bool {
+    fn should_shutdown(&self) -> bool {
         if !self.config.worker_shutdown_on_idle {
             return false;
         }
@@ -490,6 +497,8 @@ mod taskturbine {
     use super::SpawnResult;
     #[pymodule_export]
     use super::TaskOptions;
+    #[pymodule_export]
+    use super::UpkeepMetric;
     #[pymodule_export]
     use super::WorkerInner;
     #[pymodule_export]

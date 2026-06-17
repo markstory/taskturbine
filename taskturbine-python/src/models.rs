@@ -256,3 +256,34 @@ impl From<taskturbine_core::models::Checkpoint> for Checkpoint {
         }
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+#[pyclass(from_py_object)]
+pub struct UpkeepMetric {
+    #[pyo3(get)]
+    pub channel: String,
+
+    #[pyo3(get)]
+    pub total: i64,
+
+    #[pyo3(get)]
+    pub running: i64,
+
+    #[pyo3(get)]
+    pub pending: i64,
+
+    #[pyo3(get)]
+    pub sleeping: i64,
+}
+/// Convert from core API to python binding
+impl From<taskturbine_core::storage::UpkeepMetric> for UpkeepMetric {
+    fn from(value: taskturbine_core::storage::UpkeepMetric) -> UpkeepMetric {
+        UpkeepMetric {
+            channel: value.channel,
+            total: value.total,
+            pending: value.pending,
+            running: value.running,
+            sleeping: value.sleeping,
+        }
+    }
+}
