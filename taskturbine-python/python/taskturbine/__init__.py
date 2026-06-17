@@ -282,6 +282,7 @@ class TaskturbineApp(BaseApp):
             inner=self._inner.create_context(claimed_task),
             serialize=self.serialize_value,
             deserialize=self.deserialize_value,
+            metrics=self.metrics,
         )
         return context
 
@@ -298,5 +299,6 @@ class TaskturbineApp(BaseApp):
             tasks=self._tasks,
             context_factory=self.create_context,
             error_handler=self.error_handler,
+            metrics=self.metrics,
         )
         return worker

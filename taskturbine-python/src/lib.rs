@@ -279,6 +279,11 @@ struct ContextInner {
 }
 #[pymethods]
 impl ContextInner {
+    #[getter(usecase)]
+    fn usecase(&self) -> String {
+        self.storage.get_config().usecase.to_owned()
+    }
+
     #[getter(await_event_default_timeout_secs)]
     fn await_event_default_timeout_secs(&self) -> i32 {
         self.storage.get_config().await_event_default_timeout_secs

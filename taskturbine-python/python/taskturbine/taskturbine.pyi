@@ -319,6 +319,9 @@ class WorkerInner:
     """Schedule a run in the future."""
 
 class ContextInner:
+    usecase: str
+    """The usecase this context is for"""
+
     claimed_task: ClaimedTask
     """The task that was claimed for this context"""
 

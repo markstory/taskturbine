@@ -3,7 +3,9 @@ from datetime import timedelta
 import functools
 import json
 from typing import Any, Callable, ParamSpec
+from taskturbine.metrics import MetricsBackend, NoopMetrics
 from taskturbine.models import JsonData, OptionalJsonData, SuspendError
+from taskturbine.metrics import task_metrics_tags
 from taskturbine.taskturbine import (
     ClaimedTask,
     ContextInner,
@@ -58,10 +60,12 @@ class TaskContext(BaseContext):
         inner: ContextInner,
         serialize: Callable[[JsonData], bytes],
         deserialize: Callable[[bytes], JsonData | None],
+        metrics: MetricsBackend | None = None
     ) -> None:
         self._inner = inner
         self._serialize = serialize
         self._deserialize = deserialize
+        self._metrics = metrics or NoopMetrics()
         super().__init__(inner.claimed_task)
 
     def await_event(
@@ -78,6 +82,9 @@ class TaskContext(BaseContext):
         assert isinstance(timeout, timedelta)
 
         wait = self._inner.get_event_payload(event_name, timeout)
+        claimed = self._inner.claimed_task
+        tags = task_metrics_tags(self._inner.usecase, claimed)
+        self._metrics.incr("context.await_event", 1, tags)
         if wait.should_suspend:
             raise SuspendError()
         return json.loads(wait.payload)
@@ -90,6 +97,8 @@ class TaskContext(BaseContext):
         can be retrieved later.
         """
         self._inner.emit_event(event_name, self._serialize(payload))
+        tags = {"usecase": self._inner.usecase}
+        self._metrics.incr("app.emit_event", 1, tags)
 
     def sleep_for(self, step_name: str, duration: timedelta) -> None:
         """

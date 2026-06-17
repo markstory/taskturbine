@@ -1,7 +1,8 @@
 """
 Thread & Multiprocess based worker.
 
-For more CPU heavy workloads, multiprocessing + threads yield better utilization.
+For more CPU heavy workloads, multiprocessing for task execution
+& threads for IO with rust yields better utilization.
 """
 
 from __future__ import annotations
@@ -18,10 +19,10 @@ from datetime import timedelta
 from multiprocessing.pool import AsyncResult, Pool
 from typing import Any, Callable, Mapping, TYPE_CHECKING
 
-from taskturbine.metrics import MetricsBackend, NoopMetrics
+from taskturbine.metrics import MetricsBackend, NoopMetrics, task_metrics_tags
 from taskturbine.context import TaskContext
 from taskturbine.models import Task, SuspendError, ClaimedTaskDict
-from taskturbine.taskturbine import ClaimedTask, Config, WorkerInner
+from taskturbine.taskturbine import ClaimedTask, WorkerInner
 
 if TYPE_CHECKING:
     from taskturbine import TaskturbineApp
@@ -95,7 +96,7 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
     Requires a reference to the application so that registered tasks, and `create_context()`
     can be accessed safely.
     """
-    tags = _metrics_tags(app._inner.config.usecase, claimed)
+    tags = task_metrics_tags(app._inner.config.usecase, claimed)
     app.metrics.incr("worker.execute_task", 1, tags)
 
     if not app.has_task(claimed.task_name):
@@ -149,15 +150,6 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
         )
 
 
-def _metrics_tags(usecase: str, claimed: ClaimedTask | None) -> dict[str, str]:
-    tags = {
-        "usecase": usecase,
-    }
-    if claimed:
-        tags["channel"] = claimed.channel
-        tags["taskname"] = claimed.task_name
-    return tags
-
 
 class Worker:
     """
@@ -204,6 +196,7 @@ class Worker:
         ) -> None:
             last_fetch = None
             worker_sleep = self._inner.worker_sleep_ms / 1000
+            tags = task_metrics_tags(self._inner.usecase, None)
             while True:
                 # During graceful shutdown we want to immediately
                 # stop claiming tasks so that inflight work can drain out.
@@ -212,9 +205,7 @@ class Worker:
                     break
 
                 if claim_queue.full():
-                    tags = _metrics_tags(self.usecase, None)
-                    self.metrics.incr("worker.claim_queue.full", 1, tags)
-                    # This could be another utilization metric to collect
+                    self._metrics.incr("worker.claim_queue.full", 1, tags)
                     logger.debug("claim_queue full, sleeping")
                     time.sleep(worker_sleep)
                     continue
@@ -228,7 +219,9 @@ class Worker:
                     time.sleep(worker_sleep)
                     continue
 
-                claimed_tasks = inner.claim_tasks()
+                with self._metrics.timer("worker.claim_tasks.duration", tags):
+                    claimed_tasks = inner.claim_tasks()
+                self._metrics.incr("worker.claim_tasks.claimed", len(claimed_tasks), tags)
                 logger.debug(f"claimed {len(claimed_tasks)} tasks")
                 last_fetch = now
                 for item in claimed_tasks:
@@ -352,7 +345,7 @@ class Worker:
                     claimed = self._claimed_tasks.get(timeout=worker_sleep)
                 except queue.Empty:
                     # This could be another utilization metric to collect
-                    logger.debug("claimed_tasks.get() empty timeout")
+                    logger.debug("Claimed 0 tasks")
                     claimed = None
 
                 if claimed:
@@ -365,9 +358,11 @@ class Worker:
 
                 running = self._poll_inflight()
 
+                tags = {"usecase": self._inner.usecase}
                 # If this worker is shutting down wait until
                 # all inflight work is complete.
                 if running == 0 and not claimed:
+                    self._metrics.incr("worker.empty_sleep", 1, tags)
                     time.sleep(self._inner.worker_sleep_ms / 1000)
 
                 # If all workers appear idle
@@ -379,7 +374,8 @@ class Worker:
                     int(last_cleanup)
                 ):
                     logger.debug("run_upkeep start")
-                    self._inner.run_upkeep()
+                    with self._metrics.timer("run_upkeep.duration", tags):
+                        self._inner.run_upkeep()
                     last_cleanup = time.time()
 
     def _poll_inflight(self) -> int:
