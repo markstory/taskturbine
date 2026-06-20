@@ -9,7 +9,7 @@ use chrono::Utc;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{
     models::{RunId, TaskId},
-    storage::{Storage},
+    storage::Storage,
 };
 
 use crate::{
@@ -349,7 +349,10 @@ impl AsyncWorkerInner {
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let metrics = storage.upkeep_metrics().await;
-            Ok(metrics.into_iter().map(|metric| metric.into()).collect::<Vec<UpkeepMetric>>())
+            Ok(metrics
+                .into_iter()
+                .map(|metric| metric.into())
+                .collect::<Vec<UpkeepMetric>>())
         })
     }
 

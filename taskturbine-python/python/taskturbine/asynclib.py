@@ -440,7 +440,9 @@ class AsyncWorker:
                 self._app.metrics.gauge("run_upkeep.total_count", item.total, tags)
                 self._app.metrics.gauge("run_upkeep.pending_count", item.pending, tags)
                 self._app.metrics.gauge("run_upkeep.running_count", item.running, tags)
-                self._app.metrics.gauge("run_upkeep.sleeping_count", item.sleeping, tags)
+                self._app.metrics.gauge(
+                    "run_upkeep.sleeping_count", item.sleeping, tags
+                )
 
             await asyncio.sleep(interval)
 
