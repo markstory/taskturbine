@@ -467,6 +467,9 @@ class AsyncAppInner:
     """Create a AsyncContextInner which bridges into the python client."""
 
 class AsyncContextInner:
+    usecase: str
+    """The use case this context is running for"""
+
     claimed_task: ClaimedTask
     """The task that was claimed for this context"""
 

@@ -17,7 +17,7 @@ from typing import (
 )
 from taskturbine import BaseApp
 from taskturbine.context import BaseContext
-from taskturbine.metrics import MetricsBackend, NoopMetrics
+from taskturbine.metrics import MetricsBackend, NoopMetrics, task_metrics_tags
 from taskturbine.models import JsonData, OptionalJsonData, SuspendError
 from taskturbine.taskturbine import (
     AsyncContextInner,
@@ -65,10 +65,12 @@ class AsyncTaskContext(BaseContext):
         inner: AsyncContextInner,
         serialize: Callable[[JsonData], bytes],
         deserialize: Callable[[bytes], JsonData | None],
+        metrics: MetricsBackend | None = None,
     ) -> None:
         self._inner = inner
         self._serialize = serialize
         self._deserialize = deserialize
+        self._metrics = metrics or NoopMetrics()
         super().__init__(inner.claimed_task)
 
     async def await_event(
@@ -85,6 +87,8 @@ class AsyncTaskContext(BaseContext):
         assert isinstance(timeout, timedelta)
 
         wait = await self._inner.get_event_payload(event_name, timeout)
+        tags = {"usecase": self._inner.usecase}
+        self._metrics.incr("app.await_event", 1, tags)
         if wait.should_suspend:
             raise SuspendError()
         return json.loads(wait.payload)
@@ -415,7 +419,11 @@ class AsyncWorker:
         self._shutdown = False
 
     async def claim_tasks(self) -> list[ClaimedTask]:
-        return await self._inner.claim_tasks()
+        claimed = await self._inner.claim_tasks()
+        tags = {"usecase": self._inner.usecase}
+        self._app.metrics.incr("worker.claim_tasks.claimed", len(claimed), tags)
+
+        return claimed
 
     async def run_upkeep(self) -> None:
         """
@@ -426,6 +434,14 @@ class AsyncWorker:
         interval = self._inner.worker_upkeep_interval_secs
         while True:
             await self._inner.run_upkeep()
+            stats = await self._inner.upkeep_metrics()
+            for item in stats:
+                tags = {"usecase": self._inner.usecase, "channel": item.channel}
+                self._app.metrics.gauge("run_upkeep.total_count", item.total, tags)
+                self._app.metrics.gauge("run_upkeep.pending_count", item.pending, tags)
+                self._app.metrics.gauge("run_upkeep.running_count", item.running, tags)
+                self._app.metrics.gauge("run_upkeep.sleeping_count", item.sleeping, tags)
+
             await asyncio.sleep(interval)
 
     async def run(self, stop_on_idle: bool = False) -> None:
@@ -448,6 +464,7 @@ class AsyncWorker:
         last_claim_miss: float | None = None
         concurrent_task_limit = self._inner.worker_concurrency
 
+        tags = task_metrics_tags(self._inner.usecase, None)
         while True:
             done: set[asyncio.Task[TaskResult]] = set()
             claimed: list[ClaimedTask] = []
@@ -464,7 +481,9 @@ class AsyncWorker:
                 and (last_claim_miss is None or time.time() - last_claim_miss > 1)
             ):
                 logger.debug("Attempt to claim tasks")
-                claimed = await self.claim_tasks()
+                with self._app.metrics.timer("claim_tasks.duration", tags):
+                    claimed = await self.claim_tasks()
+
                 if not len(claimed):
                     last_claim_miss = time.time()
 
@@ -483,8 +502,9 @@ class AsyncWorker:
 
             if not self._shutdown and self._inner.should_run_upkeep(int(last_cleanup)):
                 logger.debug(f"run_upkeep. last_cleanup={last_cleanup}")
-                await self._inner.run_upkeep()
-                last_cleanup = time.time()
+                with self._app.metrics.timer("run_upkeep.duration", tags):
+                    await self._inner.run_upkeep()
+                    last_cleanup = time.time()
 
             if len(claimed) == 0 and len(self._pending_tasks) == 0 and stop_on_idle:
                 logger.info("All tasks complete, shutting down.")
@@ -504,19 +524,29 @@ class AsyncWorker:
                 payload=claimed.task_name.encode(),
             )
 
+        tags = task_metrics_tags(self._inner.usecase, claimed)
+        self._app.metrics.incr("worker.execute_task", 1, tags)
         task_fn = self._app.get_task(claimed.task_name)
         context = self._app.create_context(claimed)
         try:
             # Call userland code
-            res = await task_fn(context)
+            with self._app.metrics.timer("worker.execute_task.call.duration", tags):
+                res = await task_fn(context)
             res_bytes = b""
             if res is not None:
                 res_bytes = context._serialize(res)
+
+            tags["outcome"] = str(TaskOutcome.Complete)
+            self._app.metrics.incr("worker.execute_task.outcome", 1, tags)
+
             return TaskResult(
                 outcome=TaskOutcome.Complete, run_id=claimed.run_id, payload=res_bytes
             )
         except SuspendError as suspend:
             logger.debug("Task suspended")
+            tags["outcome"] = str(TaskOutcome.Suspend)
+            self._app.metrics.incr("worker.execute_task.outcome", 1, tags)
+
             return TaskResult(
                 outcome=TaskOutcome.Suspend,
                 duration=suspend.duration,
@@ -524,6 +554,9 @@ class AsyncWorker:
             )
         except Exception as fail:
             logger.exception("Task execution failed")
+            tags["outcome"] = str(TaskOutcome.Failure)
+            self._app.metrics.incr("worker.execute_task.outcome", 1, tags)
+
             retry_at = claimed.next_retry_in()
             if self._app.error_handler:
                 self._app.error_handler(fail)
@@ -536,12 +569,18 @@ class AsyncWorker:
         Process a TaskResult and update the store
         """
         logger.debug(f"process_result for {task_result.run_id}")
+        tags = task_metrics_tags(self._inner.usecase, None)
         match task_result.outcome:
             case TaskOutcome.Fatal:
+                # TODO I think this might be unreachable.
                 message = "unknown"
                 if task_result.payload:
                     message = task_result.payload.decode()
                 reason_message = f"Worker crashed with: {message}"
+
+                tags["outcome"] = str(TaskOutcome.Fatal)
+                self._app.metrics.incr("worker.execute_task.outcome", 1, tags)
+
                 await self._inner.fail_run(
                     task_result.run_id,
                     json.dumps({"reason": reason_message}).encode(),
@@ -552,6 +591,7 @@ class AsyncWorker:
                 message = "unknown"
                 if task_result.payload:
                     message = task_result.payload.decode()
+                self._app.metrics.incr("worker.execute_task.not_found", 1, tags)
                 reason_message = f"Task with name {message} was not registered"
                 await self._inner.fail_run(
                     task_result.run_id,

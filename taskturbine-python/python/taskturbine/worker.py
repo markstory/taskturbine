@@ -97,8 +97,6 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
     can be accessed safely.
     """
     tags = task_metrics_tags(app._inner.config.usecase, claimed)
-    app.metrics.incr("worker.execute_task", 1, tags)
-
     if not app.has_task(claimed.task_name):
         app.metrics.incr("worker.execute_task.not_found", 1, tags)
         logger.warning(f"Task with {claimed.task_name} is not registered")
@@ -108,6 +106,7 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
             payload=claimed.task_name.encode(),
         )
 
+    app.metrics.incr("worker.execute_task", 1, tags)
     task_fn = app.get_task(claimed.task_name)
     context = app.create_context(claimed)
     start = time.monotonic()

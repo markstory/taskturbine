@@ -160,6 +160,11 @@ impl AsyncContextInner {
         self.claimed_task.clone()
     }
 
+    #[getter(usecase)]
+    fn usecase(&self) -> String {
+        self.storage.get_config().usecase.clone()
+    }
+
     fn emit_event<'p>(
         &self,
         py: Python<'p>,
