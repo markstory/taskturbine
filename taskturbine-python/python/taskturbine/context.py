@@ -60,7 +60,7 @@ class TaskContext(BaseContext):
         inner: ContextInner,
         serialize: Callable[[JsonData], bytes],
         deserialize: Callable[[bytes], JsonData | None],
-        metrics: MetricsBackend | None = None
+        metrics: MetricsBackend | None = None,
     ) -> None:
         self._inner = inner
         self._serialize = serialize

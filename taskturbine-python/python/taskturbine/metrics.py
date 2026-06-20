@@ -4,6 +4,7 @@ import time
 
 from taskturbine.taskturbine import ClaimedTask
 
+
 def task_metrics_tags(usecase: str, claimed: ClaimedTask | None) -> dict[str, str]:
     tags = {
         "usecase": usecase,
@@ -12,7 +13,6 @@ def task_metrics_tags(usecase: str, claimed: ClaimedTask | None) -> dict[str, st
         tags["channel"] = claimed.channel
         tags["taskname"] = claimed.task_name
     return tags
-
 
 
 class MetricsBackend(Protocol):

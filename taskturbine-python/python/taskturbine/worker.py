@@ -150,7 +150,6 @@ def execute_task(app: TaskturbineApp, claimed: ClaimedTask) -> TaskResult:
         )
 
 
-
 class Worker:
     """
     Used to operate a worker.
@@ -226,7 +225,9 @@ class Worker:
 
                 with self._metrics.timer("worker.claim_tasks.duration", tags):
                     claimed_tasks = inner.claim_tasks()
-                self._metrics.incr("worker.claim_tasks.claimed", len(claimed_tasks), tags)
+                self._metrics.incr(
+                    "worker.claim_tasks.claimed", len(claimed_tasks), tags
+                )
                 logger.debug(f"claimed {len(claimed_tasks)} tasks")
                 last_fetch = now
                 for item in claimed_tasks:
@@ -389,7 +390,9 @@ class Worker:
             self._inner.run_upkeep()
 
         stats = self._inner.upkeep_metrics()
-        tags = {"usecase": self._inner.usecase, }
+        tags = {
+            "usecase": self._inner.usecase,
+        }
         for item in stats:
             tags = {"usecase": self._inner.usecase, "channel": item.channel}
             self._metrics.gauge("run_upkeep.total_count", item.total, tags)
