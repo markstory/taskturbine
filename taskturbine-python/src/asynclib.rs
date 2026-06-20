@@ -9,13 +9,13 @@ use chrono::Utc;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{
     models::{RunId, TaskId},
-    storage::Storage,
+    storage::{Storage},
 };
 
 use crate::{
     TaskOptions,
     config::Config,
-    models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult},
+    models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric},
 };
 
 #[pyclass(skip_from_py_object)]
@@ -278,6 +278,11 @@ impl AsyncWorkerInner {
         self.config.app_module.clone()
     }
 
+    #[getter(usecase)]
+    pub fn usecase(&self) -> String {
+        self.config.usecase.clone()
+    }
+
     #[getter(worker_sleep_ms)]
     pub fn worker_sleep_ms(&self) -> i32 {
         self.config.worker_sleep_ms
@@ -329,6 +334,17 @@ impl AsyncWorkerInner {
                 .run_upkeep()
                 .await
                 .map_err(|e| PyValueError::new_err(format!("Upkeep failed: {e:?}")))
+        })
+    }
+
+    /// Collect metrics on the state of the usecase data.
+    /// Generally called during upkeep
+    fn upkeep_metrics<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
+        let storage = self.storage.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let metrics = storage.upkeep_metrics().await;
+            Ok(metrics.into_iter().map(|metric| metric.into()).collect::<Vec<UpkeepMetric>>())
         })
     }
 
