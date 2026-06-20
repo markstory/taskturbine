@@ -311,6 +311,11 @@ class WorkerInner:
     - cancels tasks past cancellation_max_age
     """
 
+    def upkeep_metrics(self) -> list[UpkeepMetric]: ...
+    """
+    Get a collection of taskturbine.UpkeepMetric records.
+    """
+
     def fail_run(
         self,
         run_id: str,
@@ -500,6 +505,9 @@ class AsyncWorkerInner:
     app_module: str
     """Path to the module and variable that contain the application being run."""
 
+    usecase: str
+    """The usecase the worker is for."""
+
     worker_concurrency: int
     """Number of child processes to spawn as task executors."""
 
@@ -523,6 +531,11 @@ class AsyncWorkerInner:
     Run a cleanup operation that:
     - releases expired claims
     - cancels tasks past cancellation_max_age
+    """
+
+    async def upkeep_metrics(self) -> list[UpkeepMetric]: ...
+    """
+    Get a collection of taskturbine.UpkeepMetric records.
     """
 
     async def fail_run(
