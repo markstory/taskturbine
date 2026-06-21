@@ -384,16 +384,14 @@ class Worker:
         ):
             return False
 
+        tags = {"usecase": self._inner.usecase}
         logger.debug("run_upkeep start")
         with self._metrics.timer("run_upkeep.duration", tags):
             self._inner.run_upkeep()
 
         stats = self._inner.upkeep_metrics()
-        tags = {
-            "usecase": self._inner.usecase,
-        }
         for item in stats:
-            tags = {"usecase": self._inner.usecase, "channel": item.channel}
+            tags["channel"] = item.channel
             self._metrics.gauge("run_upkeep.total_count", item.total, tags)
             self._metrics.gauge("run_upkeep.pending_count", item.pending, tags)
             self._metrics.gauge("run_upkeep.running_count", item.running, tags)
