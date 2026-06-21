@@ -3,12 +3,17 @@ name = "taskturbine-cli"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
+description = "Command line tools for interacting with a taskturbine application."
 
 [dependencies]
 chrono.workspace = true
 clap = { version = "4.0", features = ["derive"] }
-taskturbine = { path = "../taskturbine-app" }
-taskturbine-core = { path = "../taskturbine-core", features = ["test"] }
+taskturbine = { version = "~0.1.0", path = "../taskturbine-app" }
+taskturbine-core = {
+    version = "~0.1.0",
+    path = "../taskturbine-core",
+    features = ["test"]
+}
 tokio = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
