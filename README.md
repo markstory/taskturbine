@@ -73,8 +73,6 @@ For rust:
 cargo add taskturbine
 ```
 
-:warning: Packages are not published yet.
-
 ## Concepts
 
 Application logic is defined as _tasks_. Tasks are functions that are composed of multiple
