@@ -8,7 +8,6 @@ name: Release python
 on:
   push:
     branches:
-      - master
     tags:
       - '*'
   pull_request:
@@ -101,8 +100,8 @@ jobs:
           name: wheels
           path: dist
 
-  release:
-    name: Release
+  publish:
+    name: Publish to PyPI
     runs-on: ubuntu-latest
     environment: 
       name: pypi
