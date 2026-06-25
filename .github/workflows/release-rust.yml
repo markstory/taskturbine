@@ -7,11 +7,8 @@ name: Release rust packages
 
 on:
   push:
-    branches:
-      - master
     tags:
       - '*'
-  pull_request:
   workflow_dispatch:
 
 permissions:
