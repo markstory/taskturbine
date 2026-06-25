@@ -1,4 +1,6 @@
 /target
 .env
-taskturbine-python/python/taskturbine/*.so
-/tarkpaulin-report.html
+/taskturbine-python/python/taskturbine/*.so
+/taskturbine-python/dist/
+/taskturbine-python/sdist/
+/tarpaulin-report.html
