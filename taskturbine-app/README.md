@@ -131,13 +131,17 @@ You can spawn tasks with a reference to `TaskturbineApp` or a `TaskContext`.
 let res = app.spawn_task("task-name", b"{\"user_id\": 123}", None).await;
 ```
 
+### Task Channels
+
 Tasks can be spawned onto specific 'channels' of work. Channels let you separate workloads from each other and run multiple workers pools for your different workloads.
 
 ```rust
+// Register a channel
+let app = app.add_channel("reports");
+
+// Spawn a task onto a defined channel
 let res = app.channel("reports").spawn_task("process-revenue-daily", b"{}", None).await;
 ```
-
-The `TaskResult` struct provides the `task_id` and `run_id` that were spawned.
 
 ### Task Options
 
@@ -166,5 +170,39 @@ let res = app.channel("reports").spawn_task("process-revenue-daily", b"{}", Some
 
 ## Running workers
 
-- Running a worker
-- Running an upkeep worker
+Workers are a tokio based runtime that claims and executes tasks. Tasks are claimed in batches by workers, and then processed by one of the worker threads. While taskturbine provides the tools to build a worker, you'll need to define a worker binary entrypoint in your application code. First, add a new entry to `cargo.toml`.
+
+```toml
+[[bin]]
+name = "worker"
+path = "src/worker.rs"
+```
+
+Our `worker.rs` file should look like:
+
+```rust
+use simple_logger::SimpleLogger;
+use taskturbine::app::run_worker;
+
+use tasks::make_taskturbine_app;
+
+#[tokio::main]
+async fn main() {
+    SimpleLogger::new().init().unwrap();
+
+    log::info!("Starting worker");
+    let app = make_taskturbine_app();
+
+    let worker = app.create_worker("worker-1", vec![]);
+    run_worker(worker).await;
+}
+```
+
+Each worker can consume from one or more channels. When an empty channel list is provided, a worker consumes from all channels.
+
+
+The `run_worker` function will run a worker loop until the process receives `SIGINT`, `SIGTERM` or `SIGKILL`. Each worker will run `config.worker_concurrency` number of threads to process tasks concurrently.
+
+## Metrics and Logging
+
+This package uses the `log` and `metrics` packages to record logs and metrics. You can configure a metrics/logging backend in your application before starting the worker.
