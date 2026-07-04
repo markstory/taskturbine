@@ -123,18 +123,48 @@ let _ = ctx.async_step("load-new-state", async |ctx: TaskContext| -> TaskResult 
 
 As run attempts fail, the impacted tasks will be rescheduled to run again in the future.
 
-
-
-Tasks are composed of several 'steps'. Each step represents a unit of work in the task. If a task fails, it will resume from the last successfully completed step.
-
-- Show multi step task
-
 ## Spawning tasks
 
-- Use app to spawn tasks.
-- Use context to spawn tasks
+You can spawn tasks with a reference to `TaskturbineApp` or a `TaskContext`.
 
-## Running tasks
+```rust
+let res = app.spawn_task("task-name", b"{\"user_id\": 123}", None).await;
+```
+
+Tasks can be spawned onto specific 'channels' of work. Channels let you separate workloads from each other and run multiple workers pools for your different workloads.
+
+```rust
+let res = app.channel("reports").spawn_task("process-revenue-daily", b"{}", None).await;
+```
+
+The `TaskResult` struct provides the `task_id` and `run_id` that were spawned.
+
+### Task Options
+
+When spawning tasks, you can define `TaskOptions` to configure retries, timeouts and idempotency.
+
+- `idempotency_key`: A unique identifier used to prevent duplicate tasks from
+  being spawned. By providing an idempotency_key only one copy of a task can be
+  scheduled at a time. The uniqueness constraint will end when the task is
+  cleaned up after completion/failure.
+- `headers`: Map of headers to include with the task activation
+- `max_attempts`: The maximum number of attempts to make on this task
+- `retry_seconds`: The minimum number of seconds to wait between retries.
+- `retry_factor`: The multipier to apply to retry delays between attempts. Use > 1.0 to create exponential backoff.
+- `retry_max_seconds`: The maximum number of seconds to wait between retries.
+- `cancellation_max_age`: The maximum age of a task before it should not be run.
+  Measured in seconds from when the task was created.
+
+```rust
+let options = TaskOptions {
+    retry_seconds: 60,
+    max_attempts: 10,
+    ..TaskOptions::default()
+};
+let res = app.channel("reports").spawn_task("process-revenue-daily", b"{}", Some(options)).await;
+```
+
+## Running workers
 
 - Running a worker
 - Running an upkeep worker
