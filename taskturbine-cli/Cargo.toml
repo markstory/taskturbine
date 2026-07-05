@@ -4,6 +4,7 @@ version = "0.1.1"
 edition = "2024"
 license = "Apache-2.0"
 description = "Command line tools for interacting with a taskturbine application."
+repository = "https://github.com/markstory/taskturbine"
 
 [dependencies]
 chrono.workspace = true
