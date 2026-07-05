@@ -5,8 +5,8 @@ description = "Taskturbine demo applications"
 readme = "README.md"
 requires-python = ">3.13"
 dependencies = [
-    "taskturbine-python"
+    "taskturbine"
 ]
 
 [tool.uv.sources]
-taskturbine-python = { path = "../../taskturbine-python", editable = true }
+taskturbine = { path = "../../taskturbine-python", editable = true }

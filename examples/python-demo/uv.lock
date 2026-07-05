@@ -27,14 +27,14 @@ name = "python-demo"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "taskturbine-python" },
+    { name = "taskturbine" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "taskturbine-python", editable = "../../taskturbine-python" }]
+requires-dist = [{ name = "taskturbine", editable = "../../taskturbine-python" }]
 
 [[package]]
-name = "taskturbine-python"
+name = "taskturbine"
 version = "0.1.0"
 source = { editable = "../../taskturbine-python" }
 dependencies = [
