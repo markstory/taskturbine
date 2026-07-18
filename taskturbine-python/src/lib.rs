@@ -145,6 +145,11 @@ struct WorkerInner {
 
 #[pymethods]
 impl WorkerInner {
+    #[getter(channels)]
+    pub fn get_channels(&self) -> Vec<String> {
+        self.channels.clone()
+    }
+
     #[getter(usecase)]
     pub fn usecase(&self) -> String {
         self.config.usecase.clone()

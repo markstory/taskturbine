@@ -289,11 +289,13 @@ class TaskturbineApp(BaseApp):
     def create_worker(
         self,
         worker_id: str,
-        channels: list[str],
+        channels: list[str] | None = None,
     ) -> Worker:
         """
         Create a Worker that is connected to Rust storage API.
         """
+        if channels is None:
+            channels = [self._inner.config.default_channel]
         worker = Worker(
             inner=self._inner.create_worker(worker_id, channels),
             tasks=self._tasks,

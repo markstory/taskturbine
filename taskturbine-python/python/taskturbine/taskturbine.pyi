@@ -283,6 +283,9 @@ class WorkerInner:
     usecase: str
     """The configured usecase"""
 
+    channels: list[str]
+    """The list of channels the worker is consuming from"""
+
     worker_concurrency: int
     """Number of child processes to spawn as task executors."""
 
