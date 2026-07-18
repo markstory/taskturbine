@@ -18,6 +18,7 @@ def test_create_worker_default_channels() -> None:
     assert len(worker._inner.channels) == 1
     assert worker._inner.channels[0] == demo_app._inner.config.default_channel
 
+
 def test_claimedtask_dict_methods(channel: str) -> None:
     demo_app.set_channels([channel])
     demo_app.spawn_task(
