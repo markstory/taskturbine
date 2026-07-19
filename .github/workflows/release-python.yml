@@ -18,9 +18,11 @@ jobs:
         target: [x86_64, x86, aarch64]
     steps:
       - uses: actions/checkout@v3
+
       - uses: actions/setup-python@v4
         with:
           python-version: '3.14'
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -29,6 +31,7 @@ jobs:
           args: --release --out dist --find-interpreter
           sccache: 'true'
           manylinux: auto
+
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -66,9 +69,11 @@ jobs:
         target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v3
+
       - uses: actions/setup-python@v4
         with:
           python-version: '3.14'
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -76,6 +81,7 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
+
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -86,12 +92,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
           working-directory: taskturbine-python/
           command: sdist
           args: --out dist
+
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
@@ -111,7 +119,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          merge-multiple: true
           name: wheels
           path: dist
+
+      - name: list artifacts
+        run: ls -l dist
+
       - name: Publish packages to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
