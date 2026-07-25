@@ -249,6 +249,7 @@ pub async fn multi_step_sleep(mut ctx: TaskContext) -> TaskResult {
         let _ = ctx.async_step("step-{i}", async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
             log::debug!("started step {i}");
             if rand::random::<f64>() < failure_rate {
+                log::debug!("step {i} failed");
                 return Err(TaskError::Message("Something bad".to_owned()));
             }
             tokio::time::sleep(Duration::from_millis(duration)).await;
