@@ -18,6 +18,7 @@ hex = "0.4.3"
 hmac = "0.12.1"
 log.workspace = true
 minijinja = { version = "2.14.0", features = ["builtins", "loader"] }
+rand = "0.10.2"
 serde = "1.0.228"
 serde_json.workspace = true
 sha2 = "0.10.9"

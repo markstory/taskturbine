@@ -48,6 +48,7 @@ pub fn make_task_app() -> TaskturbineApp {
         .register_task("panic-fail", panic_failure)
         .register_task("register-user", register_user)
         .register_task("sleep-time", sleep_time)
+        .register_task("multi-step-sleep", multi_step_sleep)
 }
 
 #[derive(sqlx::FromRow, Debug, PartialEq, Deserialize, Serialize)]
@@ -219,5 +220,44 @@ pub async fn sleep_time(ctx: TaskContext) -> TaskResult {
     log::info!("started sleep_time. Sleeping for {delay}");
     tokio::time::sleep(Duration::from_millis((delay * 1000.0) as u64)).await;
     log::info!("sleep_time complete");
+    Ok(None)
+}
+
+/// Simulate IO wait workload with steps
+pub async fn multi_step_sleep(mut ctx: TaskContext) -> TaskResult {
+    #[derive(Deserialize)]
+    struct MultiStepSleepParams {
+        /// The number of ms to sleep in each step to simulate io waits
+        pub duration_ms: Option<u64>,
+
+        /// The number of steps to generate in the workflow.
+        pub steps: Option<i8>,
+
+        /// The rate at which steps return errors (fail).
+        pub failure_rate: Option<f64>,
+    }
+
+    let res: Result<MultiStepSleepParams, _> = serde_json::from_slice(ctx.param_bytes().as_slice());
+    let params = res.unwrap();
+
+    log::info!("started multi_step_sleep");
+
+    let duration = params.duration_ms.unwrap_or(50);
+    let failure_rate = params.failure_rate.unwrap_or(0.0);
+
+    for i in 1..params.steps.unwrap_or(2) {
+        let _ = ctx.async_step("step-{i}", async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
+            log::debug!("started step {i}");
+            if rand::random::<f64>() < failure_rate {
+                return Err(TaskError::Message("Something bad".to_owned()));
+            }
+            tokio::time::sleep(Duration::from_millis(duration)).await;
+
+            Ok(vec![])
+        }).await?;
+    }
+
+    tokio::time::sleep(Duration::from_millis(duration)).await;
+    log::info!("multi_step_sleep complete");
     Ok(None)
 }
