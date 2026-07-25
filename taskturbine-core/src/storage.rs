@@ -155,7 +155,6 @@ impl Storage {
         .fetch_all(&self.pool)
         .await;
 
-        dbg!(&res);
         match res {
             Err(_) => {
                 vec![UpkeepMetric {
