@@ -499,7 +499,8 @@ impl Worker {
                 "suspend"
             }
             Ok(maybe_result) => {
-                log::debug!("Completed task {taskname}");
+                let task_id = task.task_id;
+                log::debug!("Completed task {taskname} {task_id}");
 
                 let result_data = maybe_result.unwrap_or_else(Vec::new);
                 let res = storage
@@ -527,15 +528,6 @@ impl Worker {
             .await;
         if let Err(schedule_err) = res {
             log::error!("Failed to fail run {schedule_err:?}");
-        }
-    }
-
-    /// Helper method to suspend a run for a period of time.
-    async fn sleep_run(&self, task: &ClaimedTask, duration: Duration) {
-        let res = self.app.storage.schedule_run(task.run_id, duration).await;
-        if let Err(schedule_err) = res {
-            // If this fails, the task will eventually be moved by the claim expiring.
-            log::error!("Failed to suspend run {schedule_err:?}");
         }
     }
 }
@@ -727,17 +719,9 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                             claimed.pop();
                         },
                         Err(TrySendError::Full(_)) => {
-                            let duration = if config.worker_sleep_ms < 1000 {
-                                time::Duration::from_secs(1)
-                            } else {
-                                time::Duration::from_secs((config.worker_sleep_ms / 1000) as u64)
-                            };
-
                             counter!("worker.claim.work_send.full").increment(1);
-                            log::info!("work_send was full; sleeping and re-attempting.");
-                            worker.sleep_run(task, duration).await;
+                            log::info!("work_send was full; sleeping to let work_send drain");
 
-                            // Back pressure to let `work_send` drain.
                             let sleep_duration = time::Duration::from_millis(config.worker_sleep_ms as u64);
                             time::sleep(sleep_duration).await;
                         },
