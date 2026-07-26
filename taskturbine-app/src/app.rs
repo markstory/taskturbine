@@ -720,7 +720,7 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                         },
                         Err(TrySendError::Full(_)) => {
                             counter!("worker.claim.work_send.full").increment(1);
-                            log::info!("work_send was full; sleeping to let work_send drain");
+                            log::debug!("work_send was full; sleeping to let work_send drain");
 
                             let sleep_duration = time::Duration::from_millis(config.worker_sleep_ms as u64);
                             time::sleep(sleep_duration).await;
