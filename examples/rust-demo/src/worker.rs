@@ -9,7 +9,10 @@ use tasks::make_task_app;
 #[tokio::main]
 async fn main() {
     // TODO add metrics and file flushing metrics backend.
-    SimpleLogger::new().init().unwrap();
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .init()
+        .unwrap();
 
     log::info!("Starting worker");
     let app = make_task_app();
