@@ -11,6 +11,7 @@ async fn main() {
     // TODO add metrics and file flushing metrics backend.
     SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
+        .with_module_level("sqlx::query", log::LevelFilter::Debug)
         .init()
         .unwrap();
 

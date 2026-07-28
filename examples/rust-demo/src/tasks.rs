@@ -36,11 +36,13 @@ pub fn make_task_app() -> TaskturbineApp {
     let task_config = Config {
         database_url,
         worker_shutdown_on_idle: env::var("TASKTURBINE_SHUTDOWN_ON_IDLE")
-            .unwrap_or("false".to_string())
-            == "true",
+            .unwrap_or("false".to_string()) == "true",
         worker_shutdown_idle_max: 10,
+        database_log_queries: env::var("TASKTURBINE_LOG_QUERIES")
+            .unwrap_or("false".to_string()) == "true",
         ..Config::default()
     };
+    log::info!("config {task_config:?}");
 
     TaskturbineApp::new(task_config)
         .add_channel("mail")
