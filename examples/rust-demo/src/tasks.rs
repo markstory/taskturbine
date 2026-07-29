@@ -36,10 +36,11 @@ pub fn make_task_app() -> TaskturbineApp {
     let task_config = Config {
         database_url,
         worker_shutdown_on_idle: env::var("TASKTURBINE_SHUTDOWN_ON_IDLE")
-            .unwrap_or("false".to_string()) == "true",
+            .unwrap_or("false".to_string())
+            == "true",
         worker_shutdown_idle_max: 10,
-        database_log_queries: env::var("TASKTURBINE_LOG_QUERIES")
-            .unwrap_or("false".to_string()) == "true",
+        database_log_queries: env::var("TASKTURBINE_LOG_QUERIES").unwrap_or("false".to_string())
+            == "true",
         ..Config::default()
     };
     log::info!("config {task_config:?}");
@@ -248,16 +249,21 @@ pub async fn multi_step_sleep(mut ctx: TaskContext) -> TaskResult {
     let failure_rate = params.failure_rate.unwrap_or(0.0);
 
     for i in 1..params.steps.unwrap_or(2) {
-        let _ = ctx.async_step("step-{i}", async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
-            log::debug!("started step {i}");
-            if rand::random::<f64>() < failure_rate {
-                log::info!("step {i} failed");
-                return Err(TaskError::Message("Something bad".to_owned()));
-            }
-            tokio::time::sleep(Duration::from_millis(duration)).await;
+        let _ = ctx
+            .async_step(
+                "step-{i}",
+                async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
+                    log::debug!("started step {i}");
+                    if rand::random::<f64>() < failure_rate {
+                        log::info!("step {i} failed");
+                        return Err(TaskError::Message("Something bad".to_owned()));
+                    }
+                    tokio::time::sleep(Duration::from_millis(duration)).await;
 
-            Ok(vec![])
-        }).await?;
+                    Ok(vec![])
+                },
+            )
+            .await?;
     }
 
     tokio::time::sleep(Duration::from_millis(duration)).await;
