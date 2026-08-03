@@ -1051,6 +1051,7 @@ impl Storage {
         extend_claim: Option<Duration>,
     ) -> Result<(), StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
+        // TODO get Checkpoint and return it.
         self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
             .await?;
         if let Some(extension) = extend_claim {
@@ -1215,6 +1216,7 @@ impl Storage {
         step_name: &str,
         state: &[u8],
     ) -> Result<(), StorageError> {
+        // TODO make this return Checkpoint
         sqlx::query(
             "INSERT INTO taskturbine.checkpoints (task_id, owner_run_id, step_name, state, updated_at)
             VALUES ($1, $2, $3, $4, NOW())

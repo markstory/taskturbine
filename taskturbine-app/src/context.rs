@@ -1,4 +1,9 @@
-use std::{collections::{HashMap, HashSet}, fmt::Debug, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    sync::Arc,
+    time::Duration,
+};
 
 use crate::app::{Channel, ResultData, TaskturbineApp};
 use metrics::counter;
@@ -61,7 +66,6 @@ impl Checkpoints {
         format!("{name}{suffix}")
     }
 
-
     /// Incrment the counter for a given name and get the new value.
     fn incr(&mut self, name: &str) -> u32 {
         if !self.counters.contains_key(name) {
@@ -91,7 +95,8 @@ impl Checkpoints {
     /// Store a collection of Checkpoints for a task.
     fn store(&mut self, task_id: &TaskId, checkpoints: Vec<Checkpoint>) {
         for checkpoint in checkpoints.into_iter() {
-            self.checkpoint_data.insert((*task_id, checkpoint.step_name.to_owned()), checkpoint);
+            self.checkpoint_data
+                .insert((*task_id, checkpoint.step_name.to_owned()), checkpoint);
         }
     }
 
@@ -186,7 +191,8 @@ impl TaskContext {
                     "Failed to load checkpoints {err:?}"
                 )));
             };
-            self.checkpoints.store(&self.task.task_id, checkpoint_values);
+            self.checkpoints
+                .store(&self.task.task_id, checkpoint_values);
         }
 
         // Get the current checkpoint value (if defined)
@@ -214,7 +220,7 @@ impl TaskContext {
                         None,
                     )
                     .await;
-                    // TODO set to self.checkpoints as well.
+                // TODO set to self.checkpoints as well.
                 if let Err(err) = res {
                     return Err(FlowControl::Failure(format!(
                         "Could not store checkpoint {err:?}"
