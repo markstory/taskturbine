@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 use crate::app::{Channel, ResultData, TaskturbineApp};
 use metrics::counter;
 use taskturbine_core::{
-    models::{ClaimedTask, Event, RunId, SpawnResult, TaskId},
+    models::{Checkpoint, ClaimedTask, Event, RunId, SpawnResult, TaskId},
     storage::{StorageError, TaskOptions},
 };
 
@@ -28,12 +28,14 @@ pub enum FlowControl {
 /// completion states for each iteration.
 struct Checkpoints {
     counters: HashMap<String, u32>,
+    loaded: HashMap<TaskId, HashMap<String, Checkpoint>>,
 }
 
 impl Checkpoints {
     pub fn new() -> Self {
         Self {
             counters: HashMap::new(),
+            loaded: HashMap::new(),
         }
     }
 
@@ -56,6 +58,33 @@ impl Checkpoints {
     /// Will return None on checkpoints that aren't known yet.
     pub fn get_counter<'a>(&'a self, name: &str) -> Option<&'a u32> {
         self.counters.get(name)
+    }
+
+    /// Check if a task has had its checkpoints loaded yet.
+    pub fn is_loaded(&self, task_id: &TaskId) -> bool {
+        self.loaded.contains_key(task_id)
+    }
+
+    /// Store a collection of Checkpoints for a task
+    pub fn store(&self, task_id: &TaskId, checkpoints: Vec<Checkpoint>) {
+        let &mut task_checkpoints = self.loaded.get_mut(task_id).unwrap_or_else(|| HashMap::new());
+        for checkpoint in checkpoints.into_iter() {
+            task_checkpoints.insert(checkpoint.step_name, checkpoint);
+        }
+        self.loaded.insert(task_id.to_owned(), task_checkpoints).expect("inserting checkpoints should not fail");
+    }
+
+    /// Get a single checkpoint from the loaded checkpoint data.
+    pub fn get(&self, task_id: &TaskId, step_name: &str) -> Option<Checkpoint> {
+        let task_checkpoints = self.loaded.get(task_id);
+        let Some(task_checkpoints) = task_checkpoints else {
+            return None;
+        };
+        let checkpoint_opt = task_checkpoints.get(step_name);
+        let Some(checkpoint) = checkpoint_opt else {
+            return None;
+        };
+        Some(checkpoint.clone())
     }
 }
 
@@ -152,19 +181,23 @@ impl TaskContext {
         F: FnOnce(TaskContext) -> Fut,
         E: std::fmt::Debug,
     {
-        // See if the step has a completed checkpoint
+        // If no checkpoints have been loaded, first load all the checkpoints.
+        // Once all checkpoints have been loaded, no further queries need to be made
+        // as we can assume that the current process has exclusive access.
+        if !self.checkpoints.is_loaded(&self.task.task_id) {
+            let res = self.app.storage.get_checkpoints(self.task.task_id).await;
+            let Ok(checkpoint_values) = res else {
+                let err = res.err().unwrap();
+                return Err(FlowControl::Failure(format!(
+                    "Failed to load checkpoints {err:?}"
+                )));
+            };
+            self.checkpoints.store(&self.task.task_id, checkpoint_values);
+        }
+
+        // Get the current checkpoint value (if defined)
         let checkpoint_name = self.checkpoint_name(name);
-        let res = self
-            .app
-            .storage
-            .get_checkpoint(self.task.task_id, &checkpoint_name)
-            .await;
-        let Ok(checkpoint_opt) = res else {
-            let err = res.err().unwrap();
-            return Err(FlowControl::Failure(format!(
-                "Failed to read checkpoint {err:?}"
-            )));
-        };
+        let checkpoint_opt = self.checkpoints.get(self.task.task_id, checkpoint_name);
         if let Some(checkpoint) = checkpoint_opt {
             return Ok(checkpoint.state);
         }
@@ -187,6 +220,7 @@ impl TaskContext {
                         None,
                     )
                     .await;
+                    // TODO set to self.checkpoints as well.
                 if let Err(err) = res {
                     return Err(FlowControl::Failure(format!(
                         "Could not store checkpoint {err:?}"

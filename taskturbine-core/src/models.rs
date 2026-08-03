@@ -8,7 +8,7 @@ use std::{
 use uuid::Uuid;
 
 /// The states that a task/run can be in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, sqlx::Type)]
+#[derive(Clone, Copy, Debug, PartialEq, sqlx::Type)]
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 pub enum TaskState {
     /// The task is ready for execution, and waiting for a worker to claim it.
@@ -58,7 +58,7 @@ impl Display for TaskState {
 }
 
 /// Marker type for Task identifiers. Bare UUIDs are easy to confuse.
-#[derive(sqlx::Decode, sqlx::Encode, Clone, Copy, Debug, PartialEq)]
+#[derive(sqlx::Decode, sqlx::Encode, Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct TaskId(pub Uuid);
 
 impl sqlx::Type<sqlx::Postgres> for TaskId {
@@ -264,7 +264,7 @@ pub struct Run {
 }
 
 /// Entity structure for a task checkpoint
-#[derive(sqlx::FromRow, Debug, PartialEq)]
+#[derive(sqlx::FromRow, Clone, Debug, PartialEq)]
 pub struct Checkpoint {
     /// The task id of the spawned task.
     pub task_id: TaskId,
