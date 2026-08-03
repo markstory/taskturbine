@@ -315,6 +315,7 @@ impl ContextInner {
     }
 
     fn get_checkpoint(&self, checkpoint_name: String) -> PyResult<Checkpoint> {
+        // TODO implement checkpoint cache to minimize queries
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
