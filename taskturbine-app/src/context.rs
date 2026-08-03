@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
+use std::{collections::{HashMap, HashSet}, fmt::Debug, sync::Arc, time::Duration};
 
 use crate::app::{Channel, ResultData, TaskturbineApp};
 use metrics::counter;
@@ -28,19 +28,42 @@ pub enum FlowControl {
 /// completion states for each iteration.
 struct Checkpoints {
     counters: HashMap<String, u32>,
-    loaded: HashMap<TaskId, HashMap<String, Checkpoint>>,
+    loaded: HashSet<TaskId>,
+    checkpoint_data: HashMap<(TaskId, String), Checkpoint>,
 }
 
 impl Checkpoints {
     pub fn new() -> Self {
         Self {
             counters: HashMap::new(),
-            loaded: HashMap::new(),
+            loaded: HashSet::new(),
+            checkpoint_data: HashMap::new(),
         }
     }
 
+    /// Generate a unique checkpoint name from a step name.
+    /// Handles the scenario where userland code has multiple
+    /// steps with the same name.
+    fn generate_name(&mut self, name: &str) -> String {
+        let count = self.incr(name);
+
+        self.format_name(name, &count)
+    }
+
+    /// Generate a checkpoint name that includes the name and counter value.
+    fn format_name(&self, name: &str, count: &u32) -> String {
+        let suffix = if *count == 1 {
+            "".to_string()
+        } else {
+            format!("#{count}")
+        };
+
+        format!("{name}{suffix}")
+    }
+
+
     /// Incrment the counter for a given name and get the new value.
-    pub fn incr(&mut self, name: &str) -> u32 {
+    fn incr(&mut self, name: &str) -> u32 {
         if !self.counters.contains_key(name) {
             self.counters.insert(name.to_string(), 0);
         }
@@ -56,35 +79,26 @@ impl Checkpoints {
 
     /// Get the current counter value for a checkpoint name.
     /// Will return None on checkpoints that aren't known yet.
-    pub fn get_counter<'a>(&'a self, name: &str) -> Option<&'a u32> {
+    fn get_counter<'a>(&'a self, name: &str) -> Option<&'a u32> {
         self.counters.get(name)
     }
 
     /// Check if a task has had its checkpoints loaded yet.
-    pub fn is_loaded(&self, task_id: &TaskId) -> bool {
-        self.loaded.contains_key(task_id)
+    fn is_loaded(&self, task_id: &TaskId) -> bool {
+        self.loaded.contains(task_id)
     }
 
-    /// Store a collection of Checkpoints for a task
-    pub fn store(&self, task_id: &TaskId, checkpoints: Vec<Checkpoint>) {
-        let &mut task_checkpoints = self.loaded.get_mut(task_id).unwrap_or_else(|| HashMap::new());
+    /// Store a collection of Checkpoints for a task.
+    fn store(&mut self, task_id: &TaskId, checkpoints: Vec<Checkpoint>) {
         for checkpoint in checkpoints.into_iter() {
-            task_checkpoints.insert(checkpoint.step_name, checkpoint);
+            self.checkpoint_data.insert((*task_id, checkpoint.step_name.to_owned()), checkpoint);
         }
-        self.loaded.insert(task_id.to_owned(), task_checkpoints).expect("inserting checkpoints should not fail");
     }
 
     /// Get a single checkpoint from the loaded checkpoint data.
-    pub fn get(&self, task_id: &TaskId, step_name: &str) -> Option<Checkpoint> {
-        let task_checkpoints = self.loaded.get(task_id);
-        let Some(task_checkpoints) = task_checkpoints else {
-            return None;
-        };
-        let checkpoint_opt = task_checkpoints.get(step_name);
-        let Some(checkpoint) = checkpoint_opt else {
-            return None;
-        };
-        Some(checkpoint.clone())
+    fn get(&self, task_id: &TaskId, step_name: &str) -> Option<Checkpoint> {
+        let key = (*task_id, step_name.to_owned());
+        self.checkpoint_data.get(&key).cloned()
     }
 }
 
@@ -107,26 +121,6 @@ impl TaskContext {
             app,
             checkpoints: Checkpoints::new(),
         }
-    }
-
-    /// Convert a step name into a unique checkpoint name.
-    /// Handles the scenario where userland code has multiple
-    /// steps with the same name.
-    fn checkpoint_name(&mut self, name: &str) -> String {
-        let count = self.checkpoints.incr(name);
-
-        self.format_checkpoint_name(name, &count)
-    }
-
-    /// Generate a checkpoint name that includes the name and counter value.
-    fn format_checkpoint_name(&self, name: &str, count: &u32) -> String {
-        let suffix = if *count == 1 {
-            "".to_string()
-        } else {
-            format!("#{count}")
-        };
-
-        format!("{name}{suffix}")
     }
 
     /// Get the task_id that is currently being run.
@@ -153,7 +147,7 @@ impl TaskContext {
         let Some(counter) = self.checkpoints.get_counter(step_name) else {
             return Ok(None);
         };
-        let checkpoint_name = self.format_checkpoint_name(step_name, counter);
+        let checkpoint_name = self.checkpoints.format_name(step_name, counter);
         let result_data = self
             .app
             .storage
@@ -196,8 +190,8 @@ impl TaskContext {
         }
 
         // Get the current checkpoint value (if defined)
-        let checkpoint_name = self.checkpoint_name(name);
-        let checkpoint_opt = self.checkpoints.get(self.task.task_id, checkpoint_name);
+        let checkpoint_name = self.checkpoints.generate_name(name);
+        let checkpoint_opt = self.checkpoints.get(&self.task.task_id, &checkpoint_name);
         if let Some(checkpoint) = checkpoint_opt {
             return Ok(checkpoint.state);
         }
@@ -310,7 +304,7 @@ impl TaskContext {
         duration: Duration,
     ) -> Result<(), FlowControl> {
         // Look for an existing checkpoint, return if it exists.
-        let checkpoint_name = self.checkpoint_name(step_name);
+        let checkpoint_name = self.checkpoints.generate_name(step_name);
         let res = self
             .app
             .storage
