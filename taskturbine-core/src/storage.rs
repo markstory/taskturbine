@@ -719,9 +719,11 @@ impl Storage {
             "SELECT *
              FROM taskturbine.tasks
              WHERE task_id = $1
+             AND usecase = $2
              FOR UPDATE",
         )
         .bind(task_id.0)
+        .bind(&self.config.usecase)
         .fetch_one(&mut *conn)
         .await
         .map_err(|_| StorageError::NotFound(task_id.0))?;
@@ -1049,10 +1051,9 @@ impl Storage {
         step_name: &str,
         state: &[u8],
         extend_claim: Option<Duration>,
-    ) -> Result<(), StorageError> {
+    ) -> Result<Checkpoint, StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
-        // TODO get Checkpoint and return it.
-        self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
+        let checkpoint = self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
             .await?;
         if let Some(extension) = extend_claim {
             let seconds = extension.as_secs() as f64;
@@ -1069,7 +1070,7 @@ impl Storage {
         }
         atomic.commit().await.map_err(StorageError::SqlError)?;
 
-        Ok(())
+        Ok(checkpoint)
     }
 
     /// Await for an external event to be received
@@ -1215,26 +1216,26 @@ impl Storage {
         run_id: &RunId,
         step_name: &str,
         state: &[u8],
-    ) -> Result<(), StorageError> {
-        // TODO make this return Checkpoint
-        sqlx::query(
+    ) -> Result<Checkpoint, StorageError> {
+        let res: Checkpoint = sqlx::query_as(
             "INSERT INTO taskturbine.checkpoints (task_id, owner_run_id, step_name, state, updated_at)
             VALUES ($1, $2, $3, $4, NOW())
             ON CONFLICT (task_id, step_name)
             DO UPDATE 
             SET owner_run_id = EXCLUDED.owner_run_id,
                 state = EXCLUDED.state,
-                updated_at = EXCLUDED.updated_at"
+                updated_at = EXCLUDED.updated_at
+            RETURNING *"
         )
         .bind(task_id.0)
         .bind(run_id)
         .bind(step_name)
         .bind(state)
-        .execute(conn)
+        .fetch_one(conn)
         .await
         .map_err(StorageError::SqlError)?;
 
-        Ok(())
+        Ok(res)
     }
 
     /// Read an event's payload by name or None
@@ -1841,6 +1842,10 @@ mod tests {
             )
             .await;
         assert!(res.is_ok());
+        let checkpoint = res.expect("Should have a checkpoint");
+        assert_eq!(checkpoint.task_id, spawned.task_id);
+        assert_eq!(checkpoint.step_name, "step-1");
+        assert_eq!(checkpoint.state, b"event-payload");
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
         let claim_expires = run.claim_expires_at.unwrap();
