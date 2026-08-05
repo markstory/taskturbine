@@ -336,7 +336,7 @@ impl ContextInner {
         checkpoint_name: &str,
         state: &[u8],
         extend_claim: Option<Duration>,
-    ) -> PyResult<()> {
+    ) -> PyResult<Checkpoint> {
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
@@ -352,7 +352,8 @@ impl ContextInner {
             extend_claim,
         ));
 
-        res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
+        res.map(Into::<Checkpoint>::into)
+            .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }
 
     fn get_event_payload(&self, event_name: String, timeout: Duration) -> PyResult<AwaitResult> {

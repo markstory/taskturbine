@@ -1053,7 +1053,8 @@ impl Storage {
         extend_claim: Option<Duration>,
     ) -> Result<Checkpoint, StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
-        let checkpoint = self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
+        let checkpoint = self
+            .store_checkpoint(&mut atomic, &task_id, &run_id, step_name, state)
             .await?;
         if let Some(extension) = extend_claim {
             let seconds = extension.as_secs() as f64;

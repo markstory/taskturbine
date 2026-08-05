@@ -32,7 +32,7 @@ pub enum FlowControl {
 /// (like in a loop). We need to handle tracking separate
 /// completion states for each iteration.
 ///
-/// This structure is meant to be an ephemeral cache that is 
+/// This structure is meant to be an ephemeral cache that is
 /// intended to be written to *after* writing to `Storage`.
 struct Checkpoints {
     counters: HashMap<String, u32>,
@@ -202,8 +202,7 @@ impl TaskContext {
                     "Failed to load checkpoints {err:?}"
                 )));
             };
-            self.checkpoints
-                .store(self.task.task_id, checkpoint_values);
+            self.checkpoints.store(self.task.task_id, checkpoint_values);
         }
 
         // Get the current checkpoint value (if defined)
@@ -237,7 +236,7 @@ impl TaskContext {
                         return Err(FlowControl::Failure(format!(
                             "Could not store checkpoint {err:?}"
                         )));
-                    },
+                    }
                     Ok(checkpoint) => {
                         self.checkpoints.add(self.task.task_id, checkpoint);
                     }

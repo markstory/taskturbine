@@ -227,7 +227,8 @@ impl AsyncContextInner {
                 )
                 .await;
 
-            res.map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
+            res.map(Into::<Checkpoint>::into)
+                .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
         })
     }
 
