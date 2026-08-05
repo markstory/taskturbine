@@ -31,6 +31,9 @@ pub enum FlowControl {
 /// It is possible for userland code to repeat step names
 /// (like in a loop). We need to handle tracking separate
 /// completion states for each iteration.
+///
+/// This structure is meant to be an ephemeral cache that is 
+/// intended to be written to *after* writing to `Storage`.
 struct Checkpoints {
     counters: HashMap<String, u32>,
     loaded: HashSet<TaskId>,
@@ -93,17 +96,25 @@ impl Checkpoints {
     }
 
     /// Store a collection of Checkpoints for a task.
-    fn store(&mut self, task_id: &TaskId, checkpoints: Vec<Checkpoint>) {
+    fn store(&mut self, task_id: TaskId, checkpoints: Vec<Checkpoint>) {
         for checkpoint in checkpoints.into_iter() {
             self.checkpoint_data
-                .insert((*task_id, checkpoint.step_name.to_owned()), checkpoint);
+                .insert((task_id, checkpoint.step_name.to_owned()), checkpoint);
         }
     }
 
     /// Get a single checkpoint from the loaded checkpoint data.
-    fn get(&self, task_id: &TaskId, step_name: &str) -> Option<Checkpoint> {
-        let key = (*task_id, step_name.to_owned());
+    fn get(&self, task_id: TaskId, step_name: &str) -> Option<Checkpoint> {
+        let key = (task_id, step_name.to_owned());
         self.checkpoint_data.get(&key).cloned()
+    }
+
+    /// Add a checkpoint to the cache.
+    ///
+    /// It is assumed that the checkpoint has already been stored.
+    fn add(&mut self, task_id: TaskId, checkpoint: Checkpoint) {
+        let key = (task_id, checkpoint.step_name.to_owned());
+        self.checkpoint_data.insert(key, checkpoint);
     }
 }
 
@@ -192,12 +203,12 @@ impl TaskContext {
                 )));
             };
             self.checkpoints
-                .store(&self.task.task_id, checkpoint_values);
+                .store(self.task.task_id, checkpoint_values);
         }
 
         // Get the current checkpoint value (if defined)
         let checkpoint_name = self.checkpoints.generate_name(name);
-        let checkpoint_opt = self.checkpoints.get(&self.task.task_id, &checkpoint_name);
+        let checkpoint_opt = self.checkpoints.get(self.task.task_id, &checkpoint_name);
         if let Some(checkpoint) = checkpoint_opt {
             return Ok(checkpoint.state);
         }
@@ -220,13 +231,17 @@ impl TaskContext {
                         None,
                     )
                     .await;
-                // TODO set to self.checkpoints as well.
-                if let Err(err) = res {
-                    return Err(FlowControl::Failure(format!(
-                        "Could not store checkpoint {err:?}"
-                    )));
-                }
 
+                match res {
+                    Err(err) => {
+                        return Err(FlowControl::Failure(format!(
+                            "Could not store checkpoint {err:?}"
+                        )));
+                    },
+                    Ok(checkpoint) => {
+                        self.checkpoints.add(self.task.task_id, checkpoint);
+                    }
+                }
                 Ok(state as ResultData)
             }
             Err(err) => Err(FlowControl::Failure(format!(
