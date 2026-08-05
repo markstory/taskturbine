@@ -216,7 +216,7 @@ impl TaskContext {
         // TODO figure out if this can work like the python client where userland code
         // calls steps. Perhaps attr macros?
 
-        // Create a disposable context to avoid &mut reference and lifetime hell.
+        // Create an isolated/disposable context to avoid &mut reference and lifetime hell.
         let context = Self::build(self.task.clone(), self.app.clone());
         match step_fn(context).await {
             Ok(state) => {
