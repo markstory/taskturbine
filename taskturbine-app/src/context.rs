@@ -425,10 +425,12 @@ mod tests {
 
     async fn one_step(mut ctx: TaskContext) -> TaskResult {
         let _ = ctx.async_step("first-step", async |_ctx: TaskContext| -> Result<ResultData, TestError> {
-            Ok(vec![])
+            Ok(b"checkpoint state".to_vec())
         }).await?;
 
-        Ok(Some(b"one_step complete".to_vec()))
+        let checkpoint = ctx.checkpoints.get(ctx.task_id(), "first-step").expect("checkpoint should be stored");
+
+        Ok(Some(checkpoint.state))
     }
 
     #[tokio::test]
@@ -697,15 +699,15 @@ mod tests {
             .unwrap();
 
         let claim = claim_task(&arc_app.storage, "one-step").await;
-        let context = TaskContext::build(claim.clone(), arc_app.clone());
-        let res = one_step(context).await.expect("should be some");
-        assert!(res.is_some());
-        let output = res.expect("should have some");
-        assert_eq!(b"one_step complete", output.as_slice());
 
         let context = TaskContext::build(claim.clone(), arc_app.clone());
         assert!(!context.checkpoints.is_loaded(&claim.task_id), "new context has no data loaded");
         let res = context.checkpoints.get(claim.task_id, "first-step");
         assert!(res.is_none(), "cache should be empty");
+
+        let res = one_step(context).await.expect("should be some");
+        assert!(res.is_some());
+        let output = res.expect("should have some");
+        assert_eq!(b"checkpoint state", output.as_slice());
     }
 }
