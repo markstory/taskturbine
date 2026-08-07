@@ -390,7 +390,7 @@ mod tests {
 
     use super::*;
 
-    use crate::app::TaskResult;
+    use crate::app::{ResultData, TaskResult};
     use crate::testutils::create_app;
     use taskturbine_core::{
         models::TaskState,
@@ -421,6 +421,14 @@ mod tests {
     async fn hello_world(mut _ctx: TaskContext) -> TaskResult {
         println!("hello world");
         Ok(None)
+    }
+
+    async fn one_step(mut ctx: TaskContext) -> TaskResult {
+        let _ = ctx.async_step("first-step", async |_ctx: TaskContext| -> Result<ResultData, TestError> {
+            Ok(vec![])
+        }).await?;
+
+        Ok(Some(b"one_step complete".to_vec()))
     }
 
     #[tokio::test]
@@ -675,5 +683,29 @@ mod tests {
         assert!(stored.is_ok());
         let value = stored.unwrap();
         assert!(value.is_none());
+    }
+
+    #[tokio::test]
+    async fn async_step_store_checkpoint() {
+        let app = create_app().await
+            .register_task("one-step", one_step);
+        let arc_app = Arc::new(app);
+
+        let _ = arc_app
+            .spawn_task("one-step", b"", None)
+            .await
+            .unwrap();
+
+        let claim = claim_task(&arc_app.storage, "one-step").await;
+        let context = TaskContext::build(claim.clone(), arc_app.clone());
+        let res = one_step(context).await.expect("should be some");
+        assert!(res.is_some());
+        let output = res.expect("should have some");
+        assert_eq!(b"one_step complete", output.as_slice());
+
+        let context = TaskContext::build(claim.clone(), arc_app.clone());
+        assert!(!context.checkpoints.is_loaded(&claim.task_id), "new context has no data loaded");
+        let res = context.checkpoints.get(claim.task_id, "first-step");
+        assert!(res.is_none(), "cache should be empty");
     }
 }
