@@ -365,8 +365,8 @@ impl ContextInner {
             state,
             extend_claim,
         ));
-
         res.map(|checkpoint| {
+            // Store in cache after write is complete to prevent phantoms
             self.checkpoints.add(task_id, checkpoint.clone());
             checkpoint.into()
         })
