@@ -1,5 +1,4 @@
 use std::{
-    collections::{HashMap, HashSet},
     fmt::Debug,
     sync::Arc,
     time::Duration,
@@ -8,7 +7,7 @@ use std::{
 use crate::app::{Channel, ResultData, TaskturbineApp};
 use metrics::counter;
 use taskturbine_core::{
-    models::{Checkpoint, ClaimedTask, Event, RunId, SpawnResult, TaskId},
+    models::{Checkpoints, ClaimedTask, Event, RunId, SpawnResult, TaskId},
     storage::{StorageError, TaskOptions},
 };
 
@@ -27,96 +26,6 @@ pub enum FlowControl {
     Suspended,
 }
 
-/// Provides in memory storage of steps -> checkpoint names
-/// It is possible for userland code to repeat step names
-/// (like in a loop). We need to handle tracking separate
-/// completion states for each iteration.
-///
-/// This structure is meant to be an ephemeral cache that is
-/// intended to be written to *after* writing to `Storage`.
-struct Checkpoints {
-    counters: HashMap<String, u32>,
-    loaded: HashSet<TaskId>,
-    checkpoint_data: HashMap<(TaskId, String), Checkpoint>,
-}
-
-impl Checkpoints {
-    pub fn new() -> Self {
-        Self {
-            counters: HashMap::new(),
-            loaded: HashSet::new(),
-            checkpoint_data: HashMap::new(),
-        }
-    }
-
-    /// Generate a unique checkpoint name from a step name.
-    /// Handles the scenario where userland code has multiple
-    /// steps with the same name.
-    fn generate_name(&mut self, name: &str) -> String {
-        let count = self.incr(name);
-
-        self.format_name(name, &count)
-    }
-
-    /// Generate a checkpoint name that includes the name and counter value.
-    fn format_name(&self, name: &str, count: &u32) -> String {
-        let suffix = if *count == 1 {
-            "".to_string()
-        } else {
-            format!("#{count}")
-        };
-
-        format!("{name}{suffix}")
-    }
-
-    /// Incrment the counter for a given name and get the new value.
-    fn incr(&mut self, name: &str) -> u32 {
-        if !self.counters.contains_key(name) {
-            self.counters.insert(name.to_string(), 0);
-        }
-        if let Some(value) = self.counters.get_mut(name) {
-            *value += 1;
-        }
-        if let Some(value) = self.counters.get(name) {
-            *value
-        } else {
-            0
-        }
-    }
-
-    /// Get the current counter value for a checkpoint name.
-    /// Will return None on checkpoints that aren't known yet.
-    fn get_counter<'a>(&'a self, name: &str) -> Option<&'a u32> {
-        self.counters.get(name)
-    }
-
-    /// Check if a task has had its checkpoints loaded yet.
-    fn is_loaded(&self, task_id: &TaskId) -> bool {
-        self.loaded.contains(task_id)
-    }
-
-    /// Store a collection of Checkpoints for a task.
-    fn store(&mut self, task_id: TaskId, checkpoints: Vec<Checkpoint>) {
-        for checkpoint in checkpoints.into_iter() {
-            self.checkpoint_data
-                .insert((task_id, checkpoint.step_name.to_owned()), checkpoint);
-        }
-    }
-
-    /// Get a single checkpoint from the loaded checkpoint data.
-    fn get(&self, task_id: TaskId, step_name: &str) -> Option<Checkpoint> {
-        let key = (task_id, step_name.to_owned());
-        self.checkpoint_data.get(&key).cloned()
-    }
-
-    /// Add a checkpoint to the cache.
-    ///
-    /// It is assumed that the checkpoint has already been stored.
-    fn add(&mut self, task_id: TaskId, checkpoint: Checkpoint) {
-        let key = (task_id, checkpoint.step_name.to_owned());
-        self.checkpoint_data.insert(key, checkpoint);
-    }
-}
 
 /// Execution context for a task.
 /// Passed to task functions by the Worker runtime.
@@ -160,10 +69,9 @@ impl TaskContext {
     /// If the step has not been completed, the return is None.
     /// If there are multiple steps with the same name, the *latest* iteration will be used.
     pub async fn step_result(&self, step_name: &str) -> Result<Option<ResultData>, StorageError> {
-        let Some(counter) = self.checkpoints.get_counter(step_name) else {
-            return Ok(None);
+        let Some(checkpoint_name) = self.checkpoints.get_latest(step_name) else {
+            return Ok(None)
         };
-        let checkpoint_name = self.checkpoints.format_name(step_name, counter);
         let result_data = self
             .app
             .storage
