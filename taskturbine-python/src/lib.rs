@@ -8,7 +8,7 @@ use chrono::Utc;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{
     self,
-    models::{RunId, TaskId},
+    models::{Checkpoints, RunId, TaskId},
     storage::Storage,
 };
 
@@ -126,6 +126,7 @@ impl AppInner {
         ContextInner {
             storage: self.storage.clone(),
             runtime: self.runtime.clone(),
+            checkpoints: Checkpoints::new(),
             claimed_task,
         }
     }
@@ -288,6 +289,7 @@ struct ContextInner {
     storage: Arc<Storage>,
     runtime: Arc<tokio::runtime::Runtime>,
     claimed_task: ClaimedTask,
+    checkpoints: Checkpoints,
 }
 #[pymethods]
 impl ContextInner {
@@ -314,25 +316,33 @@ impl ContextInner {
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
 
-    fn get_checkpoint(&self, checkpoint_name: String) -> PyResult<Checkpoint> {
-        // TODO implement checkpoint cache to minimize queries
+    fn get_checkpoint(&mut self, checkpoint_name: String) -> PyResult<Checkpoint> {
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
-            return Err(PyValueError::new_err("Invalid uuid".to_string()));
+            return Err(PyValueError::new_err("Invalid uuid for task_id".to_string()));
         };
-        let res = self
-            .runtime
-            .block_on(self.storage.get_checkpoint(task_id, &checkpoint_name));
-        if let Ok(Some(checkpoint)) = res {
-            Ok(checkpoint.into())
-        } else {
-            Err(PyValueError::new_err(
-                "Checkpoint not found, or read failed",
-            ))
+        if !self.checkpoints.is_loaded(&task_id) {
+            let res = self .runtime .block_on(self.storage.get_checkpoints(&task_id));
+            let Ok(checkpoint_values) = res else {
+                let err = res.err().unwrap();
+                return Err(PyValueError::new_err(format!(
+                    "Failed to load checkpoints {err:?}"
+                )));
+            };
+            self.checkpoints.store(task_id, checkpoint_values);
         }
+
+        // Read from the cached data that is loaded on the first checkpoint fetch.
+        if let Some(checkpoint) = self.checkpoints.get(task_id, &checkpoint_name) {
+            return Ok(checkpoint.into())
+        };
+
+        // Task execution should be exclusive so we don't read from the DB.
+        // TODO add more specific error class for not found.
+        Err(PyValueError::new_err("Checkpoint not found".to_string()))
     }
 
     fn set_checkpoint(
-        &self,
+        &mut self,
         checkpoint_name: &str,
         state: &[u8],
         extend_claim: Option<Duration>,
@@ -352,8 +362,11 @@ impl ContextInner {
             extend_claim,
         ));
 
-        res.map(Into::<Checkpoint>::into)
-            .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
+        res.map(|checkpoint| {
+            self.checkpoints.add(task_id, checkpoint.clone());
+            checkpoint.into()
+        })
+        .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
     }
 
     fn get_event_payload(&self, event_name: String, timeout: Duration) -> PyResult<AwaitResult> {
