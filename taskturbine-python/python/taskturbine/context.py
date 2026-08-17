@@ -18,7 +18,6 @@ class BaseContext(abc.ABC):
     """Abstract base class for Context implementations"""
 
     def __init__(self, claimed_task: ClaimedTask) -> None:
-        self._checkpoint_counters: dict[str, int] = {}
         self._claimed_task = claimed_task
 
     @property
@@ -38,20 +37,6 @@ class BaseContext(abc.ABC):
     def params_bytes(self) -> bytes:
         """Get the parameters a byte string"""
         return self._claimed_task.params
-
-    def _checkpoint_name(self, step_name: str) -> str:
-        """
-        Resolve a step name into a checkpoint name.
-        A task can contain steps with duplicate names, and each
-        instance of a name needs to resolve to a distinct checkpoint
-        """
-        if step_name not in self._checkpoint_counters:
-            self._checkpoint_counters[step_name] = 0
-        self._checkpoint_counters[step_name] += 1
-        value = self._checkpoint_counters[step_name]
-        if value == 1:
-            return step_name
-        return f"{step_name}#{value}"
 
 
 class TaskContext(BaseContext):
@@ -107,7 +92,7 @@ class TaskContext(BaseContext):
         Will create a checkpoint, and raise a SuspendError with
         the duration the current task should sleep for.
         """
-        checkpoint_name = self._checkpoint_name(step_name)
+        checkpoint_name = self._inner.generate_checkpoint_name(step_name)
         try:
             self._inner.get_checkpoint(checkpoint_name)
             return
@@ -135,7 +120,7 @@ class TaskContext(BaseContext):
         will be used. If the step raises an error the run is considered 'failed'
         and a retry will be scheduled according to the task's retry configuration.
         """
-        checkpoint_name = self._checkpoint_name(name)
+        checkpoint_name = self._inner.generate_checkpoint_name(name)
 
         def decorator(
             func: Callable[P, OptionalJsonData],
@@ -165,7 +150,7 @@ class TaskContext(BaseContext):
         it will be considered 'failed' and a retry will be scheduled according to the task's retry
         configuration.
         """
-        checkpoint_name = self._checkpoint_name(step_name)
+        checkpoint_name = self._inner.generate_checkpoint_name(step_name)
         return self._execute_step(checkpoint_name, func, *args, **kwargs)
 
     def _execute_step(

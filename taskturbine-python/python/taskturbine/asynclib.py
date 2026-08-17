@@ -109,7 +109,7 @@ class AsyncTaskContext(BaseContext):
         Will create a checkpoint, and raise a SuspendError with
         the duration the current task should sleep for.
         """
-        checkpoint_name = self._checkpoint_name(step_name)
+        checkpoint_name = self._inner.generate_checkpoint_name(step_name)
         try:
             await self._inner.get_checkpoint(checkpoint_name)
             return
@@ -140,7 +140,7 @@ class AsyncTaskContext(BaseContext):
         will be used. If the step raises an error the run is considered 'failed'
         and a retry will be scheduled according to the task's retry configuration.
         """
-        checkpoint_name = self._checkpoint_name(name)
+        checkpoint_name = self._inner.generate_checkpoint_name(name)
 
         def decorator(
             func: Callable[P, Awaitable[OptionalJsonData]],
@@ -170,7 +170,7 @@ class AsyncTaskContext(BaseContext):
         it will be considered 'failed' and a retry will be scheduled according to the task's retry
         configuration.
         """
-        checkpoint_name = self._checkpoint_name(step_name)
+        checkpoint_name = self._inner.generate_checkpoint_name(step_name)
         return await self._execute_step(checkpoint_name, func, *args, **kwargs)
 
     async def _execute_step(

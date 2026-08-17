@@ -8,7 +8,7 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 use chrono::Utc;
 use pyo3::{exceptions::PyValueError, prelude::*};
 use taskturbine_core::{
-    models::{RunId, TaskId},
+    models::{Checkpoints, RunId, TaskId},
     storage::Storage,
 };
 
@@ -137,6 +137,7 @@ impl AsyncAppInner {
     fn create_context(&self, claimed_task: ClaimedTask) -> AsyncContextInner {
         AsyncContextInner {
             storage: self.storage.clone(),
+            checkpoints: Checkpoints::new(),
             claimed_task,
         }
     }
@@ -147,6 +148,7 @@ impl AsyncAppInner {
 pub struct AsyncContextInner {
     storage: Arc<Storage>,
     claimed_task: ClaimedTask,
+    checkpoints: Checkpoints,
 }
 #[pymethods]
 impl AsyncContextInner {
@@ -177,6 +179,10 @@ impl AsyncContextInner {
             let res = storage.emit_event(&event_name, payload.as_slice()).await;
             res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
         })
+    }
+
+    fn generate_checkpoint_name(&mut self, step_name: String) -> PyResult<String> {
+        Ok(self.checkpoints.generate_name(&step_name))
     }
 
     fn get_checkpoint<'p>(
