@@ -71,7 +71,7 @@ impl TaskContext {
     ///
     /// This will read from storage directly bypassing the TaskContext checkpoint cache.
     pub async fn step_result(&self, step_name: &str) -> Result<Option<ResultData>, StorageError> {
-        let Some(checkpoint_name) = self.checkpoints.get_latest(step_name) else {
+        let Some(checkpoint_name) = self.checkpoints.get_latest_name(step_name) else {
             return Ok(None)
         };
         let result_data = self

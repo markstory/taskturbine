@@ -319,13 +319,13 @@ impl Checkpoints {
         self.counters.get(name)
     }
 
-    /// Get the latest checkpoint for a step
+    /// Get the latest checkpoint name for a step
     ///
     /// Each time a checkpoint name is created for a step, a counter
     /// is incremented. This method will read the state of only
     /// the latest generated checkpoint name. There is the possibility
     /// that the checkpoint has no state yet.
-    pub fn get_latest(&self, step_name: &str) -> Option<String> {
+    pub fn get_latest_name(&self, step_name: &str) -> Option<String> {
         let counter = self.get_counter(step_name)?;
         Some(self.format_name(step_name, counter))
     }
@@ -362,8 +362,8 @@ impl Checkpoints {
     }
 
     /// Get a single checkpoint from the loaded checkpoint data.
-    pub fn get(&self, task_id: TaskId, step_name: &str) -> Option<Checkpoint> {
-        let key = (task_id, step_name.to_owned());
+    pub fn get(&self, task_id: TaskId, checkpoint_name: &str) -> Option<Checkpoint> {
+        let key = (task_id, checkpoint_name.to_owned());
         self.checkpoint_data.get(&key).cloned()
     }
 
