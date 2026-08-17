@@ -1,9 +1,7 @@
 /// Common datastructures and models for taskturbine.
 use chrono::{DateTime, Utc};
 use std::{
-    fmt::{Display, Formatter},
-    str::FromStr,
-    time::Duration,
+    collections::{HashMap, HashSet}, fmt::{Display, Formatter}, str::FromStr, time::Duration
 };
 use uuid::Uuid;
 
@@ -279,6 +277,105 @@ pub struct Checkpoint {
     /// The timestamp the checkpoint was created or updated.
     pub updated_at: DateTime<Utc>,
 }
+
+
+/// Provides in memory storage of steps -> checkpoint names
+/// It is possible for userland code to repeat step names
+/// (like in a loop). We need to handle tracking separate
+/// completion states for each iteration.
+///
+/// This structure is meant to be an ephemeral cache that is
+/// intended to be written to *after* writing to `Storage`.
+#[derive(Default)]
+pub struct Checkpoints {
+    counters: HashMap<String, u32>,
+    loaded: HashSet<TaskId>,
+    checkpoint_data: HashMap<(TaskId, String), Checkpoint>,
+}
+
+impl Checkpoints {
+    pub fn new() -> Self {
+        Self {
+            counters: HashMap::new(),
+            loaded: HashSet::new(),
+            checkpoint_data: HashMap::new(),
+        }
+    }
+
+    /// Generate a checkpoint name that includes the name and counter value.
+    fn format_name(&self, name: &str, count: &u32) -> String {
+        let suffix = if *count == 1 {
+            "".to_string()
+        } else {
+            format!("#{count}")
+        };
+
+        format!("{name}{suffix}")
+    }
+
+    /// Get the current counter value for a checkpoint name.
+    /// Will return None on checkpoints that aren't known yet.
+    fn get_counter<'a>(&'a self, name: &str) -> Option<&'a u32> {
+        self.counters.get(name)
+    }
+
+    /// Get the latest checkpoint for a step
+    ///
+    /// Each time a checkpoint name is created for a step, a counter
+    /// is incremented. This method will read the state of only
+    /// the latest generated checkpoint name. There is the possibility
+    /// that the checkpoint has no state yet.
+    pub fn get_latest(&self, step_name: &str) -> Option<String> {
+        let counter = self.get_counter(step_name)?;
+        Some(self.format_name(step_name, counter))
+    }
+
+    /// Generate a unique checkpoint name from a step name.
+    /// Handles the scenario where userland code has multiple
+    /// steps with the same name.
+    pub fn generate_name(&mut self, name: &str) -> String {
+        if !self.counters.contains_key(name) {
+            self.counters.insert(name.to_string(), 0);
+        }
+        if let Some(value) = self.counters.get_mut(name) {
+            *value += 1;
+        }
+        let count = if let Some(value) = self.counters.get(name) {
+            *value
+        } else {
+            0
+        };
+        self.format_name(name, &count)
+    }
+
+    /// Check if a task has had its checkpoints loaded yet.
+    pub fn is_loaded(&self, task_id: &TaskId) -> bool {
+        self.loaded.contains(task_id)
+    }
+
+    /// Store a collection of Checkpoints for a task.
+    pub fn store(&mut self, task_id: TaskId, checkpoints: Vec<Checkpoint>) {
+        for checkpoint in checkpoints.into_iter() {
+            self.checkpoint_data
+                .insert((task_id, checkpoint.step_name.to_owned()), checkpoint);
+        }
+    }
+
+    /// Get a single checkpoint from the loaded checkpoint data.
+    pub fn get(&self, task_id: TaskId, step_name: &str) -> Option<Checkpoint> {
+        let key = (task_id, step_name.to_owned());
+        self.checkpoint_data.get(&key).cloned()
+    }
+
+    /// Add a checkpoint to the cache.
+    ///
+    /// It is assumed that the checkpoint has already been stored.
+    pub fn add(&mut self, task_id: TaskId, checkpoint: Checkpoint) {
+        let key = (task_id, checkpoint.step_name.to_owned());
+        self.checkpoint_data.insert(key, checkpoint);
+    }
+}
+
 
 /// An Event payload
 ///
