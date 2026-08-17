@@ -68,6 +68,8 @@ impl TaskContext {
     /// Get the result of a previously completed step name.
     /// If the step has not been completed, the return is None.
     /// If there are multiple steps with the same name, the *latest* iteration will be used.
+    ///
+    /// This will read from storage directly bypassing the TaskContext checkpoint cache.
     pub async fn step_result(&self, step_name: &str) -> Result<Option<ResultData>, StorageError> {
         let Some(checkpoint_name) = self.checkpoints.get_latest(step_name) else {
             return Ok(None)
@@ -103,7 +105,7 @@ impl TaskContext {
         // Once all checkpoints have been loaded, no further queries need to be made
         // as we can assume that the current process has exclusive access.
         if !self.checkpoints.is_loaded(&self.task.task_id) {
-            let res = self.app.storage.get_checkpoints(self.task.task_id).await;
+            let res = self.app.storage.get_checkpoints(&self.task.task_id).await;
             let Ok(checkpoint_values) = res else {
                 let err = res.err().unwrap();
                 return Err(FlowControl::Failure(format!(

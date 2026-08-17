@@ -1029,7 +1029,7 @@ impl Storage {
 
     /// Get a list of checkpoints saved for this task.
     /// If there are no checkpoints an empty Vec will be returned.
-    pub async fn get_checkpoints(&self, task_id: TaskId) -> Result<Vec<Checkpoint>, StorageError> {
+    pub async fn get_checkpoints(&self, task_id: &TaskId) -> Result<Vec<Checkpoint>, StorageError> {
         let res: Vec<Checkpoint> = sqlx::query_as(
             "SELECT * FROM taskturbine.checkpoints
             WHERE task_id = $1 ORDER by updated_at",
@@ -1965,7 +1965,7 @@ mod tests {
             )
             .await;
 
-        let res = storage.get_checkpoints(spawned.task_id).await;
+        let res = storage.get_checkpoints(&spawned.task_id).await;
         let rows = res.unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(b"results".to_vec(), rows[0].state);
