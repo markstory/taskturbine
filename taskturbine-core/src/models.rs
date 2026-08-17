@@ -1,7 +1,10 @@
 /// Common datastructures and models for taskturbine.
 use chrono::{DateTime, Utc};
 use std::{
-    collections::{HashMap, HashSet}, fmt::{Display, Formatter}, str::FromStr, time::Duration
+    collections::{HashMap, HashSet},
+    fmt::{Display, Formatter},
+    str::FromStr,
+    time::Duration,
 };
 use uuid::Uuid;
 
@@ -278,7 +281,6 @@ pub struct Checkpoint {
     pub updated_at: DateTime<Utc>,
 }
 
-
 /// Provides in memory storage of steps -> checkpoint names
 /// It is possible for userland code to repeat step names
 /// (like in a loop). We need to handle tracking separate
@@ -375,7 +377,6 @@ impl Checkpoints {
         self.checkpoint_data.insert(key, checkpoint);
     }
 }
-
 
 /// An Event payload
 ///

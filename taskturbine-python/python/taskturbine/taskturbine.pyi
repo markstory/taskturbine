@@ -490,7 +490,7 @@ class AsyncContextInner:
     async def emit_event(self, event_name: str, payload: bytes) -> None: ...
     """Record an event taking place."""
 
-    def generate_checkpoint_name(self, step_name: str) -> str:
+    def generate_checkpoint_name(self, step_name: str) -> str: ...
     """
     Get a unique checkpoint name for a step
 

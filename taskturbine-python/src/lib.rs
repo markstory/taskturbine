@@ -322,10 +322,14 @@ impl ContextInner {
 
     fn get_checkpoint(&mut self, checkpoint_name: String) -> PyResult<Checkpoint> {
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
-            return Err(PyValueError::new_err("Invalid uuid for task_id".to_string()));
+            return Err(PyValueError::new_err(
+                "Invalid uuid for task_id".to_string(),
+            ));
         };
         if !self.checkpoints.is_loaded(&task_id) {
-            let res = self .runtime .block_on(self.storage.get_checkpoints(&task_id));
+            let res = self
+                .runtime
+                .block_on(self.storage.get_checkpoints(&task_id));
             let Ok(checkpoint_values) = res else {
                 let err = res.err().unwrap();
                 return Err(PyValueError::new_err(format!(
@@ -337,7 +341,7 @@ impl ContextInner {
 
         // Read from the cached data that is loaded on the first checkpoint fetch.
         if let Some(checkpoint) = self.checkpoints.get(task_id, &checkpoint_name) {
-            return Ok(checkpoint.into())
+            return Ok(checkpoint.into());
         };
 
         // Task execution should be exclusive so we don't read from the DB.

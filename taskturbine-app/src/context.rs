@@ -1,8 +1,4 @@
-use std::{
-    fmt::Debug,
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use crate::app::{Channel, ResultData, TaskturbineApp};
 use metrics::counter;
@@ -25,7 +21,6 @@ pub enum FlowControl {
     /// The task is waiting for an event, and is currently suspended.
     Suspended,
 }
-
 
 /// Execution context for a task.
 /// Passed to task functions by the Worker runtime.
@@ -72,7 +67,7 @@ impl TaskContext {
     /// This will read from storage directly bypassing the TaskContext checkpoint cache.
     pub async fn step_result(&self, step_name: &str) -> Result<Option<ResultData>, StorageError> {
         let Some(checkpoint_name) = self.checkpoints.get_latest_name(step_name) else {
-            return Ok(None)
+            return Ok(None);
         };
         let result_data = self
             .app
@@ -334,11 +329,19 @@ mod tests {
     }
 
     async fn one_step(mut ctx: TaskContext) -> TaskResult {
-        let _ = ctx.async_step("first-step", async |_ctx: TaskContext| -> Result<ResultData, TestError> {
-            Ok(b"checkpoint state".to_vec())
-        }).await?;
+        let _ = ctx
+            .async_step(
+                "first-step",
+                async |_ctx: TaskContext| -> Result<ResultData, TestError> {
+                    Ok(b"checkpoint state".to_vec())
+                },
+            )
+            .await?;
 
-        let checkpoint = ctx.checkpoints.get(ctx.task_id(), "first-step").expect("checkpoint should be stored");
+        let checkpoint = ctx
+            .checkpoints
+            .get(ctx.task_id(), "first-step")
+            .expect("checkpoint should be stored");
 
         Ok(Some(checkpoint.state))
     }
@@ -599,19 +602,18 @@ mod tests {
 
     #[tokio::test]
     async fn async_step_store_checkpoint() {
-        let app = create_app().await
-            .register_task("one-step", one_step);
+        let app = create_app().await.register_task("one-step", one_step);
         let arc_app = Arc::new(app);
 
-        let _ = arc_app
-            .spawn_task("one-step", b"", None)
-            .await
-            .unwrap();
+        let _ = arc_app.spawn_task("one-step", b"", None).await.unwrap();
 
         let claim = claim_task(&arc_app.storage, "one-step").await;
 
         let context = TaskContext::build(claim.clone(), arc_app.clone());
-        assert!(!context.checkpoints.is_loaded(&claim.task_id), "new context has no data loaded");
+        assert!(
+            !context.checkpoints.is_loaded(&claim.task_id),
+            "new context has no data loaded"
+        );
         let res = context.checkpoints.get(claim.task_id, "first-step");
         assert!(res.is_none(), "cache should be empty");
 
