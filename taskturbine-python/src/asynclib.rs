@@ -195,6 +195,7 @@ impl AsyncContextInner {
         };
         let storage = self.storage.clone();
 
+        // TODO this needs to read from checkpoints cache
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let res = storage.get_checkpoint(task_id, &checkpoint_name).await;
             if let Ok(Some(checkpoint)) = res {
@@ -233,6 +234,7 @@ impl AsyncContextInner {
                 )
                 .await;
 
+            // TODO this needs to write into checkpoints cache
             res.map(Into::<Checkpoint>::into)
                 .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
         })
