@@ -346,6 +346,14 @@ class ContextInner:
     def emit_event(self, event_name: str, payload: bytes) -> None: ...
     """Record an event taking place."""
 
+    def generate_checkpoint_name(self, step_name: str) -> str: ...
+    """
+    Get a unique checkpoint name for a step
+
+    If steps are defined in a loop this method will return
+    unique values each time.
+    """
+
     def get_checkpoint(self, checkpoint_name: str) -> Checkpoint: ...
     """
     Get a checkpoint by name for a task.

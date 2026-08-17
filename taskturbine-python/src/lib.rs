@@ -316,6 +316,10 @@ impl ContextInner {
         res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
     }
 
+    fn generate_checkpoint_name(&mut self, step_name: String) -> PyResult<String> {
+        Ok(self.checkpoints.generate_name(&step_name))
+    }
+
     fn get_checkpoint(&mut self, checkpoint_name: String) -> PyResult<Checkpoint> {
         let Ok(task_id) = TryInto::<TaskId>::try_into(&self.claimed_task.task_id) else {
             return Err(PyValueError::new_err("Invalid uuid for task_id".to_string()));
