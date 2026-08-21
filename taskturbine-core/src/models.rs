@@ -1,10 +1,7 @@
 /// Common datastructures and models for taskturbine.
 use chrono::{DateTime, Utc};
 use std::{
-    collections::{HashMap, HashSet},
-    fmt::{Display, Formatter},
-    str::FromStr,
-    time::Duration,
+    collections::{HashMap, HashSet}, fmt::{Display, Formatter}, str::FromStr, sync::Mutex, time::Duration
 };
 use uuid::Uuid;
 
@@ -290,7 +287,7 @@ pub struct Checkpoint {
 /// intended to be written to *after* writing to `Storage`.
 #[derive(Default)]
 pub struct Checkpoints {
-    counters: HashMap<String, u32>,
+    counters: Mutex<HashMap<String, u32>>,
     loaded: HashSet<TaskId>,
     checkpoint_data: HashMap<(TaskId, String), Checkpoint>,
 }
@@ -298,7 +295,7 @@ pub struct Checkpoints {
 impl Checkpoints {
     pub fn new() -> Self {
         Self {
-            counters: HashMap::new(),
+            counters: Mutex::new(HashMap::new()),
             loaded: HashSet::new(),
             checkpoint_data: HashMap::new(),
         }
@@ -317,8 +314,10 @@ impl Checkpoints {
 
     /// Get the current counter value for a checkpoint name.
     /// Will return None on checkpoints that aren't known yet.
-    fn get_counter<'a>(&'a self, name: &str) -> Option<&'a u32> {
-        self.counters.get(name)
+    fn get_counter(&self, name: &str) -> Option<u32> {
+        // TODO can this allocation be removed?
+        let counter = self.counters.lock().expect("get lock failed");
+        counter.get(name).cloned()
     }
 
     /// Get the latest checkpoint name for a step
@@ -329,20 +328,21 @@ impl Checkpoints {
     /// that the checkpoint has no state yet.
     pub fn get_latest_name(&self, step_name: &str) -> Option<String> {
         let counter = self.get_counter(step_name)?;
-        Some(self.format_name(step_name, counter))
+        Some(self.format_name(step_name, &counter))
     }
 
     /// Generate a unique checkpoint name from a step name.
     /// Handles the scenario where userland code has multiple
     /// steps with the same name.
-    pub fn generate_name(&mut self, name: &str) -> String {
-        if !self.counters.contains_key(name) {
-            self.counters.insert(name.to_string(), 0);
+    pub fn generate_name(&self, name: &str) -> String {
+        let mut counters = self.counters.lock().expect("generate_name lock failed");
+        if !counters.contains_key(name) {
+            counters.insert(name.to_string(), 0);
         }
-        if let Some(value) = self.counters.get_mut(name) {
+        if let Some(value) = counters.get_mut(name) {
             *value += 1;
         }
-        let count = if let Some(value) = self.counters.get(name) {
+        let count = if let Some(value) = counters.get(name) {
             *value
         } else {
             0
@@ -364,7 +364,9 @@ impl Checkpoints {
     }
 
     /// Get a single checkpoint from the loaded checkpoint data.
+    /// TODO cleanup one param as a ref, and one as owned is madness.
     pub fn get(&self, task_id: TaskId, checkpoint_name: &str) -> Option<Checkpoint> {
+        // TODO rework the key of this map so that lookups can be done without allocations.
         let key = (task_id, checkpoint_name.to_owned());
         self.checkpoint_data.get(&key).cloned()
     }

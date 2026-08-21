@@ -137,7 +137,7 @@ impl AsyncAppInner {
     fn create_context(&self, claimed_task: ClaimedTask) -> AsyncContextInner {
         AsyncContextInner {
             storage: self.storage.clone(),
-            checkpoints: Checkpoints::new(),
+            checkpoints: Arc::new(Checkpoints::new()),
             claimed_task,
         }
     }
@@ -148,7 +148,7 @@ impl AsyncAppInner {
 pub struct AsyncContextInner {
     storage: Arc<Storage>,
     claimed_task: ClaimedTask,
-    checkpoints: Checkpoints,
+    checkpoints: Arc<Checkpoints>,
 }
 #[pymethods]
 impl AsyncContextInner {
@@ -194,9 +194,13 @@ impl AsyncContextInner {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
         let storage = self.storage.clone();
+        let checkpoints = self.checkpoints.clone();
 
-        // TODO this needs to read from checkpoints cache
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            if let Some(checkpoint) = checkpoints.get(task_id, &checkpoint_name) {
+                return Ok(Into::<Checkpoint>::into(checkpoint))
+            };
+
             let res = storage.get_checkpoint(task_id, &checkpoint_name).await;
             if let Ok(Some(checkpoint)) = res {
                 Ok(Into::<Checkpoint>::into(checkpoint))
