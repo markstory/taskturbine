@@ -292,7 +292,7 @@ pub struct Checkpoint {
 #[derive(Default)]
 pub struct Checkpoints {
     counters: Mutex<HashMap<String, u32>>,
-    loaded: HashSet<TaskId>,
+    loaded: Mutex<HashSet<TaskId>>,
     checkpoint_data: Mutex<HashMap<(TaskId, String), Checkpoint>>,
 }
 
@@ -300,7 +300,7 @@ impl Checkpoints {
     pub fn new() -> Self {
         Self {
             counters: Mutex::new(HashMap::new()),
-            loaded: HashSet::new(),
+            loaded: Mutex::new(HashSet::new()),
             checkpoint_data: Mutex::new(HashMap::new()),
         }
     }
@@ -356,7 +356,11 @@ impl Checkpoints {
 
     /// Check if a task has had its checkpoints loaded yet.
     pub fn is_loaded(&self, task_id: &TaskId) -> bool {
-        self.loaded.contains(task_id)
+        if let Ok(loaded) = self.loaded.lock() {
+            loaded.contains(task_id)
+        } else {
+            false
+        }
     }
 
     /// Store a collection of Checkpoints for a task.
@@ -367,6 +371,10 @@ impl Checkpoints {
         for checkpoint in checkpoints.into_iter() {
             checkpoint_data.insert((task_id, checkpoint.step_name.to_owned()), checkpoint);
         }
+        if let Ok(mut loaded) = self.loaded.lock() {
+            loaded.insert(task_id);
+        }
+
         Ok(())
     }
 
