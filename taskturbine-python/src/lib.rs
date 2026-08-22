@@ -375,7 +375,7 @@ impl ContextInner {
         res.map(|checkpoint| {
             // Store in cache after write is complete to prevent phantoms
             // Because checkpoints is a cache errors don't matter that much.
-            let _ = self.checkpoints.add(task_id, checkpoint.clone());
+            let _ = self.checkpoints.add(checkpoint.clone());
             checkpoint.into()
         })
         .map_err(|v| CheckpointError::new_err(format!("Could not store checkpoint {v:?}")))
