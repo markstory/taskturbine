@@ -395,11 +395,11 @@ impl Checkpoints {
     /// Add a checkpoint to the cache.
     ///
     /// It is assumed that the checkpoint has already been stored.
-    pub fn add(&self, task_id: TaskId, checkpoint: Checkpoint) -> Result<(), String> {
+    pub fn add(&self, checkpoint: Checkpoint) -> Result<(), String> {
         let Ok(mut checkpoint_data) = self.checkpoint_data.lock() else {
             return Err("Could not lock checkpoint_data".to_string());
         };
-        let key = (task_id, checkpoint.step_name.to_owned());
+        let key = (checkpoint.task_id, checkpoint.step_name.to_owned());
         checkpoint_data.insert(key, checkpoint);
         Ok(())
     }
@@ -426,9 +426,10 @@ pub struct SchedulerState {
 
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
     use uuid::Uuid;
 
-    use crate::models::{RunId, TaskId};
+    use crate::models::{Checkpoint, Checkpoints, RunId, TaskId};
 
     #[test]
     fn task_id_from_string() {
@@ -469,5 +470,35 @@ mod tests {
             uuid.to_string(),
             "string values should be the same"
         );
+    }
+
+    #[test]
+    fn checkpoints_is_loaded_and_store() {
+    }
+
+    #[test]
+    fn checkpoints_is_loaded_and_add() {
+    }
+
+    #[test]
+    fn checkpoints_get() {
+        let checkpoints = Checkpoints::new();
+        let task_id: TaskId = Uuid::now_v7().into();
+        assert!(checkpoints.get(task_id, "nope").is_none());
+
+        let checkpoint = Checkpoint {
+            task_id,
+            step_name: "testing".to_string(),
+            state: vec![],
+            owner_run_id: Uuid::now_v7().into(),
+            updated_at: Utc::now(),
+        };
+        assert!(checkpoints.add(checkpoint).is_ok(), "should be able to add a checkpoint");
+        assert!(checkpoints.get(task_id, "testing").is_some(), "matching step should exist");
+        assert!(checkpoints.get(task_id, "nope").is_none(), "step name has to match");
+    }
+
+    #[test]
+    fn checkpoints_get_counter() {
     }
 }

@@ -150,7 +150,7 @@ impl TaskContext {
                     Ok(checkpoint) => {
                         // Ignore errors as we're only writing to a cache and lock failures/errors
                         // don't matter that much.
-                        let _ = self.checkpoints.add(self.task.task_id, checkpoint);
+                        let _ = self.checkpoints.add(checkpoint);
                     }
                 }
                 Ok(state as ResultData)

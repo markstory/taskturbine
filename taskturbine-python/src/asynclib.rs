@@ -241,7 +241,7 @@ impl AsyncContextInner {
 
             res.map(|checkpoint| {
                 // Ignore errors as we're updating a cache.
-                let _ = checkpoints.add(task_id, checkpoint.clone());
+                let _ = checkpoints.add(checkpoint.clone());
                 Into::<Checkpoint>::into(checkpoint)
             })
             .map_err(|v| CheckpointError::new_err(format!("Could not store checkpoint {v:?}")))
