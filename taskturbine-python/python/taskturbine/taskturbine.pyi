@@ -57,6 +57,9 @@ class Checkpoint:
     updated_at: int
     """The timestamp the checkpoint was created or updated."""
 
+class CheckpointError: ...
+"""Exception for checkpoint related errors"""
+
 type ClaimedTaskDict = dict[str, Any]
 
 class ClaimedTask:

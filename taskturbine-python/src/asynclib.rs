@@ -13,9 +13,7 @@ use taskturbine_core::{
 };
 
 use crate::{
-    TaskOptions,
-    config::Config,
-    models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric},
+    CheckpointError, TaskOptions, config::Config, models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric}
 };
 
 #[pyclass(skip_from_py_object)]
@@ -205,7 +203,7 @@ impl AsyncContextInner {
             if let Ok(Some(checkpoint)) = res {
                 Ok(Into::<Checkpoint>::into(checkpoint))
             } else {
-                Err(PyValueError::new_err(
+                Err(CheckpointError::new_err(
                     "Checkpoint not found, or read failed",
                 ))
             }
@@ -244,7 +242,7 @@ impl AsyncContextInner {
                 let _ = checkpoints.add(task_id, checkpoint.clone());
                 Into::<Checkpoint>::into(checkpoint)
             })
-            .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
+            .map_err(|v| CheckpointError::new_err(format!("Could not store checkpoint {v:?}")))
         })
     }
 

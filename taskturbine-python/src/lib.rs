@@ -19,6 +19,8 @@ mod models;
 use config::Config;
 use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric};
 
+pyo3::create_exception!(taskturbine, CheckpointError, PyValueError);
+
 ///! See taskturbine.pyi for docstrings
 
 // Container for configuration, storage and tokio runtime.
@@ -332,7 +334,7 @@ impl ContextInner {
                 .block_on(self.storage.get_checkpoints(&task_id));
             let Ok(checkpoint_values) = res else {
                 let err = res.err().unwrap();
-                return Err(PyValueError::new_err(format!(
+                return Err(CheckpointError::new_err(format!(
                     "Failed to load checkpoints {err:?}"
                 )));
             };
@@ -346,8 +348,7 @@ impl ContextInner {
         };
 
         // Task execution should be exclusive so we don't read from the DB.
-        // TODO add more specific error class for not found.
-        Err(PyValueError::new_err("Checkpoint not found".to_string()))
+        Err(CheckpointError::new_err("Checkpoint not found".to_string()))
     }
 
     fn set_checkpoint(
@@ -376,7 +377,7 @@ impl ContextInner {
             let _ = self.checkpoints.add(task_id, checkpoint.clone());
             checkpoint.into()
         })
-        .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
+        .map_err(|v| CheckpointError::new_err(format!("Could not store checkpoint {v:?}")))
     }
 
     fn get_event_payload(&self, event_name: String, timeout: Duration) -> PyResult<AwaitResult> {
@@ -517,6 +518,8 @@ impl TaskOptions {
 mod taskturbine {
     #[pymodule_export]
     use super::AppInner;
+    #[pymodule_export]
+    use super::CheckpointError;
     #[pymodule_export]
     use super::ClaimedTask;
     #[pymodule_export]
