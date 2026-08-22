@@ -107,7 +107,9 @@ impl TaskContext {
                     "Failed to load checkpoints {err:?}"
                 )));
             };
-            self.checkpoints.store(self.task.task_id, checkpoint_values);
+            // Ignore errors as we're only writing to a cache and lock failures/errors
+            // don't matter that much.
+            let _ = self.checkpoints.store(self.task.task_id, checkpoint_values);
         }
 
         // Get the current checkpoint value (if defined)
@@ -143,7 +145,9 @@ impl TaskContext {
                         )));
                     }
                     Ok(checkpoint) => {
-                        self.checkpoints.add(self.task.task_id, checkpoint);
+                        // Ignore errors as we're only writing to a cache and lock failures/errors
+                        // don't matter that much.
+                        let _ = self.checkpoints.add(self.task.task_id, checkpoint);
                     }
                 }
                 Ok(state as ResultData)

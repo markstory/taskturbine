@@ -226,6 +226,7 @@ impl AsyncContextInner {
             return Err(PyValueError::new_err("Invalid uuid".to_string()));
         };
         let storage = self.storage.clone();
+        let checkpoints = self.checkpoints.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let res = storage
@@ -238,9 +239,12 @@ impl AsyncContextInner {
                 )
                 .await;
 
-            // TODO this needs to write into checkpoints cache
-            res.map(Into::<Checkpoint>::into)
-                .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
+            res.map(|checkpoint| {
+                // Ignore errors as we're updating a cache.
+                let _ = checkpoints.add(task_id, checkpoint.clone());
+                Into::<Checkpoint>::into(checkpoint)
+            })
+            .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
         })
     }
 

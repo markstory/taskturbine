@@ -336,7 +336,8 @@ impl ContextInner {
                     "Failed to load checkpoints {err:?}"
                 )));
             };
-            self.checkpoints.store(task_id, checkpoint_values);
+            // Because checkpoints is a cache errors don't matter that much.
+            let _ = self.checkpoints.store(task_id, checkpoint_values);
         }
 
         // Read from the cached data that is loaded on the first checkpoint fetch.
@@ -371,7 +372,8 @@ impl ContextInner {
         ));
         res.map(|checkpoint| {
             // Store in cache after write is complete to prevent phantoms
-            self.checkpoints.add(task_id, checkpoint.clone());
+            // Because checkpoints is a cache errors don't matter that much.
+            let _ = self.checkpoints.add(task_id, checkpoint.clone());
             checkpoint.into()
         })
         .map_err(|v| PyValueError::new_err(format!("Could not store checkpoint {v:?}")))
