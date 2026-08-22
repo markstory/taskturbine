@@ -20,6 +20,7 @@ use config::Config;
 use models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric};
 
 pyo3::create_exception!(taskturbine, CheckpointError, PyValueError);
+pyo3::create_exception!(taskturbine, StorageError, PyValueError);
 
 ///! See taskturbine.pyi for docstrings
 
@@ -96,7 +97,7 @@ impl AppInner {
         ));
         result
             .map(|v| v.into())
-            .map_err(|v| PyValueError::new_err(format!("Could not spawn task: {v:?}")))
+            .map_err(|v| StorageError::new_err(format!("Could not spawn task: {v:?}")))
     }
 
     fn emit_event(&self, event_name: &str, payload: &[u8]) -> PyResult<()> {
@@ -104,13 +105,13 @@ impl AppInner {
             .runtime
             .block_on(self.storage.emit_event(event_name, payload));
 
-        res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
+        res.map_err(|v| StorageError::new_err(format!("Could not store event: {v:?}")))
     }
 
     fn update_schema(&self) -> PyResult<()> {
         let res = self.runtime.block_on(self.storage.update_schema());
 
-        res.map_err(|v| PyValueError::new_err(format!("Could not update_schema: {v:?}")))
+        res.map_err(|v| StorageError::new_err(format!("Could not update_schema: {v:?}")))
     }
 
     fn create_worker(&self, worker_id: String, channels: Vec<String>) -> WorkerInner {
@@ -204,14 +205,14 @@ impl WorkerInner {
                 }
                 mapped
             })
-            .map_err(|e| PyValueError::new_err(format!("Could not claim tasks: {e:?}")))
+            .map_err(|e| StorageError::new_err(format!("Could not claim tasks: {e:?}")))
     }
 
     /// Run all the upkeep operations on the database.
     fn run_upkeep(&self) -> PyResult<()> {
         self.runtime
             .block_on(self.storage.run_upkeep())
-            .map_err(|e| PyValueError::new_err(format!("Upkeep failed: {e:?}")))
+            .map_err(|e| StorageError::new_err(format!("Upkeep failed: {e:?}")))
     }
 
     /// Collect metrics on the state of the usecase data.
@@ -261,7 +262,7 @@ impl WorkerInner {
                 self.storage
                     .fail_run(run_id, reason.unwrap_or(b""), retry_at),
             )
-            .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
+            .map_err(|e| StorageError::new_err(format!("Could not fail_run: {e:?}")))
     }
 
     /// Mark a run as complete.
@@ -271,7 +272,7 @@ impl WorkerInner {
         };
         self.runtime
             .block_on(self.storage.complete_run(run_id, &run_result))
-            .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
+            .map_err(|e| StorageError::new_err(format!("Could not complete_run: {e:?}")))
     }
 
     /// Re-schedule a task to run in the future.
@@ -281,7 +282,7 @@ impl WorkerInner {
         };
         self.runtime
             .block_on(self.storage.schedule_run(run_id, wait_for))
-            .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
+            .map_err(|e| StorageError::new_err(format!("Could not schedule_run: {e:?}")))
     }
 }
 
@@ -315,7 +316,7 @@ impl ContextInner {
             .runtime
             .block_on(self.storage.emit_event(&event_name, payload));
 
-        res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
+        res.map_err(|v| StorageError::new_err(format!("Could not store event: {v:?}")))
     }
 
     fn generate_checkpoint_name(&mut self, step_name: String) -> PyResult<String> {
@@ -526,6 +527,8 @@ mod taskturbine {
     use super::Config;
     #[pymodule_export]
     use super::ContextInner;
+    #[pymodule_export]
+    use super::StorageError;
     #[pymodule_export]
     use super::SpawnResult;
     #[pymodule_export]

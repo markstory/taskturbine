@@ -13,9 +13,7 @@ use taskturbine_core::{
 };
 
 use crate::{
-    CheckpointError, TaskOptions,
-    config::Config,
-    models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric},
+    CheckpointError, StorageError, TaskOptions, config::Config, models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric}
 };
 
 #[pyclass(skip_from_py_object)]
@@ -100,7 +98,7 @@ impl AsyncAppInner {
                 .await;
             spawn_result
                 .map(Into::<SpawnResult>::into)
-                .map_err(|e| PyValueError::new_err(format!("Could not spawn task {e:?}")))
+                .map_err(|e| StorageError::new_err(format!("Could not spawn task {e:?}")))
         })
     }
 
@@ -113,7 +111,7 @@ impl AsyncAppInner {
         let storage = self.storage.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = storage.emit_event(&event_name, payload.as_slice()).await;
-            result.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
+            result.map_err(|v| StorageError::new_err(format!("Could not store event: {v:?}")))
         })
     }
 
@@ -121,7 +119,7 @@ impl AsyncAppInner {
         let storage = self.storage.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = storage.update_schema().await;
-            result.map_err(|v| PyValueError::new_err(format!("Could not update_schema: {v:?}")))
+            result.map_err(|v| StorageError::new_err(format!("Could not update_schema: {v:?}")))
         })
     }
 
@@ -177,7 +175,7 @@ impl AsyncContextInner {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let event_name = event_name.clone();
             let res = storage.emit_event(&event_name, payload.as_slice()).await;
-            res.map_err(|v| PyValueError::new_err(format!("Could not store event: {v:?}")))
+            res.map_err(|v| StorageError::new_err(format!("Could not store event: {v:?}")))
         })
     }
 
@@ -275,7 +273,7 @@ impl AsyncContextInner {
                 .await;
             match payload_res {
                 Ok(result) => Ok(Into::<AwaitResult>::into(result)),
-                Err(err) => Err(PyValueError::new_err(format!(
+                Err(err) => Err(StorageError::new_err(format!(
                     "Could not await_event: {err:?}"
                 ))),
             }
@@ -344,7 +342,7 @@ impl AsyncWorkerInner {
                     let mapped: Vec<ClaimedTask> = v.into_iter().map(|task| task.into()).collect();
                     mapped
                 })
-                .map_err(|e| PyValueError::new_err(format!("Could not claim tasks: {e:?}")))
+                .map_err(|e| StorageError::new_err(format!("Could not claim tasks: {e:?}")))
         })
     }
 
@@ -355,7 +353,7 @@ impl AsyncWorkerInner {
             storage
                 .run_upkeep()
                 .await
-                .map_err(|e| PyValueError::new_err(format!("Upkeep failed: {e:?}")))
+                .map_err(|e| StorageError::new_err(format!("Upkeep failed: {e:?}")))
         })
     }
 
@@ -406,7 +404,7 @@ impl AsyncWorkerInner {
             storage
                 .fail_run(run_id, &reason, retry_at)
                 .await
-                .map_err(|e| PyValueError::new_err(format!("Could not fail_run: {e:?}")))
+                .map_err(|e| StorageError::new_err(format!("Could not fail_run: {e:?}")))
         })
     }
 
@@ -425,7 +423,7 @@ impl AsyncWorkerInner {
             storage
                 .complete_run(run_id, &run_result)
                 .await
-                .map_err(|e| PyValueError::new_err(format!("Could not complete_run: {e:?}")))
+                .map_err(|e| StorageError::new_err(format!("Could not complete_run: {e:?}")))
         })
     }
 
@@ -444,7 +442,7 @@ impl AsyncWorkerInner {
             storage
                 .schedule_run(run_id, wait_for)
                 .await
-                .map_err(|e| PyValueError::new_err(format!("Could not schedule_run: {e:?}")))
+                .map_err(|e| StorageError::new_err(format!("Could not schedule_run: {e:?}")))
         })
     }
 }
