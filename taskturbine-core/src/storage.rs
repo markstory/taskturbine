@@ -458,6 +458,7 @@ impl Storage {
         .execute(&mut *atomic);
 
         if let Err(e) = res.await {
+            let _ = atomic.rollback().await;
             return Err(StorageError::SqlError(e));
         }
         atomic.commit().await.map_err(StorageError::SqlError)?;
@@ -739,7 +740,7 @@ impl Storage {
 
         if state != TaskState::Running {
             // Need to be running to complete.
-            atomic.commit().await.map_err(StorageError::SqlError)?;
+            atomic.rollback().await.map_err(StorageError::SqlError)?;
             return Err(StorageError::NotRunning(run_id.0));
         }
         let res = sqlx::query(
@@ -753,6 +754,7 @@ impl Storage {
         .execute(&mut *atomic)
         .await;
         if let Err(e) = res {
+            let _ = atomic.rollback().await;
             return Err(StorageError::SqlError(e));
         }
 
@@ -786,10 +788,12 @@ impl Storage {
     ) -> Result<Task, StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
         let task = self.get_locked_task(task_id, &mut atomic).await?;
+
+        // Cannot be cancelled if currently working.
+        // as there isn't a way to interrupt the owning worker process.
         if task.state == TaskState::Running {
-            // Cannot be cancelled if currently working.
-            // as there isn't a way to interrupt the owning worker process.
-            atomic.commit().await.map_err(StorageError::SqlError)?;
+            atomic.rollback().await.map_err(StorageError::SqlError)?;
+
             return Err(StorageError::ValidationError(format!(
                 "Cannot cancel {task_id:?} it is currently running"
             )));
@@ -991,6 +995,8 @@ impl Storage {
             .await
             .map_err(|_| StorageError::NotFound(run_id.0))?;
         if run.get::<TaskState, _>("state") != TaskState::Running {
+            let _ = atomic.rollback().await;
+
             return Err(StorageError::NotRunning(run_id.0));
         }
         self.suspend_run(
@@ -1098,6 +1104,8 @@ impl Storage {
 
         // If the task has a checkpoint already, return early.
         if let Some(checkpoint) = checkpoint_opt {
+            let _ = atomic.rollback().await;
+
             return Ok(AwaitResult {
                 payload: checkpoint.get::<Vec<u8>, _>("state"),
                 should_suspend: false,
@@ -1123,6 +1131,8 @@ impl Storage {
         // Ensure the task & run exists, is running, and that we can lock the run.
         let run_row = self.get_locked_run_state(&mut atomic, run_id).await?;
         if run_row.get::<TaskState, _>("state") != TaskState::Running {
+            let _ = atomic.rollback().await;
+
             return Err(StorageError::NotRunning(run_id.0));
         }
 
@@ -1132,7 +1142,7 @@ impl Storage {
             self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, &payload)
                 .await?;
 
-            let _ = atomic.commit().await.map_err(StorageError::SqlError);
+            atomic.commit().await.map_err(StorageError::SqlError)?;
 
             return Ok(AwaitResult {
                 payload,
@@ -1160,7 +1170,7 @@ impl Storage {
         self.suspend_run(&mut atomic, &task_id, &run_id, timeout)
             .await?;
 
-        let _ = atomic.commit().await.map_err(StorageError::SqlError);
+        atomic.commit().await.map_err(StorageError::SqlError)?;
 
         Ok(AwaitResult {
             should_suspend: true,
@@ -1352,7 +1362,7 @@ impl Storage {
         .await
         .map_err(StorageError::SqlError)?;
 
-        let _ = atomic.commit().await;
+        atomic.commit().await.map_err(StorageError::SqlError)?;
 
         Ok(())
     }
