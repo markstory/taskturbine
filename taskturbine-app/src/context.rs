@@ -123,7 +123,10 @@ impl TaskContext {
         // calls steps. Perhaps attr macros?
 
         // Create an isolated/disposable context to avoid &mut reference and lifetime hell.
+        // TODO Determine whether or not this context would benefit from sharing a Checkpoint cache
+        // with the parent context.
         let context = Self::build(self.task.clone(), self.app.clone());
+
         match step_fn(context).await {
             Ok(state) => {
                 let res = self
