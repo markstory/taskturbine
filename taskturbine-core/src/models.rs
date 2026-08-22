@@ -364,12 +364,15 @@ impl Checkpoints {
     }
 
     /// Store a collection of Checkpoints for a task.
+    ///
+    /// Adds the collection of checkpoints to the cache, and marks the task as 'loaded'.
     pub fn store(&self, task_id: TaskId, checkpoints: Vec<Checkpoint>) -> Result<(), String> {
-        let Ok(mut checkpoint_data) = self.checkpoint_data.lock() else {
+        if let Ok(mut checkpoint_data) = self.checkpoint_data.lock() {
+            for checkpoint in checkpoints.into_iter() {
+                checkpoint_data.insert((task_id, checkpoint.step_name.to_owned()), checkpoint);
+            }
+        } else {
             return Err("Could not lock checkpoint_data".to_string());
-        };
-        for checkpoint in checkpoints.into_iter() {
-            checkpoint_data.insert((task_id, checkpoint.step_name.to_owned()), checkpoint);
         }
         if let Ok(mut loaded) = self.loaded.lock() {
             loaded.insert(task_id);
