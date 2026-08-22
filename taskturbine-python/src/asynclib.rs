@@ -13,7 +13,9 @@ use taskturbine_core::{
 };
 
 use crate::{
-    CheckpointError, TaskOptions, config::Config, models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric}
+    CheckpointError, TaskOptions,
+    config::Config,
+    models::{AwaitResult, Checkpoint, ClaimedTask, SpawnResult, UpkeepMetric},
 };
 
 #[pyclass(skip_from_py_object)]
