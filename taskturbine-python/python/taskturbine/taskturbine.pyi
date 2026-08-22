@@ -61,6 +61,10 @@ class CheckpointError: ...
 
 """Exception for checkpoint related errors"""
 
+class StorageError: ...
+
+"""Exception for task & event storage related errors"""
+
 type ClaimedTaskDict = dict[str, Any]
 
 class ClaimedTask:
