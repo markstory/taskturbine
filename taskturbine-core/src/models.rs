@@ -289,7 +289,7 @@ pub struct Checkpoint {
 pub struct Checkpoints {
     counters: Mutex<HashMap<String, u32>>,
     loaded: HashSet<TaskId>,
-    checkpoint_data: HashMap<(TaskId, String), Checkpoint>,
+    checkpoint_data: Mutex<HashMap<(TaskId, String), Checkpoint>>,
 }
 
 impl Checkpoints {
@@ -297,7 +297,7 @@ impl Checkpoints {
         Self {
             counters: Mutex::new(HashMap::new()),
             loaded: HashSet::new(),
-            checkpoint_data: HashMap::new(),
+            checkpoint_data: Mutex::new(HashMap::new()),
         }
     }
 
@@ -356,27 +356,37 @@ impl Checkpoints {
     }
 
     /// Store a collection of Checkpoints for a task.
-    pub fn store(&mut self, task_id: TaskId, checkpoints: Vec<Checkpoint>) {
+    pub fn store(&self, task_id: TaskId, checkpoints: Vec<Checkpoint>) -> Result<(), String> {
+        let Ok(mut checkpoint_data) = self.checkpoint_data.lock() else {
+            return Err("Could not lock checkpoint_data".to_string());
+        };
         for checkpoint in checkpoints.into_iter() {
-            self.checkpoint_data
-                .insert((task_id, checkpoint.step_name.to_owned()), checkpoint);
+            checkpoint_data.insert((task_id, checkpoint.step_name.to_owned()), checkpoint);
         }
+        Ok(())
     }
 
     /// Get a single checkpoint from the loaded checkpoint data.
     /// TODO cleanup one param as a ref, and one as owned is madness.
     pub fn get(&self, task_id: TaskId, checkpoint_name: &str) -> Option<Checkpoint> {
+        let Ok(checkpoint_data) = self.checkpoint_data.lock() else {
+            return None;
+        };
         // TODO rework the key of this map so that lookups can be done without allocations.
         let key = (task_id, checkpoint_name.to_owned());
-        self.checkpoint_data.get(&key).cloned()
+        checkpoint_data.get(&key).cloned()
     }
 
     /// Add a checkpoint to the cache.
     ///
     /// It is assumed that the checkpoint has already been stored.
-    pub fn add(&mut self, task_id: TaskId, checkpoint: Checkpoint) {
+    pub fn add(&self, task_id: TaskId, checkpoint: Checkpoint) -> Result<(), String> {
+        let Ok(mut checkpoint_data) = self.checkpoint_data.lock() else {
+            return Err("Could not lock checkpoint_data".to_string());
+        };
         let key = (task_id, checkpoint.step_name.to_owned());
-        self.checkpoint_data.insert(key, checkpoint);
+        checkpoint_data.insert(key, checkpoint);
+        Ok(())
     }
 }
 
