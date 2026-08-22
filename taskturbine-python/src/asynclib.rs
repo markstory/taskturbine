@@ -198,7 +198,7 @@ impl AsyncContextInner {
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             if let Some(checkpoint) = checkpoints.get(task_id, &checkpoint_name) {
-                return Ok(Into::<Checkpoint>::into(checkpoint))
+                return Ok(Into::<Checkpoint>::into(checkpoint));
             };
 
             let res = storage.get_checkpoint(task_id, &checkpoint_name).await;

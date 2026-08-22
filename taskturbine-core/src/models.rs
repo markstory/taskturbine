@@ -1,7 +1,11 @@
 /// Common datastructures and models for taskturbine.
 use chrono::{DateTime, Utc};
 use std::{
-    collections::{HashMap, HashSet}, fmt::{Display, Formatter}, str::FromStr, sync::Mutex, time::Duration
+    collections::{HashMap, HashSet},
+    fmt::{Display, Formatter},
+    str::FromStr,
+    sync::Mutex,
+    time::Duration,
 };
 use uuid::Uuid;
 
