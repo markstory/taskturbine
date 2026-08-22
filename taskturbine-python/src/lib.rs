@@ -528,9 +528,9 @@ mod taskturbine {
     #[pymodule_export]
     use super::ContextInner;
     #[pymodule_export]
-    use super::StorageError;
-    #[pymodule_export]
     use super::SpawnResult;
+    #[pymodule_export]
+    use super::StorageError;
     #[pymodule_export]
     use super::TaskOptions;
     #[pymodule_export]
