@@ -472,12 +472,36 @@ mod tests {
         );
     }
 
+    fn make_checkpoint(task_id: TaskId) -> Checkpoint {
+        Checkpoint {
+            task_id,
+            step_name: "testing".to_string(),
+            state: vec![],
+            owner_run_id: Uuid::now_v7().into(),
+            updated_at: Utc::now(),
+        }
+    }
+
     #[test]
     fn checkpoints_is_loaded_and_store() {
+        let checkpoints = Checkpoints::new();
+        let task_id: TaskId = Uuid::now_v7().into();
+        assert_eq!(checkpoints.is_loaded(&task_id), false);
+
+        let checkpoint = make_checkpoint(task_id);
+        assert!(checkpoints.store(task_id, vec![checkpoint]).is_ok(), "storing a checkpoint should work");
+        assert_eq!(checkpoints.is_loaded(&task_id), true, "store makes a task loaded.");
     }
 
     #[test]
     fn checkpoints_is_loaded_and_add() {
+        let checkpoints = Checkpoints::new();
+        let task_id: TaskId = Uuid::now_v7().into();
+        assert_eq!(checkpoints.is_loaded(&task_id), false);
+
+        let checkpoint = make_checkpoint(task_id);
+        assert!(checkpoints.add(checkpoint).is_ok(), "should be able to add a checkpoint");
+        assert_eq!(checkpoints.is_loaded(&task_id), false, "add doesn't make a task loaded");
     }
 
     #[test]
@@ -486,19 +510,29 @@ mod tests {
         let task_id: TaskId = Uuid::now_v7().into();
         assert!(checkpoints.get(task_id, "nope").is_none());
 
-        let checkpoint = Checkpoint {
-            task_id,
-            step_name: "testing".to_string(),
-            state: vec![],
-            owner_run_id: Uuid::now_v7().into(),
-            updated_at: Utc::now(),
-        };
+        let checkpoint = make_checkpoint(task_id);
         assert!(checkpoints.add(checkpoint).is_ok(), "should be able to add a checkpoint");
         assert!(checkpoints.get(task_id, "testing").is_some(), "matching step should exist");
         assert!(checkpoints.get(task_id, "nope").is_none(), "step name has to match");
     }
 
     #[test]
-    fn checkpoints_get_counter() {
+    fn checkpoints_get_latest_name() {
+        let checkpoints = Checkpoints::new();
+        assert!(checkpoints.get_latest_name("first").is_none(), "no counter set yet");
+
+        // Duplicate names should create unique checkpoint names
+        assert_eq!(checkpoints.generate_name("first"), "first");
+        assert_eq!(checkpoints.generate_name("first"), "first#2");
+        assert_eq!(checkpoints.get_latest_name("first").unwrap(), "first#2");
+        assert_eq!(checkpoints.generate_name("first"), "first#3");
+        assert_eq!(checkpoints.get_latest_name("first").unwrap(), "first#3");
+
+        // get_latest_name does not change counter
+        assert_eq!(checkpoints.generate_name("first"), "first#4");
+
+        // Each value has a unique sequence
+        assert_eq!(checkpoints.generate_name("second"), "second");
+        assert_eq!(checkpoints.generate_name("second"), "second#2");
     }
 }
