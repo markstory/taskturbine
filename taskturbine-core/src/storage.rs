@@ -713,8 +713,6 @@ impl Storage {
         task_id: TaskId,
         conn: &mut PgConnection,
     ) -> Result<Task, StorageError> {
-        // TODO: add usecase conditions to all queries.
-        // Multi-tenancy is safer if operations always are constrained by usecase.
         let row: Task = sqlx::query_as(
             "SELECT *
              FROM taskturbine.tasks
