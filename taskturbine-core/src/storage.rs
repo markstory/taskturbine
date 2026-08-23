@@ -770,6 +770,7 @@ impl Storage {
         .await
         .map_err(StorageError::SqlError)?;
 
+        // TODO do this conditionally only if the run has a wait attached.
         self.clear_waits(run_id, &mut atomic).await?;
 
         atomic.commit().await.map_err(StorageError::SqlError)?;
@@ -972,6 +973,7 @@ impl Storage {
         .await
         .map_err(StorageError::SqlError)?;
 
+        // TODO only do this if the run has a wait attached.
         self.clear_waits(run_id, &mut *conn).await?;
 
         Ok(())
@@ -1191,6 +1193,8 @@ impl Storage {
         timeout: Duration,
     ) -> Result<(), StorageError> {
         let timeout = Utc::now() + timeout;
+        // TODO If `taskturbine.runs` had a nullable wait_id column, we could optimize
+        // fail_run/complete_run to not delete waits that don't exist.
         sqlx::query(
             "INSERT INTO taskturbine.waits (usecase, task_id, run_id, step_name, event_name, timeout_at, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, NOW())
