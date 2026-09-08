@@ -732,6 +732,10 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                     }
                 }
             }
+            _ = work_send.closed() => {
+                log::debug!("No more receivers for work_send, shutting down claim_tasks");
+                break;
+            }
             _ = guard.wait() => {
                 log::debug!("Shutting down claim_tasks");
                 break;
@@ -747,6 +751,10 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
         tokio::select! {
             Ok(task) = work_channel.recv() => {
                 worker.execute_task(task).await;
+            }
+            Err(_) = work_channel.recv() => {
+                log::debug!("work_channel closed, shutting down process_task");
+                break;
             }
             _ = guard.wait() => {
                 log::debug!("Shutting down process_task");
@@ -1197,14 +1205,14 @@ mod tests {
             send.send(item).await.expect("Failed to send claimed task");
         }
 
-        // Kill the worker process after 1 seconds
         let mut join = JoinSet::new();
-        join.spawn(
-            elegant_departure::tokio::depart()
-                .on_completion(tokio::time::sleep(Duration::from_secs(1))),
-        );
-
         join.spawn(process_task(worker, recv));
+
+        // Kill the worker process after 1 seconds
+        join.spawn(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            send.close();
+        });
         join.join_all().await;
 
         let task = storage
@@ -1231,16 +1239,16 @@ mod tests {
 
         // Kill the worker process after 1 seconds
         let mut join = JoinSet::new();
-        join.spawn(
-            elegant_departure::tokio::depart()
-                .on_completion(tokio::time::sleep(Duration::from_secs(1))),
-        );
-
         join.spawn(claim_tasks(worker, send));
+        join.spawn(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            let claimed = recv.recv().await.expect("recv should be ok");
+            assert_eq!(claimed.task_id, spawn_res.task_id);
+
+            recv.close();
+        });
         join.join_all().await;
 
-        let claimed = recv.recv().await.expect("recv should be ok");
-        assert_eq!(claimed.task_id, spawn_res.task_id);
         let task = storage
             .get_task(spawn_res.task_id)
             .await
@@ -1264,15 +1272,11 @@ mod tests {
 
         // Kill the worker process after 1 seconds
         let mut join = JoinSet::new();
-        join.spawn(
-            elegant_departure::tokio::depart()
-                .on_completion(tokio::time::sleep(Duration::from_secs(1))),
-        );
 
         // close the channel and then start the claim_tasks task.
         send.close();
-        join.spawn(claim_tasks(worker, send));
 
+        join.spawn(claim_tasks(worker, send));
         join.join_all().await;
 
         let recv_res = recv.try_recv();
