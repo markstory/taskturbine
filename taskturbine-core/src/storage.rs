@@ -320,12 +320,12 @@ impl Storage {
         Ok(res)
     }
 
-    /// Testing helper: get waits for a run
+    /// Testing helper: get runs waiting on an event
     #[cfg(feature = "test")]
-    pub async fn get_wait_by_run_id(&self, run_id: RunId) -> Result<Option<PgRow>, StorageError> {
-        let res = sqlx::query("SELECT * FROM taskturbine.waits WHERE run_id = $1")
-            .bind(run_id)
-            .fetch_optional(&self.pool)
+    pub async fn get_runs_waiting(&self, event_name: &str) -> Result<Vec<PgRow>, StorageError> {
+        let res = sqlx::query("SELECT * FROM taskturbine.runs WHERE wait_event_name = $1")
+            .bind(event_name)
+            .fetch_all(&self.pool)
             .await
             .map_err(StorageError::SqlError)?;
 
@@ -745,7 +745,7 @@ impl Storage {
         }
         let res = sqlx::query(
             "UPDATE taskturbine.runs as run
-            SET state = $1, completed_at = NOW(), result = $2
+            SET state = $1, completed_at = NOW(), wait_event_name = NULL, result = $2
             WHERE run_id = $3",
         )
         .bind(TaskState::Completed)
@@ -769,8 +769,6 @@ impl Storage {
         .execute(&mut *atomic)
         .await
         .map_err(StorageError::SqlError)?;
-
-        self.clear_waits(run_id, &mut atomic).await?;
 
         atomic.commit().await.map_err(StorageError::SqlError)?;
 
@@ -827,22 +825,6 @@ impl Storage {
         Ok(task)
     }
 
-    /// Clear waits on runs that we are no longer interested in
-    /// as the run is complete or cancelled.
-    async fn clear_waits(
-        &self,
-        run_id: RunId,
-        conn: &mut PgConnection,
-    ) -> Result<(), StorageError> {
-        sqlx::query("DELETE FROM taskturbine.waits WHERE run_id = $1")
-            .bind(run_id)
-            .execute(&mut *conn)
-            .await
-            .map_err(StorageError::SqlError)?;
-
-        Ok(())
-    }
-
     /// Mark a run as failed with the provided reason.
     /// If an retry_at is not provided, the next retry time will be calculated
     /// based on the task's retry_ attributes.
@@ -890,8 +872,9 @@ impl Storage {
         let res = sqlx::query(
             "UPDATE taskturbine.runs
             SET state = $1,
-                completed_at = NOW(), 
-                failure_reason = $2
+                completed_at = NOW(),
+                failure_reason = $2,
+                wait_event_name = NULL
             WHERE run_id = $3",
         )
         .bind(TaskState::Failed)
@@ -972,8 +955,6 @@ impl Storage {
         .await
         .map_err(StorageError::SqlError)?;
 
-        self.clear_waits(run_id, &mut *conn).await?;
-
         Ok(())
     }
 
@@ -1004,6 +985,7 @@ impl Storage {
             &run.get::<TaskId, _>("task_id"),
             &run_id,
             wait_for,
+            None,
         )
         .await?;
 
@@ -1136,7 +1118,7 @@ impl Storage {
             return Err(StorageError::NotRunning(run_id.0));
         }
 
-        // Check for an event that was received while we were sleeping/running.
+        // Check for an event that was received while we were sleeping/starting up.
         if let Some(payload) = event {
             // There was an event, store a checkpoint and return
             self.store_checkpoint(&mut atomic, &task_id, &run_id, step_name, &payload)
@@ -1155,19 +1137,9 @@ impl Storage {
         let timeout = timeout.unwrap_or_else(|| {
             Duration::from_secs(self.config.await_event_default_timeout_secs as u64)
         });
-        // Record the event wait
-        self.store_wait(
-            &mut atomic,
-            &task_id,
-            &run_id,
-            step_name,
-            event_name,
-            timeout,
-        )
-        .await?;
 
         // Suspend the current run and mark the task as sleeping
-        self.suspend_run(&mut atomic, &task_id, &run_id, timeout)
+        self.suspend_run(&mut atomic, &task_id, &run_id, timeout, Some(event_name))
             .await?;
 
         atomic.commit().await.map_err(StorageError::SqlError)?;
@@ -1176,44 +1148,6 @@ impl Storage {
             should_suspend: true,
             payload: b"".to_vec(),
         })
-    }
-
-    /// Store a wait for a task
-    /// It is assumed that event_name are globally unique, and on a conflict,
-    /// wait record is updated to reflect the provided run information.
-    async fn store_wait(
-        &self,
-        conn: &mut PgConnection,
-        task_id: &TaskId,
-        run_id: &RunId,
-        step_name: &str,
-        event_name: &str,
-        timeout: Duration,
-    ) -> Result<(), StorageError> {
-        let timeout = Utc::now() + timeout;
-        sqlx::query(
-            "INSERT INTO taskturbine.waits (usecase, task_id, run_id, step_name, event_name, timeout_at, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW())
-            ON CONFLICT (usecase, event_name)
-            DO UPDATE
-            SET usecase = EXCLUDED.usecase,
-                task_id = EXCLUDED.task_id,
-                run_id = EXCLUDED.run_id,
-                step_name = EXCLUDED.step_name,
-                timeout_at = EXCLUDED.timeout_at,
-                created_at = EXCLUDED.created_at"
-        )
-        .bind(&self.config.usecase)
-        .bind(task_id.0)
-        .bind(run_id)
-        .bind(step_name)
-        .bind(event_name)
-        .bind(timeout)
-        .execute(conn)
-        .await
-        .map_err(StorageError::SqlError)?;
-
-        Ok(())
     }
 
     /// Record a checkpoint for a task at a given step.
@@ -1277,13 +1211,17 @@ impl Storage {
         }
     }
 
-    /// Advance a task and run to sleeping state until available_at
+    /// Advance a task and run to sleeping state until available_at has elapsed
+    ///
+    /// Can optionally set a event_name to wait for. Event names are assumed to be unique
+    /// within a usecase.
     async fn suspend_run(
         &self,
         conn: &mut PgConnection,
         task_id: &TaskId,
         run_id: &RunId,
         available_in: Duration,
+        wait_event_name: Option<&str>,
     ) -> Result<(), StorageError> {
         let available_at = Utc::now() + available_in;
         sqlx::query(
@@ -1292,13 +1230,15 @@ impl Storage {
                 SET state = $1,
                     claimed_by = NULL,
                     claim_expires_at = NULL,
-                    available_at = $2
-                WHERE run_id = $3
+                    available_at = $2,
+                    wait_event_name = $3
+                WHERE run_id = $4
             )
-            UPDATE taskturbine.tasks SET state = $1 WHERE task_id = $4",
+            UPDATE taskturbine.tasks SET state = $1 WHERE task_id = $5",
         )
         .bind(TaskState::Sleeping)
         .bind(available_at)
+        .bind(wait_event_name)
         .bind(run_id)
         .bind(task_id)
         .execute(&mut *conn)
@@ -1335,17 +1275,17 @@ impl Storage {
         // Clear any valid waits, and wake up those runs.
         sqlx::query(
             "WITH matching_waits AS (
-                DELETE FROM taskturbine.waits
-                WHERE event_name = $1
-                AND usecase = $2
-                AND (timeout_at IS NULL OR timeout_at >= NOW())
-                RETURNING run_id
+                SELECT r.run_id 
+                FROM taskturbine.runs AS r
+                INNER JOIN taskturbine.tasks AS t ON r.task_id = t.task_id
+                WHERE r.wait_event_name = $1 AND t.usecase = $2
             ),
             updated_runs AS (
                 UPDATE taskturbine.runs
                 SET state = $3,
                     available_at = NOW(),
                     claimed_by = NULL,
+                    wait_event_name = NULL,
                     claim_expires_at = NULL
                 WHERE run_id IN (SELECT run_id FROM matching_waits)
                 RETURNING task_id
@@ -1578,13 +1518,10 @@ mod tests {
             .await;
 
         assert!(res.is_ok());
-        let wait_res = storage.get_wait_by_run_id(spawned.run_id).await;
 
-        assert!(wait_res.is_ok());
-        assert!(
-            wait_res.unwrap().is_none(),
-            "wait should be deleted on run completion"
-        );
+        let waiting_runs = storage.get_runs_waiting("event_name").await;
+        assert!(waiting_runs.is_ok());
+        assert_eq!(waiting_runs.unwrap().len(), 0, "no runs waiting");
     }
 
     #[tokio::test]
@@ -1689,10 +1626,10 @@ mod tests {
             )
             .await;
         assert!(res.is_ok());
-        let wait_res = storage.get_wait_by_run_id(spawned.run_id).await;
-        assert!(wait_res.is_ok());
-        let wait = wait_res.unwrap();
-        assert!(wait.is_none(), "wait should be deleted on fail");
+        let waiting = storage.get_runs_waiting("event_name").await;
+        assert!(waiting.is_ok());
+        let waits = waiting.unwrap();
+        assert_eq!(waits.len(), 0, "no waits remaining");
     }
 
     #[tokio::test]
@@ -1725,6 +1662,10 @@ mod tests {
         assert!(res.is_err());
         let err = res.err().unwrap();
         assert!(matches!(err, StorageError::NotRunning(_)));
+
+        let waiting = storage.get_runs_waiting("event_name").await;
+        assert!(waiting.is_ok());
+        assert_eq!(waiting.unwrap().len(), 0, "no wait stored");
     }
 
     #[tokio::test]
@@ -1904,17 +1845,18 @@ mod tests {
             .await;
         assert!(res.is_ok());
 
-        let res = storage.get_wait_by_run_id(spawned.run_id).await;
-        let opt = res.unwrap();
-        assert!(opt.is_some(), "a wait should be saved");
+        let res = storage.get_runs_waiting(&event_id).await;
+        let rows = res.unwrap();
+        assert_eq!(rows.len(), 1, "a wait should be saved");
 
-        // Capture an event which should wait up the task
+        // Capture an event which should update the task to pending
         let res = storage.emit_event(&event_id, b"payload data").await;
+        dbg!(&res);
         assert!(res.is_ok());
 
-        let res = storage.get_wait_by_run_id(spawned.run_id).await;
-        let opt = res.unwrap();
-        assert!(opt.is_none(), "no wait should remain");
+        let res = storage.get_runs_waiting(&event_id).await;
+        let rows = res.unwrap();
+        assert_eq!(rows.len(), 0, "should be no waits remaining");
 
         let run = storage.get_run(spawned.run_id).await.unwrap();
         assert_eq!(run.state, TaskState::Pending);
