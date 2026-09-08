@@ -1221,7 +1221,7 @@ impl Storage {
         task_id: &TaskId,
         run_id: &RunId,
         available_in: Duration,
-        wait_event_name: Option<&str>
+        wait_event_name: Option<&str>,
     ) -> Result<(), StorageError> {
         let available_at = Utc::now() + available_in;
         sqlx::query(
