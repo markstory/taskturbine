@@ -1,6 +1,7 @@
 <h1 align="center">
     <img src="https://raw.githubusercontent.com/markstory/taskturbine/d25fd8b00646a6107ed9cfcd7017acce58962949/assets/taskturbine-logo-color.svg" />
     <br />
+    <br />
     Taskturbine
 </h1>
 
