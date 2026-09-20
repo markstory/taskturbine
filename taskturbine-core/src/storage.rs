@@ -629,7 +629,7 @@ impl Storage {
             LIMIT $2",
         )
         .bind(&self.config.usecase)
-        .bind(&cleanup_limit)
+        .bind(cleanup_limit)
         .fetch_all(&mut *atomic)
         .await
         .map_err(StorageError::SqlError)?;
@@ -680,7 +680,7 @@ impl Storage {
             WHERE task_id IN (SELECT task_id FROM candidates)"
         )
         .bind(&self.config.usecase)
-        .bind(&limit)
+        .bind(limit)
         .execute(&mut *atomic)
         .await
         .map_err(StorageError::SqlError)?;
@@ -2347,11 +2347,9 @@ mod tests {
         let storage = create_storage().await;
         let channel = "test_upkeep_metrics";
 
-        let _ = storage
-            .spawn_task(&channel, "first-task", b"", None)
-            .await;
+        let _ = storage.spawn_task(channel, "first-task", b"", None).await;
         let spawned = storage
-            .spawn_task(&channel, "first-task", b"", None)
+            .spawn_task(channel, "first-task", b"", None)
             .await
             .expect("should work");
         storage
@@ -2360,7 +2358,7 @@ mod tests {
             .expect("updating run state should not fail");
 
         let spawned = storage
-            .spawn_task(&channel, "first-task", b"", None)
+            .spawn_task(channel, "first-task", b"", None)
             .await
             .expect("should work");
         storage
@@ -2370,9 +2368,7 @@ mod tests {
 
         let metrics = storage.upkeep_metrics().await;
         assert_eq!(metrics.len(), 1, "only one channel");
-        assert_eq!(
-            &metrics[0].channel, &channel, "default channel is present"
-        );
+        assert_eq!(&metrics[0].channel, &channel, "default channel is present");
         assert_eq!(metrics[0].pending, 1, "pending count should match");
         assert_eq!(metrics[0].running, 1, "running count should match");
         assert_eq!(metrics[0].sleeping, 1, "sleeping count should match");

@@ -9,8 +9,8 @@ use async_channel::{Receiver, Sender, TrySendError};
 use futures::FutureExt;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
-use crate::context::{FlowControl, TaskContext};
 use crate::config::Config;
+use crate::context::{FlowControl, TaskContext};
 use metrics::{counter, gauge, histogram};
 use taskturbine_core::{
     models::{ClaimedTask, SpawnResult},

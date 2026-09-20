@@ -2,7 +2,6 @@
 // Use Into to convert from app -> core config.
 pub use taskturbine_core::config::Config as CoreConfig;
 
-
 /// Configuration options for Taskturbine rust applications.
 ///
 /// This struct duplicates several options from taskturbine_core::config::Config
@@ -12,7 +11,6 @@ pub use taskturbine_core::config::Config as CoreConfig;
 #[derive(Debug, Clone)]
 pub struct Config {
     // Attributes duplicated from taskturbine_core::config::Config
-
     /// The URI of the database your are connecting to.
     /// Example: postgresql://app:password@localhost/taskturbine
     pub database_url: String,
@@ -29,7 +27,6 @@ pub struct Config {
     pub await_event_default_timeout_secs: i32,
 
     // Attributes for taskturbine-app
-
     /// The default channel that tasks are spawned into.
     /// This channel will automatically be registered into the application
     /// using a config instance.
@@ -101,15 +98,15 @@ impl Default for Config {
     }
 }
 
-impl Into<CoreConfig> for Config {
+impl From<Config> for CoreConfig {
     // Create a taskturbine-core::config::Config from the application config
     // so that configuration can be passed down.
-    fn into(self) -> CoreConfig {
+    fn from(val: Config) -> Self {
         CoreConfig {
-            database_url: self.database_url,
-            database_log_queries: self.database_log_queries,
-            usecase: self.usecase,
-            await_event_default_timeout_secs: self.await_event_default_timeout_secs,
+            database_url: val.database_url,
+            database_log_queries: val.database_log_queries,
+            usecase: val.usecase,
+            await_event_default_timeout_secs: val.await_event_default_timeout_secs,
         }
     }
 }
