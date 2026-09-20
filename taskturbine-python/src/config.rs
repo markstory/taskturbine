@@ -60,16 +60,6 @@ impl From<Config> for taskturbine_core::config::Config {
             database_url: value.database_url,
             database_log_queries: value.database_log_queries,
             usecase: value.usecase,
-            default_channel: value.default_channel,
-            worker_claim_timeout_secs: value.worker_claim_timeout_secs,
-            worker_cleanup_cutoff_secs: value.worker_cleanup_cutoff_secs,
-            worker_upkeep_inline: value.worker_upkeep_inline,
-            worker_upkeep_interval_secs: value.worker_upkeep_interval_secs,
-            worker_cleanup_limit: value.worker_cleanup_limit,
-            worker_concurrency: value.worker_concurrency,
-            worker_sleep_ms: value.worker_sleep_ms,
-            worker_shutdown_idle_max: value.worker_shutdown_idle_max,
-            worker_shutdown_on_idle: value.worker_shutdown_on_idle,
             await_event_default_timeout_secs: value.await_event_default_timeout_secs,
         }
     }
