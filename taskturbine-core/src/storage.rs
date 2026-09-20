@@ -2345,12 +2345,13 @@ mod tests {
     #[tokio::test]
     async fn test_upkeep_metrics() {
         let storage = create_storage().await;
+        let channel = "test_upkeep_metrics";
 
         let _ = storage
-            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
+            .spawn_task(&channel, "first-task", b"", None)
             .await;
         let spawned = storage
-            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
+            .spawn_task(&channel, "first-task", b"", None)
             .await
             .expect("should work");
         storage
@@ -2359,7 +2360,7 @@ mod tests {
             .expect("updating run state should not fail");
 
         let spawned = storage
-            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
+            .spawn_task(&channel, "first-task", b"", None)
             .await
             .expect("should work");
         storage
@@ -2370,8 +2371,7 @@ mod tests {
         let metrics = storage.upkeep_metrics().await;
         assert_eq!(metrics.len(), 1, "only one channel");
         assert_eq!(
-            metrics[0].channel, storage.config.default_channel,
-            "default channel is present"
+            &metrics[0].channel, &channel, "default channel is present"
         );
         assert_eq!(metrics[0].pending, 1, "pending count should match");
         assert_eq!(metrics[0].running, 1, "running count should match");
