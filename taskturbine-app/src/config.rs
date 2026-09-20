@@ -7,6 +7,8 @@ pub use taskturbine_core::config::Config as CoreConfig;
 ///
 /// This struct duplicates several options from taskturbine_core::config::Config
 /// for ergonomics.
+///
+/// TODO add environment variable and config file support
 #[derive(Debug, Clone)]
 pub struct Config {
     // Attributes duplicated from taskturbine_core::config::Config
