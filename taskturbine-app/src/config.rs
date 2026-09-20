@@ -5,9 +5,28 @@ pub use taskturbine_core::config::Config as CoreConfig;
 
 /// Configuration options for Taskturbine rust applications.
 ///
+/// This struct duplicates several options from taskturbine_core::config::Config
+/// for ergonomics.
+#[derive(Debug, Clone)]
 pub struct Config {
-    /// The taskturbine-core Config instance.
-    pub core: CoreConfig,
+    // Attributes duplicated from taskturbine_core::config::Config
+
+    /// The URI of the database your are connecting to.
+    /// Example: postgresql://app:password@localhost/taskturbine
+    pub database_url: String,
+
+    /// Enable database logging at DEBUG level
+    pub database_log_queries: bool,
+
+    /// The application or client that is connecting.
+    /// Workers are bound to a specific usecase and can conditionally
+    /// consume from one or more channel (aka. queue/topic)
+    pub usecase: String,
+
+    /// The default number of seconds that events are waited on for.
+    pub await_event_default_timeout_secs: i32,
+
+    // Attributes for taskturbine-app
 
     /// The default channel that tasks are spawned into.
     /// This channel will automatically be registered into the application
@@ -55,15 +74,17 @@ pub struct Config {
     /// itself idle. If `[worker_shutdown_on_idle]` is set, the worker
     /// will complete its run loop. This is used for integration testing.
     pub worker_shutdown_idle_max: i32,
-
-    /// The default number of seconds that events are waited on for.
-    pub await_event_default_timeout_secs: i32,
 }
 
-impl Default for AppConfig {
+impl Default for Config {
     fn default() -> Self {
+        let core = CoreConfig::default();
         Config {
-            core: CoreConfig::default(),
+            database_url: core.database_url,
+            database_log_queries: core.database_log_queries,
+            usecase: core.usecase,
+            await_event_default_timeout_secs: core.await_event_default_timeout_secs,
+
             default_channel: "default".to_string(),
             worker_concurrency: 3,
             worker_sleep_ms: 100,
@@ -74,7 +95,19 @@ impl Default for AppConfig {
             worker_claim_timeout_secs: 60 * 10,
             worker_shutdown_on_idle: false,
             worker_shutdown_idle_max: 5,
-            await_event_default_timeout_secs: 120,
+        }
+    }
+}
+
+impl Into<CoreConfig> for Config {
+    // Create a taskturbine-core::config::Config from the application config
+    // so that configuration can be passed down.
+    fn into(self) -> CoreConfig {
+        CoreConfig {
+            database_url: self.database_url,
+            database_log_queries: self.database_log_queries,
+            usecase: self.usecase,
+            await_event_default_timeout_secs: self.await_event_default_timeout_secs,
         }
     }
 }
