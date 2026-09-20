@@ -23,7 +23,6 @@ pub struct Config {
     //
     //  - A worker attempts to claim tasks but none are found.
     //  - A worker claims tasks and can't send them to a worker queue.
-    //  - A worker c
     pub worker_sleep_ms: i32,
 
     /// The maximum number of completed tasks and events
