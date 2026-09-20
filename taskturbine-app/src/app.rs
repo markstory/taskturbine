@@ -1176,7 +1176,6 @@ mod tests {
             .await
             .expect("Failed to claim tasks");
 
-        /*
         let (send, recv) = async_channel::bounded::<ClaimedTask>(3);
         for item in claimed {
             send.send(item).await.expect("Failed to send claimed task");
@@ -1198,7 +1197,6 @@ mod tests {
             .expect("Failed to read task");
         assert_eq!(spawn_res.task_id, task.task_id);
         assert_eq!(task.state, TaskState::Completed);
-        */
     }
 
     #[tokio::test]
