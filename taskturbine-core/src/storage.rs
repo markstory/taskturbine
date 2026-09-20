@@ -158,6 +158,7 @@ impl Storage {
         match res {
             Err(_) => {
                 vec![UpkeepMetric {
+                    // TODO remove reference to default_channel
                     channel: self.config.default_channel.to_owned(),
                     total: 0,
                     pending: 0,

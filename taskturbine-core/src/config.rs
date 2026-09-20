@@ -15,6 +15,8 @@ pub struct Config {
     /// consume from one or more channel (aka. queue/topic)
     pub usecase: String,
 
+    // -- Remove everything below here as it moves to taskturbine-app
+
     /// The default channel that tasks are spawned into.
     /// This channel will automatically be registered into the application
     /// using a config instance.
