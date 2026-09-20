@@ -57,6 +57,19 @@ impl TaskturbineApp {
         }
     }
 
+    /// Create an app instance from config & storage
+    pub fn with_storage(config: Config, storage: Storage) -> Self {
+        let mut channels = HashSet::new();
+        channels.insert(config.default_channel.clone());
+
+        Self {
+            config,
+            storage,
+            channels,
+            tasks: HashMap::new(),
+        }
+    }
+
     /// Define a channel that tasks can be consumed on.
     ///
     /// Channels allow you to have dedicated workers for specific
@@ -765,11 +778,11 @@ mod tests {
     use crate::{
         app::{check_idle_shutdown, claim_tasks, process_task},
         context::{FlowControl, TaskContext},
-        testutils::create_app,
+        testutils::{create_app, create_config},
     };
     use taskturbine_core::{
         models::{ClaimedTask, TaskState},
-        storage::{StorageError, TaskOptions},
+        storage::{Storage, StorageError, TaskOptions},
     };
 
     use super::TaskturbineApp;
@@ -795,6 +808,16 @@ mod tests {
             .await
             .register_task("duplicate-task", |_ctx| async { Ok(None) })
             .register_task("duplicate-task", |_ctx| async { Ok(None) });
+    }
+
+    #[tokio::test]
+    async fn with_storage() {
+        let config = create_config();
+        let default_channel = config.default_channel.clone();
+        let storage = Storage::new(config.clone().into());
+        let app = TaskturbineApp::with_storage(config, storage);
+
+        assert_eq!(app.config.default_channel, default_channel);
     }
 
     #[tokio::test]
@@ -1182,13 +1205,12 @@ mod tests {
         }
 
         let mut join = JoinSet::new();
-        join.spawn(process_task(worker, recv));
-
         // Kill the worker process after 1 seconds
         join.spawn(async move {
             tokio::time::sleep(Duration::from_secs(1)).await;
             send.close();
         });
+        join.spawn(process_task(worker, recv));
         join.join_all().await;
 
         let task = storage
