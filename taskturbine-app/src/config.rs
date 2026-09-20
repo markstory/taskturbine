@@ -1,12 +1,13 @@
 // TODO make a Config in this package so the core config is slimmer.
 // Use Into to convert from app -> core config.
-pub use taskturbine_core::config::Config;
+pub use taskturbine_core::config::Config as CoreConfig;
 
 
-// TODO rename this
-pub struct AppConfig {
+/// Configuration options for Taskturbine rust applications.
+///
+pub struct Config {
     /// The taskturbine-core Config instance.
-    pub core: Config,
+    pub core: CoreConfig,
 
     /// The default channel that tasks are spawned into.
     /// This channel will automatically be registered into the application
@@ -60,7 +61,21 @@ pub struct AppConfig {
     pub await_event_default_timeout_secs: i32,
 }
 
-/*
 impl Default for AppConfig {
+    fn default() -> Self {
+        Config {
+            core: CoreConfig::default(),
+            default_channel: "default".to_string(),
+            worker_concurrency: 3,
+            worker_sleep_ms: 100,
+            worker_upkeep_inline: true,
+            worker_upkeep_interval_secs: 10,
+            worker_cleanup_cutoff_secs: 60 * 10,
+            worker_cleanup_limit: 1000,
+            worker_claim_timeout_secs: 60 * 10,
+            worker_shutdown_on_idle: false,
+            worker_shutdown_idle_max: 5,
+            await_event_default_timeout_secs: 120,
+        }
+    }
 }
-*/
