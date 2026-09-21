@@ -148,8 +148,8 @@
 //! ```rust
 //! use std::env;
 //! use taskturbine::app::{TaskturbineApp, ResultData, run_worker};
+//! use taskturbine::config::Config;
 //! use taskturbine::context::{FlowControl, TaskContext};
-//! use taskturbine_core::config::Config;
 //!
 //! async fn send_mail(ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
 //!     Ok(None)
@@ -208,7 +208,7 @@
 //!
 //! ```rust
 //! use taskturbine::app::{TaskturbineApp, run_upkeep_worker};
-//! use taskturbine_core::config::Config;
+//! use taskturbine::config::Config;
 //!
 //! async fn worker_main() {
 //!     let config = Config::default();

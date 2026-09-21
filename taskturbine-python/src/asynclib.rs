@@ -351,9 +351,10 @@ impl AsyncWorkerInner {
     /// Run all the upkeep operations on the database.
     fn run_upkeep<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let storage = self.storage.clone();
+        let limit = self.config.worker_cleanup_limit;
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             storage
-                .run_upkeep()
+                .run_upkeep(limit)
                 .await
                 .map_err(|e| StorageError::new_err(format!("Upkeep failed: {e:?}")))
         })

@@ -9,10 +9,10 @@ use async_channel::{Receiver, Sender, TrySendError};
 use futures::FutureExt;
 use tokio::{signal::unix::SignalKind, task::JoinSet, time};
 
+use crate::config::Config;
 use crate::context::{FlowControl, TaskContext};
 use metrics::{counter, gauge, histogram};
 use taskturbine_core::{
-    config::Config,
     models::{ClaimedTask, SpawnResult},
     storage::{Storage, StorageError, TaskOptions},
 };
@@ -44,7 +44,7 @@ pub struct TaskturbineApp {
 impl TaskturbineApp {
     /// Create an app instance from a config object.
     pub fn new(config: Config) -> Self {
-        let storage = Storage::new(config.clone());
+        let storage = Storage::new(config.clone().into());
 
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
@@ -57,9 +57,8 @@ impl TaskturbineApp {
         }
     }
 
-    /// Constructor when you already have a Storage instance.
-    pub fn from_storage(storage: Storage) -> Self {
-        let config = storage.get_config();
+    /// Create an app instance from config & storage
+    pub fn with_storage(config: Config, storage: Storage) -> Self {
         let mut channels = HashSet::new();
         channels.insert(config.default_channel.clone());
 
@@ -94,7 +93,7 @@ impl TaskturbineApp {
     ///
     /// ```rust
     /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine_core::config::Config;
+    /// use taskturbine::config::Config;
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -123,7 +122,7 @@ impl TaskturbineApp {
     ///
     /// ```rust
     /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine_core::config::Config;
+    /// use taskturbine::config::Config;
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -160,7 +159,7 @@ impl TaskturbineApp {
     ///
     /// ```rust
     /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine_core::config::Config;
+    /// use taskturbine::config::Config;
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -186,7 +185,7 @@ impl TaskturbineApp {
     ///
     /// ```rust
     /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine_core::config::Config;
+    /// use taskturbine::config::Config;
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -224,7 +223,7 @@ impl TaskturbineApp {
     ///
     /// ```rust
     /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine_core::config::Config;
+    /// use taskturbine::config::Config;
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -417,7 +416,7 @@ impl Worker {
     pub async fn run_upkeep(&self) -> Result<(), WorkerError> {
         self.app
             .storage
-            .run_upkeep()
+            .run_upkeep(self.app.config.worker_cleanup_limit)
             .await
             .map_err(|e| WorkerError::Message(format!("{e:?}")))
     }
@@ -549,7 +548,7 @@ fn _task_metric_labels<'a, 'b>(
 ///
 /// ```rust
 /// use taskturbine::app::{TaskturbineApp, run_worker};
-/// use taskturbine_core::config::Config;
+/// use taskturbine::config::Config;
 ///
 /// (async || {
 ///     let config = Config::default();
@@ -626,7 +625,7 @@ async fn check_idle_shutdown(worker: Arc<Worker>) {
 ///
 /// ```rust
 /// use taskturbine::app::{TaskturbineApp, run_upkeep_worker};
-/// use taskturbine_core::config::Config;
+/// use taskturbine::config::Config;
 ///
 /// (async || {
 ///     let config = Config::default();
@@ -779,12 +778,11 @@ mod tests {
     use crate::{
         app::{check_idle_shutdown, claim_tasks, process_task},
         context::{FlowControl, TaskContext},
-        testutils::create_app,
+        testutils::{create_app, create_config},
     };
     use taskturbine_core::{
         models::{ClaimedTask, TaskState},
         storage::{Storage, StorageError, TaskOptions},
-        testutils::create_config,
     };
 
     use super::TaskturbineApp;
@@ -813,12 +811,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn app_from_storage() {
+    async fn with_storage() {
         let config = create_config();
-        let storage = Storage::new(config.clone());
-        let app = TaskturbineApp::from_storage(storage);
-        let app_config = app.config;
-        assert_eq!(config.database_url, app_config.database_url);
+        let default_channel = config.default_channel.clone();
+        let storage = Storage::new(config.clone().into());
+        let app = TaskturbineApp::with_storage(config, storage);
+
+        assert_eq!(app.config.default_channel, default_channel);
     }
 
     #[tokio::test]
@@ -828,7 +827,7 @@ mod tests {
         assert!(app.has_channel("reports"), "Should have defined channel");
         assert!(
             app.has_channel("taskturbine-test"),
-            "Should have default channel"
+            "Should have default channel of taskturbine-test"
         );
         assert!(
             !app.has_channel("undefined"),
@@ -1206,13 +1205,12 @@ mod tests {
         }
 
         let mut join = JoinSet::new();
-        join.spawn(process_task(worker, recv));
-
         // Kill the worker process after 1 seconds
         join.spawn(async move {
             tokio::time::sleep(Duration::from_secs(1)).await;
             send.close();
         });
+        join.spawn(process_task(worker, recv));
         join.join_all().await;
 
         let task = storage

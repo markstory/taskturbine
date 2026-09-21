@@ -130,9 +130,9 @@ impl Storage {
 
     /// Run upkeep operations to release expired claims and cancel tasks
     /// based on `cancellation_max_age`.
-    pub async fn run_upkeep(&self) -> Result<(), StorageError> {
-        self.handle_expired_claims().await?;
-        self.handle_cancellation_max_age().await?;
+    pub async fn run_upkeep(&self, limit: i32) -> Result<(), StorageError> {
+        self.handle_expired_claims(limit).await?;
+        self.handle_cancellation_max_age(limit).await?;
 
         Ok(())
     }
@@ -158,7 +158,7 @@ impl Storage {
         match res {
             Err(_) => {
                 vec![UpkeepMetric {
-                    channel: self.config.default_channel.to_owned(),
+                    channel: "".to_owned(),
                     total: 0,
                     pending: 0,
                     running: 0,
@@ -616,7 +616,7 @@ impl Storage {
     /// claims at a time.
     ///
     /// Should be run periodically by workers, or by a dedicated cleanup process.
-    pub async fn handle_expired_claims(&self) -> Result<i64, StorageError> {
+    pub async fn handle_expired_claims(&self, cleanup_limit: i32) -> Result<i64, StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
         // Find all runs that have expired claims
         let res = sqlx::query(
@@ -629,7 +629,7 @@ impl Storage {
             LIMIT $2",
         )
         .bind(&self.config.usecase)
-        .bind(self.config.worker_cleanup_limit)
+        .bind(cleanup_limit)
         .fetch_all(&mut *atomic)
         .await
         .map_err(StorageError::SqlError)?;
@@ -649,7 +649,7 @@ impl Storage {
     /// Update all tasks that are past their cancellation_max_age
     ///
     /// Should be run periodically by workers.
-    pub async fn handle_cancellation_max_age(&self) -> Result<u64, StorageError> {
+    pub async fn handle_cancellation_max_age(&self, limit: i32) -> Result<u64, StorageError> {
         let mut atomic = self.pool.begin().await.map_err(StorageError::SqlError)?;
 
         // Find all rows that are sleeping or pending and have been around for
@@ -666,6 +666,7 @@ impl Storage {
                     OR
                     (t.first_started_at IS NULL AND NOW() - t.created_at > t.cancellation_max_age * INTERVAL '1 SECOND')
                 )
+                LIMIT $2
             ),
             updated_runs AS (
                 UPDATE taskturbine.runs
@@ -679,6 +680,7 @@ impl Storage {
             WHERE task_id IN (SELECT task_id FROM candidates)"
         )
         .bind(&self.config.usecase)
+        .bind(limit)
         .execute(&mut *atomic)
         .await
         .map_err(StorageError::SqlError)?;
@@ -2109,7 +2111,7 @@ mod tests {
 
         time::sleep(Duration::from_secs(2)).await;
 
-        let res = storage.handle_expired_claims().await;
+        let res = storage.handle_expired_claims(100).await;
         assert!(res.is_ok());
         assert_eq!(res.unwrap(), 1);
     }
@@ -2143,7 +2145,7 @@ mod tests {
         .await
         .unwrap();
 
-        let res = storage.handle_cancellation_max_age().await;
+        let res = storage.handle_cancellation_max_age(100).await;
         assert!(res.is_ok());
         let updated = res.unwrap();
         assert_eq!(updated, 1);
@@ -2185,7 +2187,7 @@ mod tests {
         .await
         .unwrap();
 
-        let res = storage.handle_cancellation_max_age().await;
+        let res = storage.handle_cancellation_max_age(100).await;
         assert!(res.is_ok());
         let updated = res.unwrap();
         assert_eq!(updated, 1);
@@ -2343,12 +2345,11 @@ mod tests {
     #[tokio::test]
     async fn test_upkeep_metrics() {
         let storage = create_storage().await;
+        let channel = "test_upkeep_metrics";
 
-        let _ = storage
-            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
-            .await;
+        let _ = storage.spawn_task(channel, "first-task", b"", None).await;
         let spawned = storage
-            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
+            .spawn_task(channel, "first-task", b"", None)
             .await
             .expect("should work");
         storage
@@ -2357,7 +2358,7 @@ mod tests {
             .expect("updating run state should not fail");
 
         let spawned = storage
-            .spawn_task(&storage.config.default_channel, "first-task", b"", None)
+            .spawn_task(channel, "first-task", b"", None)
             .await
             .expect("should work");
         storage
@@ -2367,10 +2368,7 @@ mod tests {
 
         let metrics = storage.upkeep_metrics().await;
         assert_eq!(metrics.len(), 1, "only one channel");
-        assert_eq!(
-            metrics[0].channel, storage.config.default_channel,
-            "default channel is present"
-        );
+        assert_eq!(&metrics[0].channel, &channel, "default channel is present");
         assert_eq!(metrics[0].pending, 1, "pending count should match");
         assert_eq!(metrics[0].running, 1, "running count should match");
         assert_eq!(metrics[0].sleeping, 1, "sleeping count should match");

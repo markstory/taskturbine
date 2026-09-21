@@ -14,7 +14,6 @@ pub fn create_config() -> Config {
     Config {
         usecase: format!("taskturbine-test-{}", Uuid::now_v7()),
         database_url: db_url,
-        default_channel: "taskturbine-test".into(),
         database_log_queries: true,
         ..Config::default()
     }

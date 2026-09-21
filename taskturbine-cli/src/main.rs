@@ -3,7 +3,7 @@ use std::fmt::Display;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 
-use taskturbine_core::config::Config;
+use taskturbine::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
 
 mod admin_storage;
@@ -122,6 +122,7 @@ async fn main() -> Result<(), CliError> {
             .expect("Could not determine database url from options or TASKTURBINE_DATABASE_URL")
     });
 
+    // TODO add a way to build app::config::Config from env vars.
     let config = Config {
         database_url: db_url,
         usecase: args.usecase,
@@ -134,7 +135,7 @@ async fn main() -> Result<(), CliError> {
         config.usecase.bright_blue()
     );
 
-    let storage = Storage::new(config);
+    let storage = Storage::new(config.clone().into());
     let result = match args.command {
         Commands::CleanupEvent(args) => cleanup_event::execute(storage, args).await,
         Commands::CleanupTask(args) => cleanup_task::execute(storage, args).await,
@@ -147,8 +148,8 @@ async fn main() -> Result<(), CliError> {
         Commands::GetTask(args) => task_get::execute(storage, args).await,
         Commands::ListTask(args) => task_list::execute(storage, args).await,
         Commands::Scheduler(args) => scheduler::scheduler(storage, args).await,
-        Commands::SpawnTask(args) => task_spawn::spawn_task(storage, args).await,
-        Commands::UpkeepWorker => upkeep::upkeep(storage).await,
+        Commands::SpawnTask(args) => task_spawn::spawn_task(storage, config, args).await,
+        Commands::UpkeepWorker => upkeep::upkeep(storage, config).await,
     };
 
     match result {

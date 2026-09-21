@@ -211,7 +211,7 @@ impl WorkerInner {
     /// Run all the upkeep operations on the database.
     fn run_upkeep(&self) -> PyResult<()> {
         self.runtime
-            .block_on(self.storage.run_upkeep())
+            .block_on(self.storage.run_upkeep(self.config.worker_cleanup_limit))
             .map_err(|e| StorageError::new_err(format!("Upkeep failed: {e:?}")))
     }
 
