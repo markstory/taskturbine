@@ -24,3 +24,4 @@ sqlx = { workspace = true, features = ["chrono", "postgres", "runtime-tokio", "u
 tokio = { workspace = true }
 uuid = { workspace = true }
 metrics = "0.24.6"
+serde = "1.0.229"
