@@ -139,9 +139,11 @@ async fn main() -> Result<(), CliError> {
 
     let cli_config: CliConfig = (&args).into();
 
+    // TODO add toml file support.
     let builder = Figment::from(Config::default())
         .merge(Serialized::defaults(cli_config))
         .merge(Env::prefixed("TASKTURBINE_"));
+
     let config: Config = builder.extract().map_err(|err| CliError(format!("Failed to build config: {err:?}")))?;
     if config.database_url.is_empty() {
         return Err(CliError("Could not determine database url from options or TASKTURBINE_DATABASE_URL".to_owned()));
