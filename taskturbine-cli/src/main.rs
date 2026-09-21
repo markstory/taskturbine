@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use figment::{Figment, providers::{Serialized, Env}};
+use serde::{Deserialize, Serialize};
 
 use taskturbine::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
@@ -60,6 +62,21 @@ struct Cli {
     command: Commands,
 }
 
+#[derive(Serialize, Deserialize)]
+struct CliConfig {
+    database_url: String,
+    usecase: String,
+}
+
+impl From<&Cli> for CliConfig {
+    fn from(value: &Cli) -> Self {
+        CliConfig {
+            database_url: value.database_url.clone().unwrap_or("".to_owned()),
+            usecase: value.usecase.clone(),
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Clears all data from storage.
@@ -116,18 +133,19 @@ async fn main() -> Result<(), CliError> {
     };
     simple_logger::init_with_level(log_level).unwrap();
 
-    // Find the database url. Use both CLI options and environment variables.
-    let db_url = args.database_url.unwrap_or_else(|| {
-        std::env::var("TASKTURBINE_DATABASE_URL")
-            .expect("Could not determine database url from options or TASKTURBINE_DATABASE_URL")
-    });
+    let cli_config: CliConfig = (&args).into();
 
-    // TODO add a way to build app::config::Config from env vars.
-    let config = Config {
-        database_url: db_url,
-        usecase: args.usecase,
-        ..Config::default()
-    };
+    let builder = Figment::from(Config::default())
+        .merge(Serialized::defaults(cli_config))
+        .merge(Env::prefixed("TASKTURBINE_"));
+    let config: Config = builder.extract().map_err(|err| CliError(format!("Failed to build config: {err:?}")))?;
+    if config.database_url.is_empty() {
+        return Err(CliError("Could not determine database url from options or TASKTURBINE_DATABASE_URL".to_owned()));
+    }
+    if config.usecase.is_empty() {
+        return Err(CliError("Could not determine usecase from options or TASKTURBINE_USECASE".to_owned()));
+    }
+
     println!("{}", "Taskturbine CLI".blue());
     println!(
         "{}: {}",
