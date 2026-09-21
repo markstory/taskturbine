@@ -58,6 +58,10 @@ struct Cli {
     #[arg(short, long)]
     verbose: bool,
 
+    /// Read configuration from a TOML file.
+    #[arg(short, long)]
+    config: String,
+
     #[command(subcommand)]
     command: Commands,
 }
