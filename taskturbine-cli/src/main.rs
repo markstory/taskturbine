@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use figment::{Figment, providers::{Serialized, Env}};
+use figment::{Figment, providers::{Env, Format, Serialized, Toml}};
 use serde::{Deserialize, Serialize};
 
 use taskturbine::config::Config;
@@ -58,9 +58,9 @@ struct Cli {
     #[arg(short, long)]
     verbose: bool,
 
-    /// Read configuration from a TOML file.
+    /// Read configuration from a TOML file. Config file options override environment variables.
     #[arg(short, long)]
-    config: String,
+    config: Option<String>,
 
     #[command(subcommand)]
     command: Commands,
@@ -70,6 +70,7 @@ struct Cli {
 struct CliConfig {
     database_url: String,
     usecase: String,
+    config: Option<String>,
 }
 
 impl From<&Cli> for CliConfig {
@@ -77,6 +78,7 @@ impl From<&Cli> for CliConfig {
         CliConfig {
             database_url: value.database_url.clone().unwrap_or("".to_owned()),
             usecase: value.usecase.clone(),
+            config: value.config.clone(),
         }
     }
 }
@@ -127,6 +129,29 @@ enum Commands {
     CancelTask(task_cancel::CancelArgs),
 }
 
+/// Extract configuration from the following sources:
+/// - Environment variables.
+/// - The file provided through --config
+/// - CLI args
+fn create_config(args: CliConfig) -> Result<Config, CliError> {
+    let config_arg = args.config.clone();
+    let mut builder = Figment::from(Config::default())
+        .merge(Env::prefixed("TASKTURBINE_"));
+    if let Some(config_file) = config_arg {
+        builder = builder.merge(Toml::file(config_file));
+    }
+    builder = builder.merge(Serialized::defaults(args));
+
+    let config: Config = builder.extract().map_err(|err| CliError(format!("Failed to build config: {err:?}")))?;
+    if config.database_url.is_empty() {
+        return Err(CliError("Could not determine database url from options or TASKTURBINE_DATABASE_URL".to_owned()));
+    }
+    if config.usecase.is_empty() {
+        return Err(CliError("Could not determine usecase from options or TASKTURBINE_USECASE".to_owned()));
+    }
+    Ok(config)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), CliError> {
     let args = Cli::parse();
@@ -136,21 +161,7 @@ async fn main() -> Result<(), CliError> {
         log::Level::Info
     };
     simple_logger::init_with_level(log_level).unwrap();
-
-    let cli_config: CliConfig = (&args).into();
-
-    // TODO add toml file support.
-    let builder = Figment::from(Config::default())
-        .merge(Serialized::defaults(cli_config))
-        .merge(Env::prefixed("TASKTURBINE_"));
-
-    let config: Config = builder.extract().map_err(|err| CliError(format!("Failed to build config: {err:?}")))?;
-    if config.database_url.is_empty() {
-        return Err(CliError("Could not determine database url from options or TASKTURBINE_DATABASE_URL".to_owned()));
-    }
-    if config.usecase.is_empty() {
-        return Err(CliError("Could not determine usecase from options or TASKTURBINE_USECASE".to_owned()));
-    }
+    let config = create_config((&args).into())?;
 
     println!("{}", "Taskturbine CLI".blue());
     println!(
