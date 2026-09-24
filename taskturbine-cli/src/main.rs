@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use figment::{Figment, providers::{Env, Format, Serialized, Toml}};
+use figment::{Figment, providers::{Env, Format, Toml}};
 use serde::{Deserialize, Serialize};
 
 use taskturbine::config::Config;
@@ -66,7 +66,7 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(Serialize, Deserialize)]
+/// Intermediary struct between clap and figment
 struct CliConfig {
     database_url: Option<String>,
     usecase: Option<String>,
