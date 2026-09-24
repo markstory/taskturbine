@@ -46,19 +46,19 @@ impl Display for CliError {
 #[command(about = "Command line tools and interface for taskturbine")]
 struct Cli {
     /// The database url to connect to. eg. postgres://user:pass@localhost/dbname.
-    /// Will use `TASKTURBINE_DATABASE_URL` as a fallback.
-    #[arg(short, long)]
+    #[arg(long)]
     database_url: Option<String>,
 
     /// The usecase that is being operated on
-    #[arg(short, long, default_value = "default")]
-    usecase: String,
+    #[arg(long)]
+    usecase: Option<String>,
 
     /// Enable verbose/debug output
     #[arg(short, long)]
     verbose: bool,
 
-    /// Read configuration from a TOML file. Config file options override environment variables.
+    /// Read configuration from a TOML file.
+    /// Config file options override environment variables.
     #[arg(short, long)]
     config: Option<String>,
 
@@ -68,15 +68,15 @@ struct Cli {
 
 #[derive(Serialize, Deserialize)]
 struct CliConfig {
-    database_url: String,
-    usecase: String,
+    database_url: Option<String>,
+    usecase: Option<String>,
     config: Option<String>,
 }
 
 impl From<&Cli> for CliConfig {
     fn from(value: &Cli) -> Self {
         CliConfig {
-            database_url: value.database_url.clone().unwrap_or("".to_owned()),
+            database_url: value.database_url.clone(),
             usecase: value.usecase.clone(),
             config: value.config.clone(),
         }
@@ -134,21 +134,20 @@ enum Commands {
 /// - The file provided through --config
 /// - CLI args
 fn create_config(args: CliConfig) -> Result<Config, CliError> {
-    let config_arg = args.config.clone();
     let mut builder = Figment::from(Config::default())
         .merge(Env::prefixed("TASKTURBINE_"));
-    if let Some(config_file) = config_arg {
+
+    if let Some(config_file) = args.config {
         builder = builder.merge(Toml::file(config_file));
     }
-    builder = builder.merge(Serialized::defaults(args));
+    if let Some(db_url) = args.database_url {
+        builder = builder.merge(("database_url", db_url));
+    }
+    if let Some(usecase) = args.usecase {
+        builder = builder.merge(("usecase", usecase));
+    }
 
     let config: Config = builder.extract().map_err(|err| CliError(format!("Failed to build config: {err:?}")))?;
-    if config.database_url.is_empty() {
-        return Err(CliError("Could not determine database url from options or TASKTURBINE_DATABASE_URL".to_owned()));
-    }
-    if config.usecase.is_empty() {
-        return Err(CliError("Could not determine usecase from options or TASKTURBINE_USECASE".to_owned()));
-    }
     Ok(config)
 }
 
