@@ -2,8 +2,10 @@ use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use figment::{Figment, providers::{Env, Format, Toml}};
-use serde::{Deserialize, Serialize};
+use figment::{
+    Figment,
+    providers::{Env, Format, Toml},
+};
 
 use taskturbine::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
@@ -134,8 +136,7 @@ enum Commands {
 /// - The file provided through --config
 /// - CLI args
 fn create_config(args: CliConfig) -> Result<Config, CliError> {
-    let mut builder = Figment::from(Config::default())
-        .merge(Env::prefixed("TASKTURBINE_"));
+    let mut builder = Figment::from(Config::default()).merge(Env::prefixed("TASKTURBINE_"));
 
     if let Some(config_file) = args.config {
         builder = builder.merge(Toml::file(config_file));
@@ -147,7 +148,9 @@ fn create_config(args: CliConfig) -> Result<Config, CliError> {
         builder = builder.merge(("usecase", usecase));
     }
 
-    let config: Config = builder.extract().map_err(|err| CliError(format!("Failed to build config: {err:?}")))?;
+    let config: Config = builder
+        .extract()
+        .map_err(|err| CliError(format!("Failed to build config: {err:?}")))?;
     Ok(config)
 }
 

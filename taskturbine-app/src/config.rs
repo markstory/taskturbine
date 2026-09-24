@@ -1,5 +1,8 @@
-use figment::{Provider, Error, Metadata, Profile, value::{Map, Dict}};
-use serde::{Serialize, Deserialize};
+use figment::{
+    Error, Metadata, Profile, Provider,
+    value::{Dict, Map},
+};
+use serde::{Deserialize, Serialize};
 
 use taskturbine_core::config::Config as CoreConfig;
 
@@ -105,7 +108,7 @@ impl Provider for Config {
     }
 
     /// Get configuration data out.
-    fn data(&self) ->  Result<Map<Profile, Dict>, Error> {
+    fn data(&self) -> Result<Map<Profile, Dict>, Error> {
         figment::providers::Serialized::defaults(Config::default()).data()
     }
 }
@@ -131,12 +134,17 @@ mod tests {
     #[test]
     fn config_uses_env_vars() {
         figment::Jail::expect_with(|jail| {
-            jail.set_env("TASKTURBINE_DATABASE_URL", "postgresql://user:password@localhost/test");
-            let builder = Figment::from(Config::default())
-                .merge(Env::prefixed("TASKTURBINE_"));
+            jail.set_env(
+                "TASKTURBINE_DATABASE_URL",
+                "postgresql://user:password@localhost/test",
+            );
+            let builder = Figment::from(Config::default()).merge(Env::prefixed("TASKTURBINE_"));
 
             let config: Config = builder.extract().expect("Config should parse");
-            assert_eq!("postgresql://user:password@localhost/test", config.database_url, "env var is included");
+            assert_eq!(
+                "postgresql://user:password@localhost/test", config.database_url,
+                "env var is included"
+            );
             assert_eq!("default", config.usecase, "defaults work too");
 
             Ok(())
