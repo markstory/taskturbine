@@ -17,6 +17,7 @@ taskturbine-core = {
 }
 tokio = { workspace = true }
 serde_json = { workspace = true }
+figment = { workspace = true , features = ["env", "test", "toml"]}
 log = { workspace = true }
 simple_logger = "5.1.0"
 uuid.workspace = true

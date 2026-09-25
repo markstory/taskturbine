@@ -1,14 +1,17 @@
-// TODO make a Config in this package so the core config is slimmer.
-// Use Into to convert from app -> core config.
-pub use taskturbine_core::config::Config as CoreConfig;
+use figment::{
+    Error, Metadata, Profile, Provider,
+    value::{Dict, Map},
+};
+use serde::{Deserialize, Serialize};
+
+use taskturbine_core::config::Config as CoreConfig;
 
 /// Configuration options for Taskturbine rust applications.
 ///
 /// This struct duplicates several options from taskturbine_core::config::Config
 /// for ergonomics.
 ///
-/// TODO add environment variable and config file support
-#[derive(Debug, Clone)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Config {
     // Attributes duplicated from taskturbine_core::config::Config
     /// The URI of the database your are connecting to.
@@ -98,6 +101,18 @@ impl Default for Config {
     }
 }
 
+impl Provider for Config {
+    /// Describe which provider configuration is coming from.
+    fn metadata(&self) -> Metadata {
+        Metadata::named("Taskturbine Config")
+    }
+
+    /// Get configuration data out.
+    fn data(&self) -> Result<Map<Profile, Dict>, Error> {
+        figment::providers::Serialized::defaults(Config::default()).data()
+    }
+}
+
 impl From<Config> for CoreConfig {
     // Create a taskturbine-core::config::Config from the application config
     // so that configuration can be passed down.
@@ -108,5 +123,31 @@ impl From<Config> for CoreConfig {
             usecase: val.usecase,
             await_event_default_timeout_secs: val.await_event_default_timeout_secs,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+    use figment::{Figment, providers::Env};
+
+    #[test]
+    fn config_uses_env_vars() {
+        figment::Jail::expect_with(|jail| {
+            jail.set_env(
+                "TASKTURBINE_DATABASE_URL",
+                "postgresql://user:password@localhost/test",
+            );
+            let builder = Figment::from(Config::default()).merge(Env::prefixed("TASKTURBINE_"));
+
+            let config: Config = builder.extract().expect("Config should parse");
+            assert_eq!(
+                "postgresql://user:password@localhost/test", config.database_url,
+                "env var is included"
+            );
+            assert_eq!("default", config.usecase, "defaults work too");
+
+            Ok(())
+        });
     }
 }

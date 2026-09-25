@@ -2,6 +2,10 @@ use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use figment::{
+    Figment,
+    providers::{Env, Format, Toml},
+};
 
 use taskturbine::config::Config;
 use taskturbine_core::storage::{Storage, StorageError};
@@ -44,20 +48,41 @@ impl Display for CliError {
 #[command(about = "Command line tools and interface for taskturbine")]
 struct Cli {
     /// The database url to connect to. eg. postgres://user:pass@localhost/dbname.
-    /// Will use `TASKTURBINE_DATABASE_URL` as a fallback.
-    #[arg(short, long)]
+    #[arg(long)]
     database_url: Option<String>,
 
     /// The usecase that is being operated on
-    #[arg(short, long, default_value = "default")]
-    usecase: String,
+    #[arg(long)]
+    usecase: Option<String>,
 
     /// Enable verbose/debug output
     #[arg(short, long)]
     verbose: bool,
 
+    /// Read configuration from a TOML file.
+    /// Config file options override environment variables.
+    #[arg(short, long)]
+    config: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
+}
+
+/// Intermediary struct between clap and figment
+struct CliConfig {
+    database_url: Option<String>,
+    usecase: Option<String>,
+    config: Option<String>,
+}
+
+impl From<&Cli> for CliConfig {
+    fn from(value: &Cli) -> Self {
+        CliConfig {
+            database_url: value.database_url.clone(),
+            usecase: value.usecase.clone(),
+            config: value.config.clone(),
+        }
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -106,6 +131,29 @@ enum Commands {
     CancelTask(task_cancel::CancelArgs),
 }
 
+/// Extract configuration from the following sources:
+/// - Environment variables.
+/// - The file provided through --config
+/// - CLI args
+fn create_config(args: CliConfig) -> Result<Config, CliError> {
+    let mut builder = Figment::from(Config::default()).merge(Env::prefixed("TASKTURBINE_"));
+
+    if let Some(config_file) = args.config {
+        builder = builder.merge(Toml::file(config_file));
+    }
+    if let Some(db_url) = args.database_url {
+        builder = builder.merge(("database_url", db_url));
+    }
+    if let Some(usecase) = args.usecase {
+        builder = builder.merge(("usecase", usecase));
+    }
+
+    let config: Config = builder
+        .extract()
+        .map_err(|err| CliError(format!("Failed to build config: {err:?}")))?;
+    Ok(config)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), CliError> {
     let args = Cli::parse();
@@ -115,19 +163,8 @@ async fn main() -> Result<(), CliError> {
         log::Level::Info
     };
     simple_logger::init_with_level(log_level).unwrap();
+    let config = create_config((&args).into())?;
 
-    // Find the database url. Use both CLI options and environment variables.
-    let db_url = args.database_url.unwrap_or_else(|| {
-        std::env::var("TASKTURBINE_DATABASE_URL")
-            .expect("Could not determine database url from options or TASKTURBINE_DATABASE_URL")
-    });
-
-    // TODO add a way to build app::config::Config from env vars.
-    let config = Config {
-        database_url: db_url,
-        usecase: args.usecase,
-        ..Config::default()
-    };
     println!("{}", "Taskturbine CLI".blue());
     println!(
         "{}: {}",
