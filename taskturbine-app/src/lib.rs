@@ -226,5 +226,11 @@ pub mod app;
 pub mod config;
 pub mod context;
 pub mod metrics;
+
+// Export top-level structs and functions
+pub use config::Config;
+pub use app::{TaskturbineApp, Worker, run_worker, run_upkeep_worker};
+pub use context::TaskContext;
+
 #[cfg(test)]
 mod testutils;
