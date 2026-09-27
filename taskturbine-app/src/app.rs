@@ -94,8 +94,7 @@ impl TaskturbineApp {
     /// Get a Channel that can be used to spawn tasks.
     ///
     /// ```rust
-    /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine::config::Config;
+    /// use taskturbine::{Config, TaskturbineApp};
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -123,8 +122,7 @@ impl TaskturbineApp {
     /// Duplicate task names will panic at runtime.
     ///
     /// ```rust
-    /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine::config::Config;
+    /// use taskturbine::{Config, TaskturbineApp};
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -160,8 +158,7 @@ impl TaskturbineApp {
     /// If `channels` is empty, tasks in all channels will be processed.
     ///
     /// ```rust
-    /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine::config::Config;
+    /// use taskturbine::{Config, TaskturbineApp};
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -186,8 +183,7 @@ impl TaskturbineApp {
     /// An error is returned if the task name is not registered.
     ///
     /// ```rust
-    /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine::config::Config;
+    /// use taskturbine::{Config, TaskturbineApp};
     ///
     /// (async || {
     ///     let config = Config::default();
@@ -224,8 +220,7 @@ impl TaskturbineApp {
     /// How those bytes are encoded is an application concern.
     ///
     /// ```rust
-    /// use taskturbine::app::TaskturbineApp;
-    /// use taskturbine::config::Config;
+    /// use taskturbine::{Config, TaskturbineApp};
     ///
     /// (async || {
     ///     let config = Config::default();

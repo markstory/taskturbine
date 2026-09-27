@@ -230,7 +230,7 @@ impl TaskContext {
     }
 
     /// Suspend the current task until the provided duration has elapsed.
-    /// You almost always want to call this with `?`
+    /// You almost always want to call this with `?`.
     pub async fn sleep_for(
         &mut self,
         step_name: &str,
