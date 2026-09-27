@@ -62,7 +62,8 @@ impl TaskContext {
 
     /// Get the result of a previously completed step name.
     /// If the step has not been completed, the return is None.
-    /// If there are multiple steps with the same name, the *latest* iteration will be used.
+    /// If there are multiple steps with the same name, the checkpoint 
+    /// with the highest index value will be used.
     ///
     /// This will read from storage directly bypassing the TaskContext checkpoint cache.
     pub async fn step_result(&self, step_name: &str) -> Result<Option<ResultData>, StorageError> {

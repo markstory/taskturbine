@@ -21,7 +21,9 @@ use taskturbine_core::{
 type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sync>>;
 
 /// A basic interface for results from tasks & steps.
-/// Applications are responsible for decoding bytes.
+/// Applications are responsible for decoding bytes into relevant structs.
+/// It is recommended to serialize parameters using JSON if cross-platform 
+/// compatibility is required.
 pub type ResultData = Vec<u8>;
 
 /// The result type of task functions.
@@ -264,6 +266,7 @@ where
     F: Fn(TaskContext) -> Ret + Sync + 'static,
     Ret: Future<Output = TaskResult> + Send + 'static,
 {
+    /// Apply the &self - the function implementing the TaskHandler trait.
     fn call(&self, ctx: TaskContext) -> Pin<Box<dyn Future<Output = TaskResult> + Send>> {
         Box::pin(self(ctx))
     }
@@ -547,8 +550,7 @@ fn _task_metric_labels<'a, 'b>(
 /// Consumes the worker and runs indefinitely until the process is killed.
 ///
 /// ```rust
-/// use taskturbine::app::{TaskturbineApp, run_worker};
-/// use taskturbine::config::Config;
+/// use taskturbine::{Config, TaskturbineApp, run_worker};
 ///
 /// (async || {
 ///     let config = Config::default();
@@ -624,8 +626,7 @@ async fn check_idle_shutdown(worker: Arc<Worker>) {
 /// Consumes the worker and runs indefinitely until the process is killed.
 ///
 /// ```rust
-/// use taskturbine::app::{TaskturbineApp, run_upkeep_worker};
-/// use taskturbine::config::Config;
+/// use taskturbine::{Config, TaskturbineApp, run_upkeep_worker};
 ///
 /// (async || {
 ///     let config = Config::default();

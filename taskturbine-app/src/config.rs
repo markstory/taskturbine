@@ -1,3 +1,4 @@
+//!
 use figment::{
     Error, Metadata, Profile, Provider,
     value::{Dict, Map},
@@ -9,8 +10,7 @@ use taskturbine_core::config::Config as CoreConfig;
 /// Configuration options for Taskturbine rust applications.
 ///
 /// This struct duplicates several options from taskturbine_core::config::Config
-/// for ergonomics.
-///
+/// for ergonomics and ease of use.
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Config {
     // Attributes duplicated from taskturbine_core::config::Config
@@ -78,6 +78,10 @@ pub struct Config {
     pub worker_shutdown_idle_max: i32,
 }
 
+/// Implement default configuration values for [`Config`].
+/// `database_url` will default to an empty string, and all other options
+/// implement reasonable defaults for local development and small production
+/// use cases.
 impl Default for Config {
     fn default() -> Self {
         let core = CoreConfig::default();
