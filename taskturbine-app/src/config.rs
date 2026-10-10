@@ -1,4 +1,4 @@
-//!
+//! Configuration structs that integrate with Figment
 use figment::{
     Error, Metadata, Profile, Provider,
     value::{Dict, Map},

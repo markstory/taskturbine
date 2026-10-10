@@ -1,3 +1,4 @@
+//! Defines the metrics used by taskturbine applications and workers.
 use metrics::{Unit, describe_counter, describe_gauge, describe_histogram};
 
 /// Import and call during application startup to register all metrics if required.

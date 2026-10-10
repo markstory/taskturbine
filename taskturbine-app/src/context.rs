@@ -1,3 +1,4 @@
+//! Runtime context for task execution and task outcomes.
 use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use crate::app::{Channel, ResultData, TaskturbineApp};

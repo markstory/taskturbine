@@ -1,3 +1,5 @@
+//! This module provides structs for defining an Application, creating and running Workers
+//! for an Application and interacting with Channels.
 use std::{
     collections::{HashMap, HashSet},
     pin::Pin,
