@@ -57,7 +57,7 @@
 //! Tasks are defined as async functions with a signature like:
 //!
 //! ```rust
-//! use taskturbine::context::{TaskContext, FlowControl};
+//! use taskturbine::{TaskContext, FlowControl};
 //!
 //! pub async fn do_some_task(mut ctx: TaskContext) -> Result<(), FlowControl> {
 //!   todo!();
@@ -85,8 +85,7 @@
 //! [async_step()](../taskturbine-app/context/struct.TaskContext.html#method.async_step).
 //!
 //! ```rust
-//! use taskturbine::app::ResultData;
-//! use taskturbine::context::{FlowControl, TaskContext};
+//! use taskturbine::{FlowControl, ResultData, TaskContext};
 //!
 //! #[derive(Debug)]
 //! struct Error(String);
@@ -147,9 +146,7 @@
 //!
 //! ```rust
 //! use std::env;
-//! use taskturbine::app::{TaskturbineApp, ResultData, run_worker};
-//! use taskturbine::config::Config;
-//! use taskturbine::context::{FlowControl, TaskContext};
+//! use taskturbine::{Config, FlowControl, TaskturbineApp, TaskContext, ResultData, run_worker};
 //!
 //! async fn send_mail(ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
 //!     Ok(None)
@@ -207,8 +204,7 @@
 //! to have dedicated upkeep worker to reduce contention:
 //!
 //! ```rust
-//! use taskturbine::app::{TaskturbineApp, run_upkeep_worker};
-//! use taskturbine::config::Config;
+//! use taskturbine::{Config, TaskturbineApp, run_upkeep_worker};
 //!
 //! async fn worker_main() {
 //!     let config = Config::default();
