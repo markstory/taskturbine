@@ -22,7 +22,7 @@ type TaskRegistry = HashMap<String, Box<dyn TaskHandler<TaskContext> + Send + Sy
 
 /// A basic interface for results from tasks & steps.
 /// Applications are responsible for decoding bytes into relevant structs.
-/// It is recommended to serialize parameters using JSON if cross-platform 
+/// It is recommended to serialize parameters using JSON if cross-platform
 /// compatibility is required.
 pub type ResultData = Vec<u8>;
 
