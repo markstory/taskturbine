@@ -1,3 +1,4 @@
+//! The core storage interfaces for taskturbine state
 use std::collections::HashMap;
 
 use crate::config::Config;

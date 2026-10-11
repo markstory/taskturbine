@@ -1,3 +1,4 @@
+//! Utilities used in tests. Requires the `test` feature.
 use uuid::Uuid;
 
 use crate::{

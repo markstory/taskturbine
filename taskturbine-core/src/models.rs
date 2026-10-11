@@ -1,4 +1,4 @@
-/// Common datastructures and models for taskturbine.
+//! Common datastructures and models for taskturbine.
 use chrono::{DateTime, Utc};
 use std::{
     collections::{HashMap, HashSet},
