@@ -1,7 +1,9 @@
+//! Configuration for the taskturbine storage API.
+
 /// Configuration options for Taskturbine core APIs
 ///
 /// Each language application framework must provide a way to convert
-/// application config into this struct to configure Storage.
+/// application config into this struct to configure [`Storage`](crate::storage::Storage).
 #[derive(Debug, Clone)]
 pub struct Config {
     /// The URI of the database your are connecting to.
