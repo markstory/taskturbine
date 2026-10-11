@@ -64,10 +64,10 @@
 //! }
 //! ```
 //!
-//! The [TaskContext](../taskturbine-app/context/struct.TaskContext.html) exposes methods to define task steps,
+//! The [`TaskContext`] exposes methods to define task steps,
 //! wait for events, spawn tasks and work with the tasks' parameters.
 //!
-//! The [FlowControl](../taskturbine-app/context/enum.FlowControl.html) error is used by taskturbine to represent
+//! The [`FlowControl`] error is used by taskturbine to represent
 //! scenarios where task steps have failed due to application logic, or are waiting for events, or
 //! for a sleep to expire. Task steps, events, and sleep operations will return `FlowControl` to
 //! direct taskturbine on how to advance the statemachine for a task when the task is not yet
@@ -81,8 +81,7 @@
 //! step results, and completed steps will not be run again.
 //!
 //! Step can either being synchronous or asynchronous. Task steps are defined using the
-//! [step()](../taskturbine-app/context/struct.TaskContext.html#method.step) and
-//! [async_step()](../taskturbine-app/context/struct.TaskContext.html#method.async_step).
+//! [`step()`](TaskContext::step) and [`async_step()`](TaskContext::async_step).
 //!
 //! ```rust
 //! use taskturbine::{FlowControl, ResultData, TaskContext};
@@ -114,8 +113,7 @@
 //! ## Spawning Tasks
 //!
 //! Tasks can be spawned using either
-//! [TaskturbineApp.spawn_task()](app/struct.TaskturbineApp.html#method.spawn_task) or
-//! [TaskContext.spawn_task()](context/struct.TaskContext.html#method.spawn_task). Tasks
+//! [`TaskturbineApp::spawn_task()`] or [`TaskContext::spawn_task()`]. Tasks
 //! take their parameters as a bytestring, and encoding/decoding parameter payloads is
 //! an application concern.
 //!
@@ -134,9 +132,8 @@
 //! be woken up and made pending for execution again. This provides a simple sychronization
 //! tool that lets you have tasks wait for events like webhooks, or other tasks to complete.
 //!
-//! Use [TaskContext.await_event](context/struct.TaskContext.html#method.await_event) to await events,
-//! and [TaskturbineApp.emit_event](app/struct.TaskturbineApp.html#method.emit_event) or
-//! [TaskContext.emit_event](context/struct.TaskContext.html#method.emit_event) to emit events.
+//! Use [`TaskContext::await_event`] to await events, and [`TaskturbineApp::emit_event`] or
+//! [`TaskContext::emit_event`] to emit events.
 //!
 //! # Running workers
 //!
@@ -194,8 +191,8 @@
 //!
 //! You can tune how often upkeep operations are done by workers using
 //!
-//! - [Config.worker_upkeep_interval_secs](config/struct.Config.html#structfield.worker_upkeep_interval_secs)
-//! - [Config.worker_upkeep_inline](config/struct.Config.html#structfield.worker_upkeep_inline)
+//! - [`Config::worker_upkeep_interval_secs`]
+//! - [`Config::worker_upkeep_inline`]
 //!
 //! # Upkeep workers
 //!
