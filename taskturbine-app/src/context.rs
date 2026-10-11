@@ -85,9 +85,29 @@ impl TaskContext {
     }
 
     /// Define a new async step with a name.
-    /// When steps complete, they create checkpoints of the
-    /// step results which enables re-runs of the task to durably
-    /// resume from their last checkpoint.
+    ///
+    /// As steps complete they create checkpoints with the
+    /// result of the step which enables re-runs of the task to durably
+    /// resume from their last completed step/checkpoint.
+    ///
+    /// ```rust
+    /// use taskturbine::{FlowControl, ResultData, TaskContext};
+    ///
+    /// #[derive(Debug)]
+    /// struct Error(String);
+    ///
+    /// pub async fn do_some_task(mut ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+    ///     // Define an async step
+    ///     let email_results = ctx.async_step(
+    ///         "send-results",
+    ///         async |ctx: TaskContext| -> Result<ResultData, Error> {
+    ///             todo!();
+    ///         }
+    ///     ).await?;
+    ///
+    ///     Ok(None)
+    /// }
+    /// ```
     pub async fn async_step<F, E, Fut>(
         &mut self,
         name: &str,
@@ -164,9 +184,29 @@ impl TaskContext {
     }
 
     /// Define a new synchronous step with a name.
-    /// When steps complete, they create checkpoints of the
-    /// step results which enables re-runs of the task to durably
-    /// resume from their last checkpoint.
+    ///
+    /// As steps complete they create checkpoints of the
+    /// step results, which enables re-runs of the task to durably
+    /// resume from their last completed step/checkpoint.
+    ///
+    /// ```rust
+    /// use taskturbine::{FlowControl, ResultData, TaskContext};
+    ///
+    /// #[derive(Debug)]
+    /// struct Error(String);
+    ///
+    /// pub async fn do_some_task(mut ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+    ///     // Define an synchronous step
+    ///     let email_results = ctx.step(
+    ///         "send-results",
+    ///         |ctx: TaskContext| -> Result<ResultData, Error> {
+    ///             todo!();
+    ///         }
+    ///     ).await?;
+    ///
+    ///     Ok(None)
+    /// }
+    /// ```
     pub async fn step<F, E>(&mut self, name: &str, step_fn: F) -> Result<ResultData, FlowControl>
     where
         F: FnOnce(TaskContext) -> Result<ResultData, E>,
@@ -178,14 +218,16 @@ impl TaskContext {
     }
 
     /// Record an event as having completed.
+    ///
     /// Events allow you to synchronize tasks with external actions
-    /// that can be recorded as events. Events can have a Payload of bytes.
+    /// that can be recorded as events. Events can have a payload of bytes.
     /// How those bytes are encoded is an application concern.
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
         self.app.emit_event(event_name, payload).await
     }
 
-    /// Await for an event to be captured by emit_event.
+    /// Await for an event to be captured by [`emit_event()`](TaskContext::emit_event).
+    ///
     /// When the event has not happened, the Result will be an Err
     /// that indicates that the worker should sleep. You almost
     /// always want to call this with `?`
