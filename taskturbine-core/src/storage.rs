@@ -100,6 +100,9 @@ pub struct UpkeepMetric {
 /// tasks, runs, events, waits, and checkpoints. This layer is not aware
 /// of what task names, or channels exist and validation of those identifiers
 /// is the responsibility of the caller.
+///
+/// Instead of using this struct directly, use the [`taskturbine`] package,
+/// or one of platform bindings like taskturbine-python.
 #[derive(Clone)]
 pub struct Storage {
     config: Config,
@@ -272,9 +275,10 @@ impl Storage {
         Ok(())
     }
 
-    /// {{{ Testing helpers
+    // {{{ Testing helpers
     /// Testing Helper: setting run + task to a specific state.
     #[cfg(feature = "test")]
+    #[doc(hidden)]
     pub async fn set_run_state(
         &self,
         task_id: TaskId,
@@ -311,6 +315,7 @@ impl Storage {
 
     /// Testing helper: reading task runs
     #[cfg(feature = "test")]
+    #[doc(hidden)]
     pub async fn get_run(&self, run_id: RunId) -> Result<Run, StorageError> {
         let res: Run = sqlx::query_as("SELECT * FROM taskturbine.runs WHERE run_id = $1")
             .bind(run_id)
@@ -323,6 +328,7 @@ impl Storage {
 
     /// Testing helper: get runs waiting on an event
     #[cfg(feature = "test")]
+    #[doc(hidden)]
     pub async fn get_runs_waiting(&self, event_name: &str) -> Result<Vec<PgRow>, StorageError> {
         let res = sqlx::query("SELECT * FROM taskturbine.runs WHERE wait_event_name = $1")
             .bind(event_name)
@@ -335,6 +341,7 @@ impl Storage {
 
     /// Testing helper: get a task
     #[cfg(feature = "test")]
+    #[doc(hidden)]
     pub async fn get_task(&self, task_id: TaskId) -> Result<Task, StorageError> {
         let res: Task = sqlx::query_as("SELECT * FROM taskturbine.tasks WHERE task_id = $1")
             .bind(task_id.0)
@@ -347,12 +354,14 @@ impl Storage {
 
     /// Testing helper: Sometimes we need to mutate data directly.
     #[cfg(feature = "test")]
+    #[doc(hidden)]
     pub fn get_connection(&self) -> &Pool<Postgres> {
         &self.pool
     }
 
     /// Testing helper: get an event
     #[cfg(feature = "test")]
+    #[doc(hidden)]
     pub async fn get_event_row(&self, event_name: &str) -> Result<Option<PgRow>, StorageError> {
         let res = sqlx::query(
             "SELECT * FROM taskturbine.events 
@@ -368,8 +377,8 @@ impl Storage {
     }
     // }}}
 
-    // Run migrations to create or update the database schema.
-    // Will create a taskturbine schema and add all tables inside that schema.
+    /// Run migrations to create or update the database schema.
+    /// Will create a taskturbine schema and add all tables inside that schema.
     pub async fn update_schema(&self) -> Result<(), MigrateError> {
         // Ensure the schema exists so migrations can run.
         sqlx::query("CREATE SCHEMA IF NOT EXISTS taskturbine")
