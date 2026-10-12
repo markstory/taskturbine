@@ -282,8 +282,9 @@ pub struct Checkpoint {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Provides in memory storage of steps -> checkpoint names
-/// It is possible for userland code to repeat step names
+/// Provides in memory storage of step -> checkpoint names.
+///
+/// It is possible for tasks to contain duplicate step names
 /// (like in a loop). We need to handle tracking separate
 /// completion states for each iteration.
 ///
@@ -291,12 +292,16 @@ pub struct Checkpoint {
 /// intended to be written to *after* writing to `Storage`.
 #[derive(Default)]
 pub struct Checkpoints {
+    /// Step counter values between a step name and the number of names generated with it.
     counters: Mutex<HashMap<String, u32>>,
+    /// Set of tasks that have had their checkpoint state loaded.
     loaded: Mutex<HashSet<TaskId>>,
+    /// Map of checkpoint keys and th checkpoint data.
     checkpoint_data: Mutex<HashMap<(TaskId, String), Checkpoint>>,
 }
 
 impl Checkpoints {
+    /// Create a new Checkpoint collection
     pub fn new() -> Self {
         Self {
             counters: Mutex::new(HashMap::new()),
@@ -382,12 +387,10 @@ impl Checkpoints {
     }
 
     /// Get a single checkpoint from the loaded checkpoint data.
-    /// TODO cleanup one param as a ref, and one as owned is madness.
     pub fn get(&self, task_id: TaskId, checkpoint_name: &str) -> Option<Checkpoint> {
         let Ok(checkpoint_data) = self.checkpoint_data.lock() else {
             return None;
         };
-        // TODO rework the key of this map so that lookups can be done without allocations.
         let key = (task_id, checkpoint_name.to_owned());
         checkpoint_data.get(&key).cloned()
     }
@@ -413,14 +416,18 @@ impl Checkpoints {
 /// in other systems. For example, a webhook need to be received.
 #[derive(Debug)]
 pub struct Event {
+    /// The usecase unique name of the event.
     pub event_name: String,
+    /// Bytes of the event payload. Can be JSON/protobufs or anything else.
     pub payload: Vec<u8>,
 }
 
 /// Entity structure for a scheduler entry state
 #[derive(sqlx::FromRow, Debug, PartialEq)]
 pub struct SchedulerState {
+    /// Unique name/id of the schedule entry
     pub schedule_id: String,
+    /// The last time the schedule was run.
     pub last_run: DateTime<Utc>,
 }
 
