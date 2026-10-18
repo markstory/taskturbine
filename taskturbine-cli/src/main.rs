@@ -1,3 +1,99 @@
+//! Command line tools for taskturbine applications
+//!
+//! This command line tool lets you inspect the state of a taskturbine application
+//! database, and perform maintenance operations on it.
+//!
+//! ## Installation
+//!
+//! You can install the taskturbine-cli with cargo
+//!
+//! ```bash
+//! cargo install taskturbine-cli
+//! ```
+//! A list of available commands can be output with
+//!
+//! ```bash
+//! taskturbine-cli -h
+//! ```
+//!
+//! ## Configuration
+//!
+//! The CLI tool is configured through environment variables, or a `config.toml`.
+//! The most minimal config file is:
+//!
+//! ```toml
+//! # Which database and credentials to use.
+//! database_url = "postgresql://apps:password@localhost/test_taskturbine"
+//!
+//! # Each usecase can be operated independently.
+//! usecase = "my_app"
+//! ```
+//!
+//! You can also use environment variables. Environment variables use the uppercased config
+//! name prefixed with `TASKTURBINE_` for example `database_url` would be
+//! `TASKTURBINE_DATABASE_URL`. See [`taskturbine::config::Config`] for the available
+//! configuration options.
+//!
+//! ## Creating Schema
+//!
+//! As you upgrade your taskturbine applications, you can use the `migrate` command
+//! to upgrade the schema your applications use. 
+//!
+//! ```bash
+//! taskturbine-cli migrate
+//! ```
+//!
+//! ## Maintenance operations
+//!
+//! The CLI tool provides commands to perform routine maintenance and compaction tasks.
+//! In production environments it is recommended to periodically run
+//!
+//! ```bash
+//! taskturbine-cli cleanup-event
+//! taskturbine-cli cleanup-task
+//! ```
+//! These commands prune completed tasks and expired events from the database reducing
+//! storage space.
+//!
+//!
+//! ## Scheduler
+//! 
+//! Using `taskturbine-cli scheduler` will let you periodically spawn tasks based on
+//! schedules defined in a configuration file. Think of it like crontab for your
+//! application's tasks:
+//! 
+//! ### Scheduler Configuration File
+//!
+//! ```toml
+//! [schedules]
+//! 
+//! [schedules.send-digests]
+//! taskname = "myapp-notification-send-digests"
+//! channel = "notifications"
+//! schedule = {cron = "*/5 * * * *" }
+//! params = '{"enable_experiement": true}'
+//! 
+//! [schedules.process-commits]
+//! taskname = "myapp-commits-process"
+//! channel = "commits"
+//! schedule =  { timedelta = { minutes = 5 } }
+//! ```
+//!
+//! The `schedules` table contains a list of schedule keys, the task, channel and
+//! schedule to use. Each schedule can use either a crontab or timedelta expression
+//! schedule. Fixed parameter payloads can be provided to tasks if required. By
+//! default tasks are spawned without any parameters or options.
+//!
+//! ### Running the scheduler
+//! 
+//! After building a `schedules.toml` file (see above), you can run the scheduler with:
+//!
+//! ```bash
+//! taskturbine-cli scheduler --config=./schedules.toml
+//! 
+//! # With debug logging enabled.
+//! taskturbine-cli --verbose scheduler --config=./schedules.toml
+//! ```
 use std::fmt::Display;
 
 use clap::{Parser, Subcommand};

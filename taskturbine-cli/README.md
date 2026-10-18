@@ -40,10 +40,9 @@ schedule to use. Each schedule can use either a crontab or timedelta expression
 schedule. Fixed parameter payloads can be provided to tasks if required. By
 default tasks are spawned without any parameters or options.
 
-#### Running the scheduler
+### Running the scheduler
 
-After building a `schedules.toml` file (see above), you can run the scheduler with
-:
+After building a `schedules.toml` file (see above), you can run the scheduler with:
 
 ```bash
 taskturbine-cli scheduler --config=./schedules.toml
