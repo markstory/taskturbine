@@ -1,3 +1,4 @@
+//! Command to view a list of runs.
 use clap::Args;
 
 use crate::{

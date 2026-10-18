@@ -1,3 +1,4 @@
+//! Commands to run a task scheduler
 use core::fmt;
 use std::{collections::HashMap, str::FromStr, time::Duration};
 

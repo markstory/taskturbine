@@ -1,3 +1,4 @@
+//! Command to cancel a task
 use clap::Args;
 use uuid::Uuid;
 

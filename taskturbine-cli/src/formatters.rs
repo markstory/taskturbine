@@ -1,3 +1,4 @@
+//! Formatting utilities for basic command line output.
 use taskturbine_core::models::{Checkpoint, Run, Task, TaskState};
 
 pub const INVALID_DATA: &str = "<non-utf8 data>";

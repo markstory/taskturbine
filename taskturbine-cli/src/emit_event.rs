@@ -1,3 +1,4 @@
+//! Command for emitting an event to a taskturbine application
 use clap::Args;
 
 use crate::CliError;

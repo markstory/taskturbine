@@ -1,3 +1,4 @@
+//! Run migrations for a taskturbine application.
 use crate::CliError;
 use taskturbine_core::storage::Storage;
 

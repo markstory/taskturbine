@@ -1,3 +1,4 @@
+//! Command to view a specific task
 use clap::Args;
 use uuid::Uuid;
 

@@ -1,3 +1,4 @@
+//! Command to spawn a task
 use std::collections::HashMap;
 
 use clap::Args;

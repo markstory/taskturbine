@@ -1,3 +1,4 @@
+//! Command to view an individual run.
 use clap::Args;
 use uuid::Uuid;
 

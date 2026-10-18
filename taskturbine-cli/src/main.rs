@@ -203,7 +203,6 @@ enum Commands {
     /// Will spawn tasks periodically based on the provided configuration file.
     ///
     /// See the README for an example configuration file.
-    ///
     Scheduler(scheduler::SchedulerArgs),
     /// Run a retention cleanup on event data.
     CleanupEvent(cleanup_event::CleanupEventArgs),
@@ -221,7 +220,7 @@ enum Commands {
     GetRun(run_get::RunGetArgs),
     /// Get a single task with filtering
     GetTask(task_get::TaskGetArgs),
-    /// Spawn a new task.
+    /// Spawn a new task
     SpawnTask(task_spawn::SpawnArgs),
     /// Cancels a sleeping or pending task
     CancelTask(task_cancel::CancelArgs),
