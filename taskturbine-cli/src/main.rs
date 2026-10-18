@@ -34,6 +34,8 @@
 //! `TASKTURBINE_DATABASE_URL`. See [`taskturbine::config::Config`] for the available
 //! configuration options.
 //!
+//! # Commands
+//!
 //! ## Creating Schema
 //!
 //! As you upgrade your taskturbine applications, you can use the `migrate` command
@@ -94,6 +96,16 @@
 //! # With debug logging enabled.
 //! taskturbine-cli --verbose scheduler --config=./schedules.toml
 //! ```
+//!
+//! ## Viewing State
+//!
+//! You can use the `list-run`, `get-run`, `list-task` and `get-task` commands to view
+//! tasks and runs that are currently being processed.
+//!
+//! ## Spawning and Cancelling tasks
+//!
+//! The `spawn-task` and `cancel-task` commands allow you to spawn new tasks, and cancel tasks
+//! respectively. Cancelled tasks will not be executed.
 use std::fmt::Display;
 
 use clap::{Parser, Subcommand};
@@ -138,6 +150,7 @@ impl Display for CliError {
     }
 }
 
+/// Options supported by all commands
 #[derive(Parser, Debug)]
 #[command(name = "taskturbine-cli")]
 #[command(version = "1.0")]
@@ -181,6 +194,7 @@ impl From<&Cli> for CliConfig {
     }
 }
 
+/// Enum of available commands.
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Clears all data from storage.
