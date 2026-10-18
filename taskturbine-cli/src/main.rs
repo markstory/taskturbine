@@ -39,7 +39,7 @@
 //! ## Creating Schema
 //!
 //! As you upgrade your taskturbine applications, you can use the `migrate` command
-//! to upgrade the schema your applications use. 
+//! to upgrade the schema your applications use.
 //!
 //! ```bash
 //! taskturbine-cli migrate
@@ -59,22 +59,22 @@
 //!
 //!
 //! ## Scheduler
-//! 
+//!
 //! Using `taskturbine-cli scheduler` will let you periodically spawn tasks based on
 //! schedules defined in a configuration file. Think of it like crontab for your
 //! application's tasks:
-//! 
+//!
 //! ### Scheduler Configuration File
 //!
 //! ```toml
 //! [schedules]
-//! 
+//!
 //! [schedules.send-digests]
 //! taskname = "myapp-notification-send-digests"
 //! channel = "notifications"
 //! schedule = {cron = "*/5 * * * *" }
 //! params = '{"enable_experiement": true}'
-//! 
+//!
 //! [schedules.process-commits]
 //! taskname = "myapp-commits-process"
 //! channel = "commits"
@@ -87,12 +87,12 @@
 //! default tasks are spawned without any parameters or options.
 //!
 //! ### Running the scheduler
-//! 
+//!
 //! After building a `schedules.toml` file (see above), you can run the scheduler with:
 //!
 //! ```bash
 //! taskturbine-cli scheduler --config=./schedules.toml
-//! 
+//!
 //! # With debug logging enabled.
 //! taskturbine-cli --verbose scheduler --config=./schedules.toml
 //! ```
