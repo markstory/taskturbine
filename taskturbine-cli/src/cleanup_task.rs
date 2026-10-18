@@ -1,3 +1,4 @@
+//! Command for running a one-time cleanup on tasks.
 use clap::Args;
 use std::time::Duration;
 

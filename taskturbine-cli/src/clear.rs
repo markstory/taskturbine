@@ -1,3 +1,4 @@
+//! Command for clearing all data in a usecase
 use clap::Args;
 
 use crate::CliError;

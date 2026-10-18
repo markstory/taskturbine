@@ -1,3 +1,4 @@
+//! Command for doing a one time cleanup operation on events.
 use std::time::Duration;
 
 use crate::CliError;
