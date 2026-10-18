@@ -1767,7 +1767,7 @@ mod tests {
                 None,
             )
             .await;
-        assert!(res.is_ok());
+        assert!(res.is_ok(), "failed to await the event {res:?}");
         let await_result = res.unwrap();
         assert_eq!(await_result.payload, b"event-payload");
         assert!(!await_result.should_suspend);
