@@ -128,10 +128,12 @@
 //!
 //! # Events
 //!
-//! Tasks can wait for an event to happen outside of a task. Your application logic can _emit
-//! events_ as they happen. When an event is emit, any task/run that has a `wait` registered, will
-//! be woken up and made pending for execution again. This provides a simple sychronization
-//! tool that lets you have tasks wait for events like webhooks, or other tasks to complete.
+//! Tasks can wait for an event to happen outside of a task. Examples of events can include
+//! handling webhooks, sending messages to a task, or waiting for other tasks to complete. 
+//! Your application logic can _emit events_ as they happen. When an event is emit, any task/run
+//! that has a `wait` registered, will be woken up and made pending for execution again. This
+//! provides a simple sychronization primitive to connect with the rest of your application's
+//! life-cycle.
 //!
 //! Use [`TaskContext::await_event`] to await events, and [`TaskturbineApp::emit_event`] or
 //! [`TaskContext::emit_event`] to emit events.
@@ -140,7 +142,7 @@
 //!
 //! Workers claim and execute tasks from one or more channels. While taskturbine gives you
 //! the building blocks for a worker, you do need to put them together in your application
-//! to create a worker binary. A simple worker can look like
+//! to create a worker binary. A simple worker can look like:
 //!
 //! ```rust
 //! use std::env;
