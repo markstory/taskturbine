@@ -38,9 +38,10 @@ pub fn make_taskturbine_app() -> TaskturbineApp {
     TaskturbineApp::new(task_config)
 }
 ```
-Taskturbine uses postgres tables to store all of its state and make it durable. On first use,
-`taskturbine` will install its tables within the `taskturbine` schema in your application's
-database.
+Taskturbine uses postgres tables to store all of its state durably. Before you can spawn
+and process tasks, you'll need to install the `taskturbine` schema. You can do that by 
+calling `await taskturbine_app.update_schema()?` in your application code, or using 
+the `migrate` command of [taskturbine-cli](https://crates.io/crates/taskturbine-cli).
 
 ## Defining Tasks
 
@@ -68,7 +69,8 @@ pub async fn sync_user(mut ctx: TaskContext) -> TaskResult {
 }
 ```
 
-This task doesn't do much. Let's add a few steps:
+Now, this task doesn't do much. Let's add some more logic and introduce a few
+'steps':
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -109,7 +111,9 @@ pub async fn sync_user(mut ctx: TaskContext) -> TaskResult {
 }
 ```
 
-Defining tasks as a series of steps, lets taskturbine make your tasks resilient against blips in network, storage systems, and downstream system failures. When a step fails, it should return a `FlowControl` error to indicate what failed:
+Defining tasks as a series of steps, lets taskturbine make your tasks resilient
+against blips in network, storage systems, and downstream system failures. When
+a step fails, it should return a `FlowControl` error to indicate what failed:
 
 ```rust
 let _ = ctx.async_step("load-new-state", async |ctx: TaskContext| -> TaskResult {
@@ -133,7 +137,9 @@ let res = app.spawn_task("task-name", b"{\"user_id\": 123}", None).await;
 
 ### Task Channels
 
-Tasks can be spawned onto specific 'channels' of work. Channels let you separate workloads from each other and run multiple workers pools for your different workloads.
+Tasks can be spawned onto specific 'channels' of work. Channels let you separate
+workloads from each other and run multiple workers pools for your different
+workloads.
 
 ```rust
 // Register a channel
@@ -170,7 +176,7 @@ let res = app.channel("reports").spawn_task("process-revenue-daily", b"{}", Some
 
 ## Running workers
 
-Workers are a tokio based runtime that claims and executes tasks. Tasks are claimed in batches by workers, and then processed by one of the worker threads. While taskturbine provides the tools to build a worker, you'll need to define a worker binary entrypoint in your application code. First, add a new entry to `cargo.toml`.
+Workers are a tokio based runtime that claims and executes tasks. Tasks are claimed in batches by workers, and then processed by one of the worker threads. While taskturbine provides the tools to build a worker, you'll need to define a worker binary entrypoint in your application code. First, add a new entry to your `Cargo.toml`.
 
 ```toml
 [[bin]]
