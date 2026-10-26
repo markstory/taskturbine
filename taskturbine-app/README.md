@@ -188,7 +188,7 @@ Our `worker.rs` file should look like:
 
 ```rust
 use simple_logger::SimpleLogger;
-use taskturbine::app::run_worker;
+use taskturbine::run_worker;
 
 use tasks::make_taskturbine_app;
 

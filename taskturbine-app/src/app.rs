@@ -108,7 +108,7 @@ impl TaskturbineApp {
     /// })();
     /// ```
     ///
-    /// Will panic if an undeclared channel is used.
+    /// Using an undefined channel will panic at runtime.
     pub fn channel<'a>(&'a self, name: &'a str) -> Channel<'a> {
         if !self.has_channel(name) {
             panic!("Unknown channel {name}");
@@ -120,8 +120,6 @@ impl TaskturbineApp {
     ///
     /// Once a task is registered, it can be spawned into any channel
     /// that is defined in the App. See [`TaskturbineApp::channel()`]
-    ///
-    /// Duplicate task names will panic at runtime.
     ///
     /// ```rust
     /// use taskturbine::{Config, TaskturbineApp};
@@ -136,6 +134,7 @@ impl TaskturbineApp {
     ///     });
     /// })();
     /// ```
+    /// Registering duplicate task names will panic at runtime.
     pub fn register_task<T>(mut self, task_name: &str, task_fn: T) -> Self
     where
         T: TaskHandler<TaskContext> + Sync + Send + 'static,
@@ -194,6 +193,7 @@ impl TaskturbineApp {
     ///     app.spawn_task("process-feedback", b"{\"user_id\":123}", None).await;
     /// })();
     /// ```
+    /// To spawn a task on a specific channel use [`channel()`](TaskturbineApp::channel)
     pub async fn spawn_task(
         &self,
         task_name: &str,
@@ -219,7 +219,6 @@ impl TaskturbineApp {
     /// Record an event as having completed.
     /// Events allow you to synchronize tasks with external actions
     /// that can be recorded as events. Events can have a Payload of bytes.
-    /// How those bytes are encoded is an application concern.
     ///
     /// ```rust
     /// use taskturbine::{Config, TaskturbineApp};
@@ -232,6 +231,7 @@ impl TaskturbineApp {
     ///     app.emit_event("email-verify-foo@example.com", payload).await;
     /// })();
     /// ```
+    /// How the bytes within an event are encoded is an application concern.
     pub async fn emit_event(&self, event_name: &str, payload: &[u8]) -> Result<(), FlowControl> {
         let res = self.storage.emit_event(event_name, payload).await;
         counter!("app.emit_event", "usecase" => self.config.usecase.to_owned()).increment(1);
@@ -326,6 +326,19 @@ impl From<StorageError> for WorkerError {
 ///
 /// A Worker can be run with [`run_worker`]. You can also
 /// use [`run_upkeep_worker`] to run a dedicated upkeep worker.
+///
+/// ```rust
+/// use taskturbine::{Config, TaskturbineApp, run_worker};
+///
+/// (async || {
+///     let config = Config::default();
+///     let mut app = TaskturbineApp::new(config);
+///
+///     // Create a worker with id = `worker-1` consuming from all channels.
+///     let worker = app.create_worker("worker-1", vec![]);
+///     run_worker(worker).await;
+/// })();
+/// ```
 pub struct Worker {
     /// The application instance this worker is for.
     app: Arc<TaskturbineApp>,
