@@ -1,4 +1,4 @@
-//! A durable task framework for Rust and Python.
+//! A durable task framework for Rust applications using tokio
 //!
 //! # Overview
 //!
