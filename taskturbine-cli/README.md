@@ -12,6 +12,25 @@ This crate provides CLI tools for interacting with a taskturbine application's d
 - Create schema and run schema migrations.
 - Run tasks on a schedule
 
+## Installation
+
+```bash
+cargo install taskturbine-cli
+```
+
+## Configuration
+
+Configuration of `taskturbine-cli` can be accomplished with either environment variables, or a TOML configuration file:
+
+## Managing Schema
+
+The `migrate` command lets you create the schema and tables needed to run taskturbine
+tasks in your application's database.
+
+```bash
+taskturbine-cli migrate
+```
+
 ## Scheduler
 
 Using `taskturbine-cli scheduler` will let you periodically spawn tasks based on
