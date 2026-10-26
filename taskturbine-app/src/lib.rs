@@ -90,19 +90,20 @@
 //! struct Error(String);
 //!
 //! pub async fn do_some_task(mut ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
-//!     // Define a sync step. `step_result` will contain the bytes returned by the step fn.
+//!     // Define a sync step. `prepared_bytes` will contain the bytes returned by the step fn.
 //!     let prepared_bytes = ctx.step(
 //!         "prepare-data",
 //!         |ctx: TaskContext| -> Result<ResultData, Error> {
-//!             todo!();
+//!             Ok(b"{\"status\":\"ok\"}".to_vec())
 //!         }
 //!     ).await?;
 //!
-//!     // Define an async step
+//!     // Define an async step. `email_results` will contain the bytes
+//!     // returned by the step.
 //!     let email_results = ctx.async_step(
 //!         "send-results",
 //!         async |ctx: TaskContext| -> Result<ResultData, Error> {
-//!             todo!();
+//!             Ok(b"ok".to_vec())
 //!         }
 //!     ).await?;
 //!
