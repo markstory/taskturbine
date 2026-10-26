@@ -207,7 +207,7 @@ async fn main() {
 Each worker can consume from one or more channels. When an empty channel list is provided, a worker consumes from all channels.
 
 
-The `run_worker` function will run a worker loop until the process receives `SIGINT`, `SIGTERM` or `SIGKILL`. Each worker will run `config.worker_concurrency` number of threads to process tasks concurrently.
+The `run_worker` function will run a worker loop until the process receives `SIGINT`, `SIGTERM` or `SIGKILL`. Each worker will run `config.worker_concurrency` number of processors to process tasks concurrently.
 
 ## Metrics and Logging
 
