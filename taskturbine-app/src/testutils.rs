@@ -6,11 +6,12 @@ use crate::config::Config;
 pub fn create_config() -> Config {
     let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
         .expect("Missing required TASKTURBINE_DATABASE_URL env var");
+    let uuid = Uuid::now_v7();
     Config {
-        usecase: format!("taskturbine-test-{}", Uuid::now_v7()),
+        usecase: format!("taskturbine-test-{}", uuid),
         database_url: db_url,
         database_log_queries: true,
-        default_channel: "taskturbine-test".to_owned(),
+        default_channel: format!("taskturbine-test-{}", uuid),
         ..Config::default()
     }
 }

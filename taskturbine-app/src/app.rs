@@ -779,7 +779,7 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
 mod tests {
     use std::{
         sync::Arc,
-        time::{Duration, SystemTime},
+        time::Duration,
     };
 
     use chrono::Utc;
@@ -798,18 +798,10 @@ mod tests {
 
     use super::TaskturbineApp;
 
-    async fn create_app_with_task(channel: &str) -> TaskturbineApp {
+    async fn create_app_with_task() -> TaskturbineApp {
         create_app()
             .await
-            .add_channel(channel)
             .register_task("first-task", |_ctx| async { Ok(None) })
-    }
-
-    fn now() -> u64 {
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
     }
 
     #[tokio::test]
@@ -834,10 +826,11 @@ mod tests {
     #[tokio::test]
     async fn add_channel_has_channel() {
         let app = create_app().await.add_channel("reports");
+        let default_channel = app.config.default_channel.to_owned();
 
         assert!(app.has_channel("reports"), "Should have defined channel");
         assert!(
-            app.has_channel("taskturbine-test"),
+            app.has_channel(&default_channel),
             "Should have default channel of taskturbine-test"
         );
         assert!(
@@ -897,28 +890,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_config() {
-        let channel = "worker_config";
-        let app = create_app_with_task(channel).await;
+    async fn worker_config_inherit_config() {
+        let app = create_app_with_task().await;
+        let default_channel = app.config.default_channel.to_owned();
 
         let worker = app.create_worker("worker-1", vec![]);
         let config = worker.config();
-        assert_eq!(config.default_channel, "taskturbine-test");
+        assert_eq!(config.default_channel, default_channel);
     }
 
     #[tokio::test]
     async fn worker_claim_tasks() {
-        let channel = "worker_claim_tasks";
-        let app = create_app_with_task(channel).await;
+        let app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
 
         let res = app
-            .channel(channel)
             .spawn_task("first-task", b"", None)
             .await;
         assert!(res.is_ok(), "failed to spawn task");
         let spawned = res.unwrap();
 
-        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let worker = app.create_worker("worker-1", vec![channel]);
         let timeout = Duration::from_secs(300);
         let res = worker.claim_tasks(timeout).await;
         assert!(res.is_ok(), "failed to claim tasks");
@@ -932,16 +924,15 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task() {
-        let channel = "worker_execute_task";
-        let app = create_app_with_task(channel).await;
+        let app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
 
         let res = app
-            .channel(channel)
             .spawn_task("first-task", b"", None)
             .await;
         assert!(res.is_ok(), "failed to spawn task");
 
-        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let worker = app.create_worker("worker-1", vec![channel]);
         let timeout = Duration::from_secs(300);
         let res = worker.claim_tasks(timeout).await;
         assert!(res.is_ok(), "failed to claim tasks");
@@ -957,20 +948,20 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task_result() {
-        let channel = "worker_execute_task_results";
-        let mut app = create_app_with_task(channel).await;
+        let mut app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
+
         app = app.register_task("result-task", async |_ctx: TaskContext| {
             let data = (b"{\"some\":\"json\"}").to_vec();
             Ok(Some(data))
         });
 
         let res = app
-            .channel(channel)
             .spawn_task("result-task", b"", None)
             .await;
         assert!(res.is_ok(), "failed to spawn task");
 
-        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let worker = app.create_worker("worker-1", vec![channel]);
         let timeout = Duration::from_secs(300);
         let res = worker.claim_tasks(timeout).await;
         assert!(res.is_ok(), "failed to claim tasks");
@@ -987,19 +978,18 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task_failure() {
-        let channel = "worker_execute_task_failure";
-        let mut app = create_app_with_task(channel).await;
+        let mut app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         app = app.register_task("fail-task", async |_ctx: TaskContext| {
             Err(FlowControl::Failure("failure".to_string()))
         });
 
         let res = app
-            .channel(channel)
             .spawn_task("fail-task", b"", None)
             .await;
         assert!(res.is_ok(), "failed to spawn task");
 
-        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let worker = app.create_worker("worker-1", vec![channel]);
         let timeout = Duration::from_secs(300);
         let res = worker.claim_tasks(timeout).await;
         assert!(res.is_ok(), "failed to claim tasks");
@@ -1015,8 +1005,8 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task_invalid_value() {
-        let channel = "worker_execute_task_invalid_value";
-        let mut app = create_app_with_task(channel).await;
+        let mut app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         app = app.register_task("second-task", async |_ctx: TaskContext| {
             Err(FlowControl::InvalidValue(
                 "something invalid was passed".to_string(),
@@ -1024,7 +1014,6 @@ mod tests {
         });
 
         let res = app
-            .channel(channel)
             .spawn_task("second-task", b"", None)
             .await;
         assert!(res.is_ok(), "failed to spawn task");
@@ -1045,9 +1034,8 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task_suspend_with_duration() {
-        // Include a timestamp to isolate test runs as we leave state behind
-        let channel = format!("worker_execute_task_suspended_{}", now());
-        let mut app = create_app_with_task(&channel).await;
+        let mut app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         app = app.register_task("sleep-task", async |mut ctx: TaskContext| {
             ctx.sleep_for("sleep-time", Duration::from_secs(30)).await?;
             Ok(None)
@@ -1058,12 +1046,11 @@ mod tests {
             ..TaskOptions::default()
         };
         let res = app
-            .channel(&channel)
             .spawn_task("sleep-task", b"", Some(options))
             .await;
         assert!(res.is_ok(), "failed to spawn task");
 
-        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let worker = app.create_worker("worker-1", vec![channel]);
         let timeout = Duration::from_secs(300);
         let res = worker.claim_tasks(timeout).await;
         assert!(res.is_ok(), "failed to claim tasks");
@@ -1088,20 +1075,19 @@ mod tests {
     #[tokio::test]
     async fn worker_execute_task_suspend() {
         // Include a timestamp to isolate test runs as we leave state behind
-        let channel = format!("worker_execute_task_suspend_{}", now());
-        let mut app = create_app_with_task(&channel).await;
+        let mut app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         app = app.register_task("sleep-task", async |ctx: TaskContext| {
             let _event = ctx.await_event("sleep-time", None).await?;
             Ok(None)
         });
 
         let res = app
-            .channel(&channel)
             .spawn_task("sleep-task", b"", None)
             .await;
         assert!(res.is_ok(), "failed to spawn task");
 
-        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let worker = app.create_worker("worker-1", vec![channel]);
         let timeout = Duration::from_secs(300);
         let res = worker.claim_tasks(timeout).await;
         assert!(res.is_ok(), "failed to claim tasks");
@@ -1117,11 +1103,8 @@ mod tests {
 
     #[tokio::test]
     async fn worker_execute_task_undefined_task() {
-        let channel = "worker_execute_task_undefined_task";
-        let app = create_app_with_task(channel).await;
-
+        let app = create_app_with_task().await;
         let res = app
-            .channel(channel)
             .spawn_task("undefined", b"", None)
             .await;
         assert!(res.is_err(), "undefined task should fail");
@@ -1131,11 +1114,9 @@ mod tests {
 
     #[tokio::test]
     async fn worker_run_upkeep() {
-        let channel = "worker_run_upkeep";
-        let app = create_app_with_task(channel).await;
-
+        let app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         let res = app
-            .channel(channel)
             .spawn_task("first-task", b"", None)
             .await;
         let spawned = res.expect("spawn_task failed");
@@ -1158,7 +1139,7 @@ mod tests {
         let _ = res.expect("Update failed");
 
         let storage = app.storage.clone();
-        let worker = app.create_worker("worker-1", vec![channel.to_string()]);
+        let worker = app.create_worker("worker-1", vec![channel]);
         let res = worker.run_upkeep().await;
         assert!(res.is_ok());
 
@@ -1169,12 +1150,12 @@ mod tests {
 
     #[tokio::test]
     async fn check_idle_shutdown_max() {
-        let channel = "check_idle_shutdown_max";
-        let mut app = create_app_with_task(channel).await;
+        let mut app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         app.config.worker_shutdown_on_idle = true;
         app.config.worker_shutdown_idle_max = 3;
 
-        let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_string()]));
+        let worker = Arc::new(app.create_worker("worker-1", vec![channel]));
         let _ = worker
             .claim_tasks(Duration::from_secs(1))
             .await
@@ -1195,16 +1176,15 @@ mod tests {
 
     #[tokio::test]
     async fn process_task_consume_queue() {
-        let channel = "process_task_consume_queue";
-        let app = create_app_with_task(channel).await;
+        let app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         let spawn_res = app
-            .channel(channel)
             .spawn_task("first-task", b"", None)
             .await
             .expect("Failed to spawn a task");
 
         let storage = app.storage.clone();
-        let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_owned()]));
+        let worker = Arc::new(app.create_worker("worker-1", vec![channel]));
         let claimed = worker
             .claim_tasks(Duration::from_secs(60))
             .await
@@ -1234,23 +1214,21 @@ mod tests {
 
     #[tokio::test]
     async fn claim_tasks_fills_queue() {
-        let channel = "claim_tasks_fills_queue";
-        let app = create_app_with_task(channel).await;
+        let app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         let spawn_res = app
-            .channel(channel)
             .spawn_task("first-task", b"", None)
             .await
             .expect("Failed to spawn a task");
 
         let storage = app.storage.clone();
-        let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_owned()]));
+        let worker = Arc::new(app.create_worker("worker-1", vec![channel]));
         let (send, recv) = async_channel::bounded::<ClaimedTask>(3);
 
         // Kill the worker process after 1 seconds
         let mut join = JoinSet::new();
         join.spawn(claim_tasks(worker, send));
         join.spawn(async move {
-            tokio::time::sleep(Duration::from_secs(1)).await;
             let claimed = recv.recv().await.expect("recv should be ok");
             assert_eq!(claimed.task_id, spawn_res.task_id);
 
@@ -1267,26 +1245,20 @@ mod tests {
 
     #[tokio::test]
     async fn claim_tasks_handles_channel_close() {
-        let channel = "claim_tasks_handles_channel_close";
-        let app = create_app_with_task(channel).await;
+        let app = create_app_with_task().await;
+        let channel = app.config.default_channel.clone();
         let spawn_res = app
-            .channel(channel)
             .spawn_task("first-task", b"", None)
             .await
             .expect("Failed to spawn a task");
 
         let storage = app.storage.clone();
-        let worker = Arc::new(app.create_worker("worker-1", vec![channel.to_owned()]));
+        let worker = Arc::new(app.create_worker("worker-1", vec![channel]));
         let (send, recv) = async_channel::bounded::<ClaimedTask>(3);
-
-        // Kill the worker process after 1 seconds
-        let mut join = JoinSet::new();
 
         // close the channel and then start the claim_tasks task.
         send.close();
-
-        join.spawn(claim_tasks(worker, send));
-        join.join_all().await;
+        claim_tasks(worker, send).await;
 
         let recv_res = recv.try_recv();
         assert!(recv_res.is_err(), "recv should fail");
@@ -1294,6 +1266,6 @@ mod tests {
             .get_task(spawn_res.task_id)
             .await
             .expect("task should exist");
-        assert_eq!(task.state, TaskState::Pending, "task will be claimed");
+        assert_eq!(task.state, TaskState::Pending, "task will be pending");
     }
 }
