@@ -706,7 +706,6 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
         tokio::select! {
             biased;
             _ = work_send.closed() => {
-                println!("channel closed");
                 log::debug!("No more receivers for work_send, shutting down claim_tasks");
                 break;
             }
@@ -746,7 +745,6 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                             time::sleep(sleep_duration).await;
                         },
                         Err(TrySendError::Closed(_)) => {
-                            println!("channel no send");
                             log::warn!("Channel is closed, shutting down claim_tasks");
                             return;
                         }
