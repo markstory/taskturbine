@@ -704,6 +704,16 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
         let timeout = Duration::from_secs(config.worker_claim_timeout_secs as u64);
         let start = Instant::now();
         tokio::select! {
+            biased;
+            _ = work_send.closed() => {
+                println!("channel closed");
+                log::debug!("No more receivers for work_send, shutting down claim_tasks");
+                break;
+            }
+            _ = guard.wait() => {
+                log::debug!("Shutting down claim_tasks");
+                break;
+            }
             Ok(mut claimed) = worker.claim_tasks(timeout) => {
                 histogram!("worker.claim_tasks.duration").record(Instant::now() - start);
                 log::debug!("Claimed {} tasks", claimed.len());
@@ -736,19 +746,12 @@ async fn claim_tasks(worker: Arc<Worker>, work_send: Sender<ClaimedTask>) {
                             time::sleep(sleep_duration).await;
                         },
                         Err(TrySendError::Closed(_)) => {
+                            println!("channel no send");
                             log::warn!("Channel is closed, shutting down claim_tasks");
                             return;
                         }
                     }
                 }
-            }
-            _ = work_send.closed() => {
-                log::debug!("No more receivers for work_send, shutting down claim_tasks");
-                break;
-            }
-            _ = guard.wait() => {
-                log::debug!("Shutting down claim_tasks");
-                break;
             }
         }
     }
@@ -759,6 +762,7 @@ async fn process_task(worker: Arc<Worker>, work_channel: Receiver<ClaimedTask>) 
     let guard = elegant_departure::get_shutdown_guard();
     loop {
         tokio::select! {
+            biased;
             Ok(task) = work_channel.recv() => {
                 worker.execute_task(task).await;
             }
