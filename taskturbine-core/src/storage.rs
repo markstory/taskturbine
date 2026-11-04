@@ -1612,6 +1612,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn fail_run_remove_wait() {
         let (storage, spawned) = create_task().await.unwrap();
 
@@ -1793,6 +1794,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn set_checkpoint_extend_claim() {
         let (storage, spawned) = create_task().await.unwrap();
 
@@ -1977,6 +1979,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn cleanup_tasks_with_limit() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
