@@ -32,11 +32,11 @@ pub async fn create_storage() -> Storage {
 
 pub async fn create_task() -> Result<(Storage, SpawnResult), StorageError> {
     let storage = create_storage().await;
-    let channel = "demo";
+    let channel = format!("demo-{}", Uuid::now_v7());
     let task_name = "say_hello";
     let payload = b"{\"key\": \"value\"}";
 
-    let result = storage.spawn_task(channel, task_name, payload, None).await;
+    let result = storage.spawn_task(&channel, task_name, payload, None).await;
     assert!(result.is_ok(), "Failed to spawn task {:?}", result.err());
     let spawned = result.unwrap();
 
