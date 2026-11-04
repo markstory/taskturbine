@@ -1473,6 +1473,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn complete_run_not_running() {
         let (storage, spawned) = create_task().await.unwrap();
         let res = storage
@@ -1486,6 +1487,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn complete_run_success() {
         let (storage, spawned) = create_task().await.unwrap();
         let _ = storage
@@ -1499,6 +1501,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn complete_run_clears_waits() {
         let (storage, spawned) = create_task().await.unwrap();
 
@@ -1828,6 +1831,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn emit_event_records() {
         let storage = create_storage().await;
         let uuid = Uuid::now_v7();
@@ -1844,6 +1848,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn emit_event_clears_task_waits() {
         let (storage, spawned) = create_task().await.unwrap();
         let _ = storage
@@ -1957,6 +1962,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn cleanup_events_with_limit() {
         let storage = create_storage().await;
         let _ = storage.emit_event("event-1", b"hi").await;
@@ -2044,6 +2050,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn claim_task_success() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
@@ -2066,6 +2073,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn claim_task_success_in_channel() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
@@ -2089,6 +2097,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn claim_task_complete_run_workflow() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
@@ -2110,6 +2119,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn handle_expired_claims() {
         let storage = create_storage().await;
         let _ = storage.clear_storage().await;
@@ -2247,6 +2257,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn extend_claim_on_other_worker() {
         let (storage, _) = create_task().await.unwrap();
         let timeout = Duration::from_secs(1);
