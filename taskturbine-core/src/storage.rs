@@ -1411,18 +1411,13 @@ mod tests {
     #[tokio::test]
     async fn spawn_task_idempotency_key_violation() {
         let storage = create_storage().await;
-        storage
-            .clear_storage()
-            .await
-            .expect("Failed to clear storage");
-
-        let channel = "spawn_task_idempotency_key_violation";
+        let channel = format!("channel-{}", Uuid::now_v7());
+        let idempotency_key = format!("idempotency-key-{}", Uuid::now_v7());
         let task_name = "say_hello";
         let payload = b"";
-        let idempotency_key = "some-unique-value";
         let result = storage
             .spawn_task(
-                channel,
+                &channel,
                 task_name,
                 payload,
                 Some(TaskOptions {
@@ -1437,7 +1432,7 @@ mod tests {
         // Spawn a duplicate task (same task_name + idempotency_key) -> err
         let duplicate = storage
             .spawn_task(
-                channel,
+                &channel,
                 task_name,
                 payload,
                 Some(TaskOptions {
@@ -1453,13 +1448,14 @@ mod tests {
         );
 
         // Make a task with a different idempotency key.
+        let different_key = format!("key-2-{}", Uuid::now_v7());
         let result = storage
             .spawn_task(
-                channel,
+                &channel,
                 task_name,
                 payload,
                 Some(TaskOptions {
-                    idempotency_key: Some("a-different-value".to_string()),
+                    idempotency_key: Some(different_key),
                     ..Default::default()
                 }),
             )
@@ -1662,6 +1658,7 @@ mod tests {
     #[tokio::test]
     async fn await_event_not_running() {
         let (storage, spawned) = create_task().await.unwrap();
+        let event_name = format!("event-{}", Uuid::now_v7());
 
         // Fails because the run is not running.
         let res = storage
@@ -1669,7 +1666,7 @@ mod tests {
                 spawned.task_id,
                 spawned.run_id,
                 "step_name",
-                "event_name",
+                &event_name,
                 None,
             )
             .await;
@@ -1677,7 +1674,7 @@ mod tests {
         let err = res.err().unwrap();
         assert!(matches!(err, StorageError::NotRunning(_)));
 
-        let waiting = storage.get_runs_waiting("event_name").await;
+        let waiting = storage.get_runs_waiting(&event_name).await;
         assert!(waiting.is_ok());
         assert_eq!(waiting.unwrap().len(), 0, "no wait stored");
     }
@@ -1792,7 +1789,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn set_checkpoint_extend_claim() {
         let (storage, spawned) = create_task().await.unwrap();
 
@@ -2013,7 +2009,6 @@ mod tests {
         // to manipulate time of tasks.
         let cutoff = Utc::now() + Duration::from_secs(60 * 5);
         let res = storage.cleanup_tasks(cutoff, 2).await;
-        dbg!(&res);
         assert!(res.is_ok(), "should cleanup ok");
         assert_eq!(1, res.unwrap());
 
