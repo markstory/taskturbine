@@ -1972,11 +1972,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn cleanup_tasks_with_limit() {
         let storage = create_storage().await;
-        let _ = storage.clear_storage().await;
-
         let completed = storage
             .spawn_task("ns", "task1", b"{}", None)
             .await
@@ -2110,21 +2107,49 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn handle_expired_claims() {
         let storage = create_storage().await;
-        let timeout = Duration::from_secs(1);
+        let timeout = Duration::from_millis(10);
         let channel = format!("channel-{}", Uuid::now_v7());
 
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
         let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
         assert!(res.is_ok());
 
-        time::sleep(Duration::from_secs(2)).await;
+        time::sleep(Duration::from_millis(20)).await;
 
         let res = storage.handle_expired_claims(100).await;
         assert!(res.is_ok());
         assert!(res.unwrap() >= 1, "At least one claim should have expired");
+    }
+
+    #[tokio::test]
+    async fn handle_expired_claims_retain_valid_claims() {
+        let storage = create_storage().await;
+        let timeout = Duration::from_millis(10);
+        let keep_timeout = Duration::from_secs(1);
+        let channel = format!("channel-{}", Uuid::now_v7());
+
+        let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
+        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
+        assert!(res.is_ok(), "should be ok");
+        assert_eq!(res.unwrap().len(), 1, "should claim one task");
+
+        let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
+        let res = storage.claim_task(vec![&channel], "worker-2", keep_timeout, 1).await;
+        assert!(res.is_ok(), "should claim the new task");
+        let claimed_keep = res.unwrap();
+        assert_eq!(claimed_keep.len(), 1, "should contain one task");
+
+        time::sleep(Duration::from_millis(20)).await;
+        let res = storage.handle_expired_claims(100).await;
+        assert!(res.is_ok());
+        assert!(res.unwrap() >= 1, "At least one claim should have expired");
+
+        let res = storage.get_task(claimed_keep[0].task_id).await;
+        assert!(res.is_ok(), "longer claim should exist");
+        let claimed = res.unwrap();
+        assert_eq!(claimed.state, TaskState::Running);
     }
 
     #[tokio::test]
