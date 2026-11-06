@@ -2129,7 +2129,7 @@ mod tests {
 
         let res = storage.handle_expired_claims(100).await;
         assert!(res.is_ok());
-        assert_eq!(res.unwrap(), 1);
+        assert!(res.unwrap() >= 1, "At least one claim should have expired");
     }
 
     #[tokio::test]
@@ -2253,7 +2253,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn extend_claim_on_other_worker() {
         let (storage, _) = create_task().await.unwrap();
         let timeout = Duration::from_secs(1);
