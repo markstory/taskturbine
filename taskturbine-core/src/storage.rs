@@ -1473,13 +1473,13 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn complete_run_not_running() {
         let (storage, spawned) = create_task().await.unwrap();
         let res = storage
             .complete_run(spawned.run_id, b"{\"result\": \"success\"}")
             .await;
         assert!(res.is_err());
+        println!("{:?}", res);
         assert!(matches!(
             res.err().unwrap(),
             StorageError::NotRunning { .. }
@@ -1487,7 +1487,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn complete_run_success() {
         let (storage, spawned) = create_task().await.unwrap();
         let _ = storage
@@ -1501,7 +1500,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn complete_run_clears_waits() {
         let (storage, spawned) = create_task().await.unwrap();
 
@@ -1516,7 +1514,7 @@ mod tests {
                 spawned.task_id,
                 spawned.run_id,
                 "step_name",
-                "event_name",
+                "complete_run_clears_waits",
                 None,
             )
             .await;
@@ -1534,7 +1532,7 @@ mod tests {
 
         assert!(res.is_ok());
 
-        let waiting_runs = storage.get_runs_waiting("event_name").await;
+        let waiting_runs = storage.get_runs_waiting("complete_run_clears_waits").await;
         assert!(waiting_runs.is_ok());
         assert_eq!(waiting_runs.unwrap().len(), 0, "no runs waiting");
     }
@@ -1612,7 +1610,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn fail_run_remove_wait() {
         let (storage, spawned) = create_task().await.unwrap();
 
@@ -1627,11 +1624,11 @@ mod tests {
                 spawned.task_id,
                 spawned.run_id,
                 "step_name",
-                "event_name",
+                "fail_run_remove_wait",
                 None,
             )
             .await;
-        assert!(res.is_ok());
+        assert!(res.is_ok(), "event wait should be stored");
 
         // Fail the run
         let res = storage
@@ -1642,9 +1639,10 @@ mod tests {
             )
             .await;
         assert!(res.is_ok());
-        let waiting = storage.get_runs_waiting("event_name").await;
+        let waiting = storage.get_runs_waiting("fail_run_remove_wait").await;
         assert!(waiting.is_ok());
         let waits = waiting.unwrap();
+        dbg!(&waits);
         assert_eq!(waits.len(), 0, "no waits remaining");
     }
 
@@ -1654,7 +1652,7 @@ mod tests {
         let task_id = TaskId(Uuid::now_v7());
         let run_id = RunId(Uuid::now_v7());
         let res = storage
-            .await_event(task_id, run_id, "step_name", "event_name", None)
+            .await_event(task_id, run_id, "step_name", "await_event_missing_run", None)
             .await;
         assert!(res.is_err());
         let err = res.err().unwrap();
@@ -1827,13 +1825,13 @@ mod tests {
             .get_checkpoint(spawned.task_id, "step-1")
             .await
             .unwrap();
+        println!("{:?}", checkpoint_opt);
         assert!(checkpoint_opt.is_some());
         let checkpoint = checkpoint_opt.unwrap();
         assert_eq!(b"event-payload".to_vec(), checkpoint.state);
     }
 
     #[tokio::test]
-    #[ignore]
     async fn emit_event_records() {
         let storage = create_storage().await;
         let uuid = Uuid::now_v7();
@@ -1850,7 +1848,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn emit_event_clears_task_waits() {
         let (storage, spawned) = create_task().await.unwrap();
         let _ = storage
@@ -2053,16 +2050,15 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn claim_task_success() {
+        let channel = format!("channel-{}", Uuid::now_v7());
         let storage = create_storage().await;
-        let _ = storage.clear_storage().await;
         let timeout = Duration::from_secs(30);
 
-        let _ = storage.spawn_task("test", "hello-world", b"", None).await;
-        let _ = storage.spawn_task("test", "hello-world", b"", None).await;
+        let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
+        let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
 
-        let res = storage.claim_task(vec![], "worker-1", timeout, 1).await;
+        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
         assert!(res.is_ok());
 
         let claimed = res.unwrap();
@@ -2070,16 +2066,14 @@ mod tests {
         let first_claim = &claimed[0];
         assert_eq!(first_claim.task_name, "hello-world");
 
-        let res = storage.claim_task(vec![], "worker-1", timeout, 100).await;
+        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 100).await;
         assert!(res.is_ok());
         assert!(claimed.len() < 100, "");
     }
 
     #[tokio::test]
-    #[ignore]
     async fn claim_task_success_in_channel() {
         let storage = create_storage().await;
-        let _ = storage.clear_storage().await;
         let timeout = Duration::from_secs(30);
 
         let _ = storage
@@ -2100,15 +2094,14 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn claim_task_complete_run_workflow() {
         let storage = create_storage().await;
-        let _ = storage.clear_storage().await;
         let timeout = Duration::from_secs(30);
+        let channel = format!("channel-{}", Uuid::now_v7());
 
-        let _ = storage.spawn_task("test", "hello-world", b"", None).await;
+        let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
 
-        let res = storage.claim_task(vec![], "worker-1", timeout, 1).await;
+        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
         assert!(res.is_ok());
         let claimed = res.unwrap();
         assert!(!claimed.is_empty());
@@ -2125,11 +2118,11 @@ mod tests {
     #[ignore]
     async fn handle_expired_claims() {
         let storage = create_storage().await;
-        let _ = storage.clear_storage().await;
         let timeout = Duration::from_secs(1);
+        let channel = format!("channel-{}", Uuid::now_v7());
 
-        let _ = storage.spawn_task("test", "hello-world", b"", None).await;
-        let res = storage.claim_task(vec![], "worker-1", timeout, 1).await;
+        let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
+        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
         assert!(res.is_ok());
 
         time::sleep(Duration::from_secs(2)).await;
