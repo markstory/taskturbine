@@ -129,7 +129,7 @@
 //! # Events
 //!
 //! Tasks can wait for an event to happen outside of a task. Examples of events can include
-//! handling webhooks, sending messages to a task, or waiting for other tasks to complete. 
+//! handling webhooks, sending messages to a task, or waiting for other tasks to complete.
 //! Your application logic can _emit events_ as they happen. When an event is emit, any task/run
 //! that has a `wait` registered, will be woken up and made pending for execution again. This
 //! provides a simple sychronization primitive to connect with the rest of your application's

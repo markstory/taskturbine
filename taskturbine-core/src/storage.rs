@@ -1648,7 +1648,13 @@ mod tests {
         let task_id = TaskId(Uuid::now_v7());
         let run_id = RunId(Uuid::now_v7());
         let res = storage
-            .await_event(task_id, run_id, "step_name", "await_event_missing_run", None)
+            .await_event(
+                task_id,
+                run_id,
+                "step_name",
+                "await_event_missing_run",
+                None,
+            )
             .await;
         assert!(res.is_err());
         let err = res.err().unwrap();
@@ -2050,7 +2056,9 @@ mod tests {
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
 
-        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
+        let res = storage
+            .claim_task(vec![&channel], "worker-1", timeout, 1)
+            .await;
         assert!(res.is_ok());
 
         let claimed = res.unwrap();
@@ -2058,7 +2066,9 @@ mod tests {
         let first_claim = &claimed[0];
         assert_eq!(first_claim.task_name, "hello-world");
 
-        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 100).await;
+        let res = storage
+            .claim_task(vec![&channel], "worker-1", timeout, 100)
+            .await;
         assert!(res.is_ok());
         assert!(claimed.len() < 100, "");
     }
@@ -2093,7 +2103,9 @@ mod tests {
 
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
 
-        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
+        let res = storage
+            .claim_task(vec![&channel], "worker-1", timeout, 1)
+            .await;
         assert!(res.is_ok());
         let claimed = res.unwrap();
         assert!(!claimed.is_empty());
@@ -2113,7 +2125,9 @@ mod tests {
         let channel = format!("channel-{}", Uuid::now_v7());
 
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
-        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
+        let res = storage
+            .claim_task(vec![&channel], "worker-1", timeout, 1)
+            .await;
         assert!(res.is_ok());
 
         time::sleep(Duration::from_millis(20)).await;
@@ -2131,12 +2145,16 @@ mod tests {
         let channel = format!("channel-{}", Uuid::now_v7());
 
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
-        let res = storage.claim_task(vec![&channel], "worker-1", timeout, 1).await;
+        let res = storage
+            .claim_task(vec![&channel], "worker-1", timeout, 1)
+            .await;
         assert!(res.is_ok(), "should be ok");
         assert_eq!(res.unwrap().len(), 1, "should claim one task");
 
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
-        let res = storage.claim_task(vec![&channel], "worker-2", keep_timeout, 1).await;
+        let res = storage
+            .claim_task(vec![&channel], "worker-2", keep_timeout, 1)
+            .await;
         assert!(res.is_ok(), "should claim the new task");
         let claimed_keep = res.unwrap();
         assert_eq!(claimed_keep.len(), 1, "should contain one task");
