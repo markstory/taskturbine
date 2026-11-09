@@ -194,8 +194,8 @@ impl AdminStorage {
 
 #[cfg(test)]
 mod tests {
-    use taskturbine_core::testutils::{create_channel, create_storage};
     use super::*;
+    use taskturbine_core::testutils::{create_channel, create_storage};
 
     async fn create_admin_storage(config: Config) -> AdminStorage {
         AdminStorage::new(config)
@@ -306,6 +306,6 @@ mod tests {
         };
         let res = admin_storage.run_list(options).await;
         let runs = res.expect("should be ok");
-        assert!(runs.len() >= 1);
+        assert!(!runs.is_empty());
     }
 }
