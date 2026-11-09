@@ -164,7 +164,6 @@ impl AdminStorage {
         query.push(" ORDER BY runs.created_at DESC");
 
         let res: Result<Vec<Run>, sqlx::Error> = query.build_query_as().fetch_all(&self.pool).await;
-
         let runs = res.map_err(StorageError::SqlError)?;
         Ok(runs)
     }
@@ -195,30 +194,19 @@ impl AdminStorage {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
-    use taskturbine_core::testutils::{create_config, create_storage};
-
+    use taskturbine_core::testutils::{create_channel, create_storage};
     use super::*;
 
-    fn now() -> u64 {
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-    }
-
-    async fn create_admin_storage() -> AdminStorage {
-        let config = create_config();
-
+    async fn create_admin_storage(config: Config) -> AdminStorage {
         AdminStorage::new(config)
     }
 
     #[tokio::test]
     async fn task_list_name_regexp() {
-        let ts = now();
-        let channel = format!("task_list_name_regexp_{ts}");
         let storage = create_storage().await;
-        let admin_storage = create_admin_storage().await;
+        let channel = create_channel();
+
+        let admin_storage = create_admin_storage(storage.get_config()).await;
         let _ = storage
             .spawn_task(&channel, "register-user", b"", None)
             .await;
@@ -248,9 +236,9 @@ mod tests {
 
     #[tokio::test]
     async fn task_get() {
-        let channel = "task_get";
+        let channel = &create_channel();
         let storage = create_storage().await;
-        let admin_storage = create_admin_storage().await;
+        let admin_storage = create_admin_storage(storage.get_config()).await;
         let spawn_res = storage
             .spawn_task(channel, "register-user", b"", None)
             .await;
@@ -275,10 +263,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_list_name_regexp() {
-        let channel = "run_list_name_regexp";
+    async fn run_list_task_id() {
+        let channel = &create_channel();
         let storage = create_storage().await;
-        let admin_storage = create_admin_storage().await;
+        let admin_storage = create_admin_storage(storage.get_config()).await;
         let spawn_res = storage
             .spawn_task(channel, "register-user", b"", None)
             .await;
@@ -297,9 +285,9 @@ mod tests {
 
     #[tokio::test]
     async fn run_list_state() {
-        let channel = "run_list_state";
+        let channel = &create_channel();
         let storage = create_storage().await;
-        let admin_storage = create_admin_storage().await;
+        let admin_storage = create_admin_storage(storage.get_config()).await;
         let _ = storage
             .spawn_task(channel, "register-user", b"", None)
             .await;
@@ -318,6 +306,6 @@ mod tests {
         };
         let res = admin_storage.run_list(options).await;
         let runs = res.expect("should be ok");
-        assert!(runs.len() > 1);
+        assert!(runs.len() >= 1);
     }
 }
