@@ -1376,18 +1376,18 @@ mod tests {
     use tokio::time;
 
     use super::*;
-    use crate::testutils::{create_storage, create_task};
+    use crate::testutils::{create_channel, create_storage, create_task};
 
     #[tokio::test]
     async fn spawn_task_invalid_retry_factor() {
         let storage = create_storage().await;
-        let channel = "demo";
+        let channel = create_channel();
         let task_name = "say_hello";
         let payload = b"{\"key\": \"value\"}";
 
         let result = storage
             .spawn_task(
-                channel,
+                &channel,
                 task_name,
                 payload,
                 Some(TaskOptions {
@@ -1411,7 +1411,7 @@ mod tests {
     #[tokio::test]
     async fn spawn_task_idempotency_key_violation() {
         let storage = create_storage().await;
-        let channel = format!("channel-{}", Uuid::now_v7());
+        let channel = create_channel();
         let idempotency_key = format!("idempotency-key-{}", Uuid::now_v7());
         let task_name = "say_hello";
         let payload = b"";
@@ -2049,7 +2049,7 @@ mod tests {
 
     #[tokio::test]
     async fn claim_task_success() {
-        let channel = format!("channel-{}", Uuid::now_v7());
+        let channel = create_channel();
         let storage = create_storage().await;
         let timeout = Duration::from_secs(30);
 
@@ -2099,7 +2099,7 @@ mod tests {
     async fn claim_task_complete_run_workflow() {
         let storage = create_storage().await;
         let timeout = Duration::from_secs(30);
-        let channel = format!("channel-{}", Uuid::now_v7());
+        let channel = create_channel();
 
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
 
@@ -2122,7 +2122,7 @@ mod tests {
     async fn handle_expired_claims() {
         let storage = create_storage().await;
         let timeout = Duration::from_millis(10);
-        let channel = format!("channel-{}", Uuid::now_v7());
+        let channel = create_channel();
 
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
         let res = storage
@@ -2142,7 +2142,7 @@ mod tests {
         let storage = create_storage().await;
         let timeout = Duration::from_millis(10);
         let keep_timeout = Duration::from_secs(1);
-        let channel = format!("channel-{}", Uuid::now_v7());
+        let channel = create_channel();
 
         let _ = storage.spawn_task(&channel, "hello-world", b"", None).await;
         let res = storage
@@ -2399,7 +2399,7 @@ mod tests {
     #[tokio::test]
     async fn test_upkeep_metrics() {
         let storage = create_storage().await;
-        let channel = "test_upkeep_metrics";
+        let channel = &create_channel();
 
         let _ = storage.spawn_task(channel, "first-task", b"", None).await;
         let spawned = storage
@@ -2422,7 +2422,7 @@ mod tests {
 
         let metrics = storage.upkeep_metrics().await;
         assert_eq!(metrics.len(), 1, "only one channel");
-        assert_eq!(&metrics[0].channel, &channel, "default channel is present");
+        assert_eq!(&metrics[0].channel, channel, "default channel is present");
         assert_eq!(metrics[0].pending, 1, "pending count should match");
         assert_eq!(metrics[0].running, 1, "running count should match");
         assert_eq!(metrics[0].sleeping, 1, "sleeping count should match");

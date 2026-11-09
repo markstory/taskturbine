@@ -42,3 +42,7 @@ pub async fn create_task() -> Result<(Storage, SpawnResult), StorageError> {
 
     Ok((storage, spawned))
 }
+
+pub fn create_channel() -> String {
+    format!("channel-{}", Uuid::now_v7())
+}
