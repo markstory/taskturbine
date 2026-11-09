@@ -196,8 +196,7 @@ impl AdminStorage {
 #[cfg(test)]
 mod tests {
     use std::time::SystemTime;
-
-    use taskturbine_core::storage::Storage;
+    use taskturbine_core::testutils::{create_config, create_storage};
 
     use super::*;
 
@@ -206,27 +205,6 @@ mod tests {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs()
-    }
-
-    fn create_config() -> Config {
-        let db_url = std::env::var("TASKTURBINE_DATABASE_URL")
-            .expect("Missing required TASKTURBINE_DATABASE_URL env var");
-        Config {
-            usecase: "test".to_string(),
-            database_url: db_url,
-            database_log_queries: true,
-            ..Config::default()
-        }
-    }
-
-    async fn create_storage() -> Storage {
-        let config = create_config();
-        let storage = Storage::new(config);
-
-        // Ensure migrations have been applied and that storage is cleared.
-        storage.update_schema().await.unwrap();
-
-        storage
     }
 
     async fn create_admin_storage() -> AdminStorage {
