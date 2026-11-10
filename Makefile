@@ -37,6 +37,7 @@ test: test-rs test-py ## Run all tests
 .PHONY: test
 
 test-rs: ## Run rust tests
+	cargo run --bin taskturbine-cli -- migrate
 	cargo t
 .PHONY: test-rs
 
