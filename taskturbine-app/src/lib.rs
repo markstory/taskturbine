@@ -224,7 +224,9 @@ pub mod context;
 pub mod metrics;
 
 // Export top-level structs and functions
-pub use app::{ResultData, StepResult, TaskResult, TaskturbineApp, Worker, run_upkeep_worker, run_worker};
+pub use app::{
+    ResultData, StepResult, TaskResult, TaskturbineApp, Worker, run_upkeep_worker, run_worker,
+};
 pub use config::Config;
 pub use context::{FlowControl, TaskContext};
 
