@@ -2,12 +2,9 @@ use std::{env, time::Duration};
 
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sha2::Sha256;
 use sqlx::Row;
-use taskturbine::{
-    Config, FlowControl, StepResult, TaskContext, TaskResult, TaskturbineApp
-};
+use taskturbine::{Config, FlowControl, StepResult, TaskContext, TaskResult, TaskturbineApp};
 
 use crate::db::{SALT, create_db};
 
@@ -219,13 +216,20 @@ pub async fn multi_step(mut ctx: TaskContext) -> TaskResult {
     struct MultiStepParams {
         pub steps: Option<i8>,
     }
-    let Ok(params): Result<MultiStepParams, _> = serde_json::from_slice(ctx.param_bytes().as_slice()) else {
-        return Err(FlowControl::InvalidValue("Invalid json parameters".to_owned()));
+    let Ok(params): Result<MultiStepParams, _> =
+        serde_json::from_slice(ctx.param_bytes().as_slice())
+    else {
+        return Err(FlowControl::InvalidValue(
+            "Invalid json parameters".to_owned(),
+        ));
     };
     for i in 1..params.steps.unwrap_or(5) {
-        let _ = ctx.async_step(&format!("step-{i}"), async |_ctx: TaskContext| -> StepResult<TaskError> {
-            Ok(vec![])
-        }).await?;
+        let _ = ctx
+            .async_step(
+                &format!("step-{i}"),
+                async |_ctx: TaskContext| -> StepResult<TaskError> { Ok(vec![]) },
+            )
+            .await?;
     }
     Ok(None)
 }
@@ -237,19 +241,28 @@ pub async fn multi_step_results(mut ctx: TaskContext) -> TaskResult {
         pub bytes_min: Option<i32>,
         pub bytes_max: Option<i32>,
     }
-    let Ok(params): Result<MultiStepResultsParams, _> = serde_json::from_slice(ctx.param_bytes().as_slice()) else {
-        return Err(FlowControl::InvalidValue("Invalid json parameters".to_owned()));
+    let Ok(params): Result<MultiStepResultsParams, _> =
+        serde_json::from_slice(ctx.param_bytes().as_slice())
+    else {
+        return Err(FlowControl::InvalidValue(
+            "Invalid json parameters".to_owned(),
+        ));
     };
     let bytes_min = params.bytes_min.unwrap_or(0);
-    let bytes_max = params.bytes_min.unwrap_or(1024);
+    let bytes_max = params.bytes_max.unwrap_or(1024);
     assert!(bytes_min < bytes_max, "min must be less than max");
 
     for i in 1..params.steps.unwrap_or(5) {
-        let _ = ctx.async_step(&format!("step-{i}"), async |_ctx: TaskContext| -> StepResult<TaskError> {
-            let blob_size = rand::random_range(bytes_min..bytes_max);
-            let blob = "a".repeat(blob_size as usize);
-            Ok(Vec::from(blob))
-        }).await?;
+        let _ = ctx
+            .async_step(
+                &format!("step-{i}"),
+                async |_ctx: TaskContext| -> StepResult<TaskError> {
+                    let blob_size = rand::random_range(bytes_min..bytes_max);
+                    let blob = "a".repeat(blob_size as usize);
+                    Ok(Vec::from(blob))
+                },
+            )
+            .await?;
     }
 
     Ok(None)
