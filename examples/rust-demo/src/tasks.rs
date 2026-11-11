@@ -6,9 +6,7 @@ use serde_json::Value;
 use sha2::Sha256;
 use sqlx::Row;
 use taskturbine::{
-    app::{ResultData, TaskResult, TaskturbineApp},
-    config::Config,
-    context::{FlowControl, TaskContext},
+    Config, FlowControl, StepResult, TaskContext, TaskResult, TaskturbineApp
 };
 
 use crate::db::{SALT, create_db};
@@ -50,7 +48,9 @@ pub fn make_task_app() -> TaskturbineApp {
         .register_task("err-fail", err_failure)
         .register_task("panic-fail", panic_failure)
         .register_task("register-user", register_user)
+        .register_task("simple-noop", simple_noop)
         .register_task("sleep-time", sleep_time)
+        .register_task("multi-step", multi_step)
         .register_task("multi-step-sleep", multi_step_sleep)
 }
 
@@ -72,7 +72,7 @@ pub async fn register_user(mut ctx: TaskContext) -> TaskResult {
 
     /// Steps can be defined as standard functions
     /// Store the user in the database.
-    async fn create_user(ctx: TaskContext) -> Result<ResultData, TaskError> {
+    async fn create_user(ctx: TaskContext) -> StepResult<TaskError> {
         log::info!("create the user in the database");
         let db = create_db().await;
         let payload: RegisterUserParams = serde_json::from_slice(ctx.param_bytes())?;
@@ -102,7 +102,7 @@ pub async fn register_user(mut ctx: TaskContext) -> TaskResult {
     let event_name = ctx
         .async_step(
             "send-verification-code",
-            async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
+            async |_ctx: TaskContext| -> StepResult<TaskError> {
                 log::info!("Generate and log a verification code");
 
                 // This simulates an email verification flow.
@@ -138,7 +138,7 @@ pub async fn register_user(mut ctx: TaskContext) -> TaskResult {
     let _ = ctx
         .async_step(
             "verification-complete",
-            async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
+            async |_ctx: TaskContext| -> StepResult<TaskError> {
                 log::info!("Verification complete, update the user.");
                 let db = create_db().await;
                 let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
@@ -153,7 +153,7 @@ pub async fn register_user(mut ctx: TaskContext) -> TaskResult {
         )
         .await?;
 
-    let _ = ctx.async_step("provision-organization", async |ctx: TaskContext| -> Result<ResultData, TaskError> {
+    let _ = ctx.async_step("provision-organization", async |ctx: TaskContext| -> StepResult<TaskError> {
         log::info!("Provision the organization.");
         let params: RegisterUserParams = serde_json::from_slice(ctx.param_bytes())?;
         let user_data: UserRegister = serde_json::from_slice(create_user_json.as_slice())?;
@@ -207,6 +207,11 @@ pub async fn panic_failure(mut _ctx: TaskContext) -> TaskResult {
     panic!("A task has hit panic!");
 }
 
+// Simplest task that could be run
+pub async fn simple_noop(_ctx: TaskContext) -> TaskResult {
+    Ok(None)
+}
+
 /// Simulate IO wait workload
 pub async fn sleep_time(ctx: TaskContext) -> TaskResult {
     let params = ctx.param_bytes();
@@ -223,6 +228,23 @@ pub async fn sleep_time(ctx: TaskContext) -> TaskResult {
     log::info!("started sleep_time. Sleeping for {delay}");
     tokio::time::sleep(Duration::from_millis((delay * 1000.0) as u64)).await;
     log::info!("sleep_time complete");
+    Ok(None)
+}
+
+/// Noop multi-step task
+pub async fn multi_step(mut ctx: TaskContext) -> TaskResult {
+    #[derive(Deserialize)]
+    struct MultiStepParams {
+        pub steps: Option<i8>,
+    }
+    let Ok(params): Result<MultiStepParams, _> = serde_json::from_slice(ctx.param_bytes().as_slice()) else {
+        return Err(FlowControl::InvalidValue("Invalid json parameters".to_owned()));
+    };
+    for i in 1..params.steps.unwrap_or(5) {
+        let _ = ctx.async_step(&format!("step-{i}"), async |_ctx: TaskContext| -> StepResult<TaskError> {
+            Ok(vec![])
+        }).await?;
+    }
     Ok(None)
 }
 
@@ -251,8 +273,8 @@ pub async fn multi_step_sleep(mut ctx: TaskContext) -> TaskResult {
     for i in 1..params.steps.unwrap_or(2) {
         let _ = ctx
             .async_step(
-                "step-{i}",
-                async |_ctx: TaskContext| -> Result<ResultData, TaskError> {
+                &format!("step-{i}"),
+                async |_ctx: TaskContext| -> StepResult<TaskError> {
                     log::debug!("started step {i}");
                     if rand::random::<f64>() < failure_rate {
                         log::info!("step {i} failed");
