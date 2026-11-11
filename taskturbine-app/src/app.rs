@@ -31,6 +31,9 @@ pub type ResultData = Vec<u8>;
 /// The result type of task functions.
 pub type TaskResult = Result<Option<ResultData>, FlowControl>;
 
+/// The result type of task step functions.
+pub type StepResult<E> = Result<ResultData, E>;
+
 /// The entrypoint and container for a Task application
 ///
 /// Application instances are created from [`Config`]. Tasks and channels

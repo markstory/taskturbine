@@ -1,7 +1,7 @@
 //! Runtime context for task execution and task outcomes.
 use std::{fmt::Debug, sync::Arc, time::Duration};
 
-use crate::app::{Channel, ResultData, TaskturbineApp};
+use crate::app::{Channel, ResultData, StepResult, TaskturbineApp};
 use metrics::counter;
 use taskturbine_core::{
     models::{Checkpoints, ClaimedTask, Event, RunId, SpawnResult, TaskId},
@@ -91,16 +91,16 @@ impl TaskContext {
     /// resume from their last completed step/checkpoint.
     ///
     /// ```rust
-    /// use taskturbine::{FlowControl, ResultData, TaskContext};
+    /// use taskturbine::{FlowControl, StepResult, ResultData, TaskContext, TaskResult};
     ///
     /// #[derive(Debug)]
     /// struct Error(String);
     ///
-    /// pub async fn do_some_task(mut ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+    /// pub async fn do_some_task(mut ctx: TaskContext) -> TaskResult {
     ///     // Define an async step
     ///     let email_results = ctx.async_step(
     ///         "send-results",
-    ///         async |ctx: TaskContext| -> Result<ResultData, Error> {
+    ///         async |ctx: TaskContext| -> StepResult<Error> {
     ///             todo!();
     ///         }
     ///     ).await?;
@@ -114,7 +114,7 @@ impl TaskContext {
         step_fn: F,
     ) -> Result<ResultData, FlowControl>
     where
-        Fut: Future<Output = Result<ResultData, E>>,
+        Fut: Future<Output = StepResult<E>>,
         F: FnOnce(TaskContext) -> Fut,
         E: std::fmt::Debug,
     {
@@ -178,7 +178,7 @@ impl TaskContext {
                 Ok(state as ResultData)
             }
             Err(err) => Err(FlowControl::Failure(format!(
-                "Task execution failed: {err:?}"
+                "Task step execution failed: {err:?}"
             ))),
         }
     }
@@ -190,16 +190,16 @@ impl TaskContext {
     /// resume from their last completed step/checkpoint.
     ///
     /// ```rust
-    /// use taskturbine::{FlowControl, ResultData, TaskContext};
+    /// use taskturbine::{FlowControl, StepResult, ResultData, TaskContext, TaskResult};
     ///
     /// #[derive(Debug)]
     /// struct Error(String);
     ///
-    /// pub async fn do_some_task(mut ctx: TaskContext) -> Result<Option<ResultData>, FlowControl> {
+    /// pub async fn do_some_task(mut ctx: TaskContext) -> TaskResult {
     ///     // Define an synchronous step
     ///     let email_results = ctx.step(
     ///         "send-results",
-    ///         |ctx: TaskContext| -> Result<ResultData, Error> {
+    ///         |ctx: TaskContext| -> StepResult<Error> {
     ///             todo!();
     ///         }
     ///     ).await?;
@@ -209,7 +209,7 @@ impl TaskContext {
     /// ```
     pub async fn step<F, E>(&mut self, name: &str, step_fn: F) -> Result<ResultData, FlowControl>
     where
-        F: FnOnce(TaskContext) -> Result<ResultData, E>,
+        F: FnOnce(TaskContext) -> StepResult<E>,
         E: std::fmt::Debug,
     {
         let async_step_fn = async |ctx: TaskContext| step_fn(ctx);
