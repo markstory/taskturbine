@@ -51,6 +51,7 @@ pub fn make_task_app() -> TaskturbineApp {
         .register_task("simple-noop", simple_noop)
         .register_task("sleep-time", sleep_time)
         .register_task("multi-step", multi_step)
+        .register_task("multi-step-results", multi_step_results)
         .register_task("multi-step-sleep", multi_step_sleep)
 }
 
@@ -207,27 +208,8 @@ pub async fn panic_failure(mut _ctx: TaskContext) -> TaskResult {
     panic!("A task has hit panic!");
 }
 
-// Simplest task that could be run
+/// Simplest task that could be run
 pub async fn simple_noop(_ctx: TaskContext) -> TaskResult {
-    Ok(None)
-}
-
-/// Simulate IO wait workload
-pub async fn sleep_time(ctx: TaskContext) -> TaskResult {
-    let params = ctx.param_bytes();
-    // TODO use serde and a struct to be more idiomatic
-    let res: Result<Value, _> = serde_json::from_slice(params.as_slice());
-    let delay = match res {
-        Ok(params) => params
-            .get("duration")
-            .map(|v| v.as_f64())
-            .unwrap_or(Some(0.1))
-            .unwrap(),
-        Err(_) => 0.1,
-    };
-    log::info!("started sleep_time. Sleeping for {delay}");
-    tokio::time::sleep(Duration::from_millis((delay * 1000.0) as u64)).await;
-    log::info!("sleep_time complete");
     Ok(None)
 }
 
@@ -245,6 +227,49 @@ pub async fn multi_step(mut ctx: TaskContext) -> TaskResult {
             Ok(vec![])
         }).await?;
     }
+    Ok(None)
+}
+
+pub async fn multi_step_results(mut ctx: TaskContext) -> TaskResult {
+    #[derive(Deserialize)]
+    struct MultiStepResultsParams {
+        pub steps: Option<i8>,
+        pub bytes_min: Option<i32>,
+        pub bytes_max: Option<i32>,
+    }
+    let Ok(params): Result<MultiStepResultsParams, _> = serde_json::from_slice(ctx.param_bytes().as_slice()) else {
+        return Err(FlowControl::InvalidValue("Invalid json parameters".to_owned()));
+    };
+    let bytes_min = params.bytes_min.unwrap_or(0);
+    let bytes_max = params.bytes_min.unwrap_or(1024);
+    assert!(bytes_min < bytes_max, "min must be less than max");
+
+    for i in 1..params.steps.unwrap_or(5) {
+        let _ = ctx.async_step(&format!("step-{i}"), async |_ctx: TaskContext| -> StepResult<TaskError> {
+            let blob_size = rand::random_range(bytes_min..bytes_max);
+            let blob = "a".repeat(blob_size as usize);
+            Ok(Vec::from(blob))
+        }).await?;
+    }
+
+    Ok(None)
+}
+
+/// Simulate IO wait workload
+pub async fn sleep_time(ctx: TaskContext) -> TaskResult {
+    #[derive(Deserialize)]
+    struct SleepTimeParams {
+        duration: Option<f64>,
+    }
+    let params = ctx.param_bytes();
+    let Ok(params): Result<SleepTimeParams, _> = serde_json::from_slice(params.as_slice()) else {
+        return Err(FlowControl::InvalidValue("Invalid parameters".to_owned()));
+    };
+    let delay = params.duration.unwrap_or(0.1);
+
+    log::info!("started sleep_time. Sleeping for {delay}");
+    tokio::time::sleep(Duration::from_millis((delay * 1000.0) as u64)).await;
+    log::info!("sleep_time complete");
     Ok(None)
 }
 
