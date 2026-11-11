@@ -58,6 +58,7 @@ impl TaskContext {
     /// [`Vec<u8>`]. Converting bytes into a structure is an application
     /// concern.
     pub fn param_bytes(&self) -> &Vec<u8> {
+        // TODO add a parse method that is compatible with serde_json structs.
         &self.task.params
     }
 
